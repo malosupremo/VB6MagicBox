@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PortingExtractor": {
+      "commandName": "Project"
+     // "commandLineArgs": "\"C:\\Users\\mauro\\OneDrive - MICROSYS SRL\\Clienti\\Satis\\Sorgenti\\5.0\\CALLER\\caller.vbp\""
+    }
+  }
+}
