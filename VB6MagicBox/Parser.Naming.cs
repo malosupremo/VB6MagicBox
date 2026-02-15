@@ -728,8 +728,37 @@ public static partial class VbParser
             conventionalName = ToPascalCase(proc.Name);
           }
 
-          proc.ConventionalName = ResolveNameConflict(conventionalName, procedureNamesUsed);
-          procedureNamesUsed.Add(proc.ConventionalName);
+          // SPECIALE: Property Get/Let/Set con lo stesso nome devono mantenere lo stesso ConventionalName
+          // Verifica se questa è una Property e se esiste già una Property Get/Let/Set con lo stesso nome
+          if (proc.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
+          {
+            // Estrai il nome base della proprietà (senza Get/Let/Set)
+            var basePropName = proc.Name;
+            
+            // Cerca se esiste già una Property (Get/Let/Set) con lo stesso nome base
+            var existingProperty = mod.Procedures.FirstOrDefault(p => 
+                p != proc &&
+                p.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase) &&
+                p.Name.Equals(basePropName, StringComparison.OrdinalIgnoreCase));
+            
+            if (existingProperty != null && !string.IsNullOrEmpty(existingProperty.ConventionalName))
+            {
+              // Usa lo stesso ConventionalName della Property esistente
+              proc.ConventionalName = existingProperty.ConventionalName;
+            }
+            else
+            {
+              // Prima Property con questo nome, applica conflict resolution normale
+              proc.ConventionalName = ResolveNameConflict(conventionalName, procedureNamesUsed);
+              procedureNamesUsed.Add(proc.ConventionalName);
+            }
+          }
+          else
+          {
+            // Procedure normale, applica conflict resolution
+            proc.ConventionalName = ResolveNameConflict(conventionalName, procedureNamesUsed);
+            procedureNamesUsed.Add(proc.ConventionalName);
+          }
 
           if (IsReservedWord(proc.ConventionalName))
           {

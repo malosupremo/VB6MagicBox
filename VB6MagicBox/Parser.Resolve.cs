@@ -347,7 +347,27 @@ public static partial class VbParser
         ResolveParameterAndLocalVariableReferences(mod, proc, fileLines);
 
         // Rilevamento delle occorrenze nude di altre procedure nel corpo (es. "Not Is_Caller_Busy" o "If Is_Caller_Busy Then")
-        for (int li = proc.LineNumber - 1; li < fileLines.Length; li++)
+        // Controlli di sicurezza per evitare IndexOutOfRangeException
+        if (proc.StartLine <= 0)
+        {
+          proc.StartLine = proc.LineNumber;
+        }
+        
+        if (proc.EndLine <= 0)
+        {
+          proc.EndLine = fileLines.Length;
+        }
+        
+        // Assicurati che gli indici siano validi
+        var startIndex = Math.Max(0, proc.StartLine - 1);
+        var endIndex = Math.Min(fileLines.Length, proc.EndLine);
+        
+        if (startIndex >= fileLines.Length)
+        {
+          continue; // Skip this procedure
+        }
+        
+        for (int li = startIndex; li < endIndex; li++)
         {
           var rawLine = fileLines[li];
           
@@ -603,9 +623,44 @@ public static partial class VbParser
       Dictionary<string, VbTypeDef> typeIndex,
       Dictionary<string, string> env)
   {
-    int currentLine = proc.LineNumber;
-
-    for (int i = proc.LineNumber - 1; i < fileLines.Length; i++)
+    // DEBUG: Log per procedure specifiche
+    bool debugThis = proc.Name.Equals("CompactArray", StringComparison.OrdinalIgnoreCase) || 
+                     proc.Name.Equals("Exist", StringComparison.OrdinalIgnoreCase);
+    
+    if (debugThis)
+    {
+      Console.WriteLine($"[DEBUG] ResolveFieldAccesses: {proc.Name} (Kind: {proc.Kind})");
+    }
+    
+    // Controlli di sicurezza per evitare IndexOutOfRangeException
+    if (proc.StartLine <= 0)
+    {
+      Console.WriteLine($"[WARN] Procedure {proc.Name} has invalid StartLine: {proc.StartLine}, using LineNumber: {proc.LineNumber}");
+      proc.StartLine = proc.LineNumber;
+    }
+    
+    if (proc.EndLine <= 0)
+    {
+      Console.WriteLine($"[WARN] Procedure {proc.Name} has invalid EndLine: {proc.EndLine}, scanning until end of file");
+      proc.EndLine = fileLines.Length;
+    }
+    
+    // Assicurati che StartLine sia valido
+    var startIndex = Math.Max(0, proc.StartLine - 1);
+    var endIndex = Math.Min(fileLines.Length, proc.EndLine);
+    
+    if (startIndex >= fileLines.Length)
+    {
+      Console.WriteLine($"[WARN] Procedure {proc.Name} StartLine {proc.StartLine} is beyond file length {fileLines.Length}");
+      return;
+    }
+    
+    if (debugThis)
+    {
+      Console.WriteLine($"[DEBUG] Scanning lines {startIndex + 1} to {endIndex} (StartLine={proc.StartLine}, EndLine={proc.EndLine})");
+    }
+    
+    for (int i = startIndex; i < endIndex; i++)
     {
       var raw = fileLines[i].Trim();
 
@@ -615,12 +670,34 @@ public static partial class VbParser
       if (idx >= 0)
         noComment = noComment.Substring(0, idx).Trim();
 
+      if (debugThis && noComment.Contains("msg_h") || noComment.Contains("Msg_h"))
+      {
+        Console.WriteLine($"[DEBUG] Line {i + 1}: {noComment}");
+      }
+
       foreach (Match m in ReFieldAccess.Matches(noComment))
       {
         var varName = m.Groups[1].Value;
         var fieldName = m.Groups[2].Value;
+        
+        // Estrai il nome base della variabile rimuovendo l'accesso array
+        // Es: "m_QueuePolling(i)" -> "m_QueuePolling"
+        var baseVarName = varName;
+        var parenIndex = varName.IndexOf('(');
+        if (parenIndex >= 0)
+        {
+          baseVarName = varName.Substring(0, parenIndex);
+        }
 
-        if (env.TryGetValue(varName, out var typeName))
+        if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
+                          fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
+        {
+          Console.WriteLine($"[DEBUG] Found field access: {varName}.{fieldName} on line {i + 1}");
+          Console.WriteLine($"[DEBUG] baseVarName = {baseVarName}");
+          Console.WriteLine($"[DEBUG] env.TryGetValue({baseVarName}) = {env.TryGetValue(baseVarName, out var type1)}, type = {type1}");
+        }
+
+        if (env.TryGetValue(baseVarName, out var typeName))
         {
           if (typeIndex.TryGetValue(typeName, out var typeDef))
           {
@@ -631,6 +708,12 @@ public static partial class VbParser
             if (field != null)
             {
               field.Used = true;
+              
+              if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
+                                fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
+              {
+                Console.WriteLine($"[DEBUG] Adding reference for {field.Name} in {mod.Name}.{proc.Name} line {i + 1}");
+              }
               
               // Cerca se esiste già una Reference per questo Module+Procedure
               var existingRef = field.References.FirstOrDefault(r =>
@@ -653,11 +736,19 @@ public static partial class VbParser
                 });
               }
             }
+            else if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
+                                   fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
+            {
+              Console.WriteLine($"[DEBUG] Field {fieldName} not found in type {typeName}");
+            }
+          }
+          else if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
+                                 fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
+          {
+            Console.WriteLine($"[DEBUG] Type {typeName} not found in typeIndex");
           }
         }
       }
-
-      currentLine++;
     }
   }
 
@@ -676,7 +767,27 @@ public static partial class VbParser
         c => c,
         StringComparer.OrdinalIgnoreCase);
 
-    for (int i = proc.LineNumber - 1; i < fileLines.Length; i++)
+    // Controlli di sicurezza per evitare IndexOutOfRangeException
+    if (proc.StartLine <= 0)
+    {
+      proc.StartLine = proc.LineNumber;
+    }
+    
+    if (proc.EndLine <= 0)
+    {
+      proc.EndLine = fileLines.Length;
+    }
+    
+    // Assicurati che gli indici siano validi
+    var startIndex = Math.Max(0, proc.StartLine - 1);
+    var endIndex = Math.Min(fileLines.Length, proc.EndLine);
+    
+    if (startIndex >= fileLines.Length)
+    {
+      return;
+    }
+    
+    for (int i = startIndex; i < endIndex; i++)
     {
       var raw = fileLines[i].Trim();
 
@@ -770,7 +881,27 @@ public static partial class VbParser
         v => v,
         StringComparer.OrdinalIgnoreCase);
 
-    for (int i = proc.LineNumber - 1; i < fileLines.Length; i++)
+    // Controlli di sicurezza per evitare IndexOutOfRangeException
+    if (proc.StartLine <= 0)
+    {
+      proc.StartLine = proc.LineNumber;
+    }
+    
+    if (proc.EndLine <= 0)
+    {
+      proc.EndLine = fileLines.Length;
+    }
+    
+    // Assicurati che gli indici siano validi
+    var startIndex = Math.Max(0, proc.StartLine - 1);
+    var endIndex = Math.Min(fileLines.Length, proc.EndLine);
+    
+    if (startIndex >= fileLines.Length)
+    {
+      return;
+    }
+    
+    for (int i = startIndex; i < endIndex; i++)
     {
       var raw = fileLines[i].Trim();
       int currentLineNumber = i + 1;
@@ -935,8 +1066,9 @@ public static partial class VbParser
           
           if (existingRef != null && lineNumber > 0)
           {
-            // Aggiungi solo il line number
-            existingRef.LineNumbers.Add(lineNumber);
+            // Aggiungi solo il line number se non esiste già
+            if (!existingRef.LineNumbers.Contains(lineNumber))
+              existingRef.LineNumbers.Add(lineNumber);
           }
           else if (existingRef == null)
           {
@@ -966,8 +1098,9 @@ public static partial class VbParser
           
           if (existingRef != null && lineNumber > 0)
           {
-            // Aggiungi solo il line number
-            existingRef.LineNumbers.Add(lineNumber);
+            // Aggiungi solo il line number se non esiste già
+            if (!existingRef.LineNumbers.Contains(lineNumber))
+              existingRef.LineNumbers.Add(lineNumber);
           }
           else if (existingRef == null)
           {
@@ -998,8 +1131,9 @@ public static partial class VbParser
           
           if (existingRef != null && lineNumber > 0)
           {
-            // Aggiungi solo il line number
-            existingRef.LineNumbers.Add(lineNumber);
+            // Aggiungi solo il line number se non esiste già
+            if (!existingRef.LineNumbers.Contains(lineNumber))
+              existingRef.LineNumbers.Add(lineNumber);
           }
           else if (existingRef == null)
           {
@@ -1355,8 +1489,8 @@ public static partial class VbParser
             if (line.IndexOf(v.Name, StringComparison.OrdinalIgnoreCase) >= 0)
             {
               v.Used = true;
-              // Traccia reference (modulo + procedura dove viene usata)
-              var procAtLine = searchMod.Procedures.FirstOrDefault(p => lineNum >= p.LineNumber);
+              // Trova la procedura corretta che contiene questa riga
+              var procAtLine = searchMod.GetProcedureAtLine(lineNum);
               if (procAtLine != null)
               {
                 // CONTROLLO SHADOW: Se la procedura ha una variabile locale con lo stesso nome,
@@ -1427,8 +1561,8 @@ public static partial class VbParser
             if (line.IndexOf(c.Name, StringComparison.OrdinalIgnoreCase) >= 0)
             {
               c.Used = true;
-              // Traccia reference se usata in una procedura (modulo + procedura)
-              var procAtLine = searchMod.Procedures.FirstOrDefault(p => lineNum >= p.LineNumber);
+              // Trova la procedura corretta che contiene questa riga
+              var procAtLine = searchMod.GetProcedureAtLine(lineNum);
               if (procAtLine != null)
               {
                 // CONTROLLO SHADOW: Se la procedura ha una costante locale con lo stesso nome,

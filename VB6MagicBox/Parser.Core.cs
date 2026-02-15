@@ -115,7 +115,7 @@ public static partial class VbParser
       new(@"^\s*(\w+)\s+", RegexOptions.IgnoreCase);
 
   private static readonly Regex ReFieldAccess =
-      new(@"(\w+)\.(\w+)", RegexOptions.IgnoreCase);
+      new(@"([A-Za-z_]\w*(?:\([^)]*\))?)\s*\.\s*([A-Za-z_]\w+)", RegexOptions.IgnoreCase);
 
   private static readonly Regex ReFormControlBegin =
       new(@"^Begin\s+(\S+)\s+(\w+)", RegexOptions.IgnoreCase);
@@ -325,7 +325,6 @@ public static partial class VbParser
     {
       Name = Path.GetFileNameWithoutExtension(path),
       ConventionalName = string.Empty,
-      FullPath = string.Empty,
       Path = path,
       Kind = kind
     };
@@ -530,13 +529,13 @@ public static partial class VbParser
         {
           Visibility = string.IsNullOrEmpty(mf2.Groups[1].Value) ? "Public" : mf2.Groups[1].Value,
           Name = mf2.Groups[3].Value,
-          ConventionalName = string.Empty,
           Kind = "Function",
           IsStatic = isStatic,
           Scope = "Module",
           Parameters = ParseParameters(mf2.Groups[4].Value, originalLineNumber),
           ReturnType = mf2.Groups[6].Value,
-          LineNumber = originalLineNumber
+          LineNumber = originalLineNumber,
+          StartLine = originalLineNumber
         };
         mod.Procedures.Add(currentProc);
         
@@ -586,12 +585,12 @@ public static partial class VbParser
         {
           Visibility = string.IsNullOrEmpty(ms.Groups[1].Value) ? "Public" : ms.Groups[1].Value,
           Name = ms.Groups[3].Value,
-          ConventionalName = string.Empty,
           Kind = "Sub",
           IsStatic = isStatic,
           Scope = "Module",
           Parameters = ParseParameters(ms.Groups[4].Value, originalLineNumber),
-          LineNumber = originalLineNumber
+          LineNumber = originalLineNumber,
+          StartLine = originalLineNumber
         };
         mod.Procedures.Add(currentProc);
         
@@ -642,12 +641,12 @@ public static partial class VbParser
           Visibility = string.IsNullOrEmpty(mp.Groups[1].Value) ? "Public" : mp.Groups[1].Value,
           Kind = $"Property{mp.Groups[3].Value}",
           Name = mp.Groups[4].Value,
-          ConventionalName = string.Empty,
           IsStatic = isStatic,
           Scope = "Module",
           Parameters = ParseParameters(mp.Groups[5].Value, originalLineNumber),
           ReturnType = mp.Groups[7].Value,
-          LineNumber = originalLineNumber
+          LineNumber = originalLineNumber,
+          StartLine = originalLineNumber
         };
         mod.Procedures.Add(currentProc);
         
@@ -715,13 +714,14 @@ public static partial class VbParser
         {
           Visibility = "Public",
           Name = mdf.Groups[1].Value,
-          ConventionalName = string.Empty,
           Kind = "ExternalFunction",
           IsStatic = false,
           Scope = "Module",
           Parameters = ParseParameters(mdf.Groups[3].Value, originalLineNumber),
           ReturnType = mdf.Groups[5].Value,
-          LineNumber = originalLineNumber
+          LineNumber = originalLineNumber,
+          StartLine = originalLineNumber,
+          EndLine = originalLineNumber
         });
         continue;
       }
@@ -736,12 +736,13 @@ public static partial class VbParser
         {
           Visibility = "Public",
           Name = mds.Groups[1].Value,
-          ConventionalName = string.Empty,
           Kind = "ExternalFunction",
           IsStatic = false,
           Scope = "Module",
           Parameters = ParseParameters(mds.Groups[3].Value, originalLineNumber),
-          LineNumber = originalLineNumber
+          LineNumber = originalLineNumber,
+          StartLine = originalLineNumber,
+          EndLine = originalLineNumber
         });
         continue;
       }
@@ -792,7 +793,6 @@ public static partial class VbParser
         mod.GlobalVariables.Add(new VbVariable
         {
           Name = mg.Groups[3].Value,
-          ConventionalName = string.Empty,
           Type = mg.Groups[5].Value,
           IsStatic = isStatic,
           IsArray = !string.IsNullOrEmpty(mg.Groups[4].Value),
@@ -824,7 +824,6 @@ public static partial class VbParser
           mod.GlobalVariables.Add(new VbVariable
           {
             Name = mm.Groups[2].Value,
-            ConventionalName = string.Empty,
             Type = mm.Groups[4].Value,
             IsStatic = isStatic,
             IsArray = !string.IsNullOrEmpty(mm.Groups[3].Value),
@@ -849,6 +848,7 @@ public static partial class VbParser
             || trimmedNoComment.StartsWith("End Function", StringComparison.OrdinalIgnoreCase)
             || trimmedNoComment.StartsWith("End Property", StringComparison.OrdinalIgnoreCase))
         {
+          currentProc.EndLine = originalLineNumber;
           currentProc = null;
           continue;
         }
@@ -896,7 +896,6 @@ public static partial class VbParser
           currentProc.LocalVariables.Add(new VbVariable
           {
             Name = ml.Groups[2].Value,
-            ConventionalName = string.Empty,
             Type = ml.Groups[4].Value,
             IsStatic = isStatic,
             IsArray = !string.IsNullOrEmpty(ml.Groups[3].Value),

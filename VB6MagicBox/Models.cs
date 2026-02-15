@@ -20,23 +20,23 @@ public class VbModule
   public required string Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public required string ConventionalName { get; set; }
+  public string ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonPropertyOrder(3)]
-  public required string Kind { get; set; }
+  public string Kind { get; set; }
 
   [JsonPropertyOrder(4)]
-  public required string Path { get; set; }
+  public string Path { get; set; }
 
   [JsonPropertyOrder(5)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(6)]
   [JsonIgnore]
-  public required string FullPath { get; set; }
+  public string FullPath { get; set; }
 
   [JsonPropertyOrder(7)]
   public List<VbConstant> Constants { get; set; } = new();
@@ -64,6 +64,17 @@ public class VbModule
 
   [JsonIgnore]
   public bool IsClass => Kind.Equals("cls", StringComparison.OrdinalIgnoreCase);
+  
+  [JsonIgnore]
+  public bool IsForm => Kind.Equals("frm", StringComparison.OrdinalIgnoreCase);
+  
+  /// <summary>
+  /// Trova la procedura che contiene il numero di riga specificato
+  /// </summary>
+  public VbProcedure? GetProcedureAtLine(int lineNumber)
+  {
+    return Procedures.FirstOrDefault(p => p.ContainsLine(lineNumber));
+  }
 }
 
 public class VbVariable
@@ -72,14 +83,14 @@ public class VbVariable
   public required string Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public required string ConventionalName { get; set; }
+  public string ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonIgnore]
   [JsonPropertyOrder(3)]
-  public required string Level { get; set; }
+  public string Level { get; set; }
 
   [JsonPropertyOrder(4)]
   public bool IsStatic { get; set; }
@@ -91,16 +102,16 @@ public class VbVariable
   public bool IsWithEvents { get; set; }
 
   [JsonPropertyOrder(7)]
-  public required string Scope { get; set; }
+  public string Scope { get; set; }
 
   [JsonPropertyOrder(8)]
-  public required string Type { get; set; }
+  public string Type { get; set; }
 
   [JsonPropertyOrder(9)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(10)]
-  public required string Visibility { get; set; }
+  public string Visibility { get; set; }
 
   [JsonPropertyOrder(11)]
   public List<VbReference> References { get; set; } = new();
@@ -115,7 +126,7 @@ public class VbProcedure
   public required string Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public required string ConventionalName { get; set; }
+  public string ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
@@ -124,7 +135,7 @@ public class VbProcedure
   public bool IsStatic { get; set; }
 
   [JsonPropertyOrder(4)]
-  public required string Kind { get; set; }
+  public string Kind { get; set; }
 
   [JsonPropertyOrder(5)]
   public string ReturnType { get; set; }
@@ -139,8 +150,22 @@ public class VbProcedure
   public string Visibility { get; set; }
 
   [JsonPropertyOrder(9)]
-  
+  [JsonIgnore]
   public int LineNumber { get; set; }
+
+  [JsonIgnore]
+  public int StartLine { get; set; }
+
+  [JsonIgnore]
+  public int EndLine { get; set; }
+
+  /// <summary>
+  /// Controlla se un numero di riga è dentro questa procedura
+  /// </summary>
+  public bool ContainsLine(int lineNumber)
+  {
+    return lineNumber >= StartLine && lineNumber <= EndLine;
+  }
 
   [JsonIgnore]
   public List<VbCall> Calls { get; set; } = new();
