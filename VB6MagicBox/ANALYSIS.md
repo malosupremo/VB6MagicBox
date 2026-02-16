@@ -251,3 +251,7 @@ VB6MagicBox.exe -l it        # Forma breve
 - 🎯 **Indentazione**: Migliorare formattazione codice > ma c'è già il tool in vb6
 - 🗑️ **Rimozione Variabili Non Usate**: Estrarre le variabili non usate / commentarle
 - 🪄 **Comando MAGIC**: Creare un comando che esegue tutte le modifiche in automatico
+
+Da provare per migrazione a C#
+- https://github.com/bhoogter/VB6TocSharp
+- https://github.com/danarrib/OpenVB6toCS
