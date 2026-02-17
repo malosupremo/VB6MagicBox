@@ -402,8 +402,25 @@ public static class Refactoring
 
       // Sostituisci SOLO nella parte di codice, non nel commento
       // Word boundary per evitare sostituzioni parziali
-      var pattern = $@"\b{Regex.Escape(oldName)}\b";
-      var newCodePart = Regex.Replace(codePart, pattern, newName, RegexOptions.IgnoreCase);
+      string pattern;
+      string replacement;
+      
+      // SPECIALE: Per le proprietà, fuori dal modulo che le definisce,
+      // usa dot-prefixed replacement (.OldName → .NewName) per evitare
+      // conflitti con parametri/variabili omonimi.
+      // Es: "g_PlasmaSource.IsDeposit = IsDeposit" → rinomina solo ".IsDeposit"
+      if (source is VbProperty && !string.Equals(definingModuleName, currentModuleName, StringComparison.OrdinalIgnoreCase))
+      {
+        pattern = $@"\.{Regex.Escape(oldName)}\b";
+        replacement = $".{newName}";
+      }
+      else
+      {
+        pattern = $@"\b{Regex.Escape(oldName)}\b";
+        replacement = newName;
+      }
+      
+      var newCodePart = Regex.Replace(codePart, pattern, replacement, RegexOptions.IgnoreCase);
       
       int matchesInLine = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase).Count;
       if (matchesInLine > 0)

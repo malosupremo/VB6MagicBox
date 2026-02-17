@@ -273,6 +273,7 @@ public static partial class VbParser
                       m.Types.Any(t => !t.IsConventional || t.Fields.Any(f => !f.IsConventional)) ||
                       m.Enums.Any(e => !e.IsConventional || e.Values.Any(v => !v.IsConventional)) ||
                       m.Controls.Any(c => !c.IsConventional) ||
+                      m.Properties.Any(p => !p.IsConventional || p.Parameters.Any(param => !param.IsConventional)) ||
                       m.Procedures.Any(p => !p.IsConventional || p.Parameters.Any(param => !param.IsConventional) || p.LocalVariables.Any(lv => !lv.IsConventional)))
           .Select(m => new
           {
@@ -313,6 +314,18 @@ public static partial class VbParser
               Controls = m.Controls
                   .Where(c => !c.IsConventional)
                   .Select(c => new { c.Name, c.ConventionalName })
+                  .ToList(),
+              Properties = m.Properties
+                  .Where(p => !p.IsConventional || p.Parameters.Any(param => !param.IsConventional))
+                  .Select(p => new
+                  {
+                      Property = new { p.Name, p.ConventionalName, p.Kind },
+                      IsConventional = p.IsConventional,
+                      Parameters = p.Parameters
+                          .Where(param => !param.IsConventional)
+                          .Select(param => new { param.Name, param.ConventionalName })
+                          .ToList()
+                  })
                   .ToList(),
               Procedures = m.Procedures
                   .Where(p => !p.IsConventional || p.Parameters.Any(param => !param.IsConventional) || p.LocalVariables.Any(lv => !lv.IsConventional))
@@ -412,6 +425,22 @@ public static partial class VbParser
       foreach (var control in mod.Controls.Where(c => !c.IsConventional))
       {
         csvLines.Add($"\"{EscapeCsv(control.Name)}\",\"{EscapeCsv(control.ConventionalName)}\",\"Control\",\"Public\",\"{EscapeCsv(mod.Name)}\"");
+      }
+
+      // Proprietà che cambiano nome
+      foreach (var property in mod.Properties.Where(p => !p.IsConventional))
+      {
+        var visibility = string.IsNullOrEmpty(property.Visibility) ? "Public" : property.Visibility;
+        csvLines.Add($"\"{EscapeCsv(property.Name)}\",\"{EscapeCsv(property.ConventionalName)}\",\"Property{property.Kind}\",\"{visibility}\",\"{EscapeCsv(mod.Name)}\"");
+      }
+
+      // Parametri delle proprietà che cambiano nome
+      foreach (var property in mod.Properties)
+      {
+        foreach (var parameter in property.Parameters.Where(p => !p.IsConventional))
+        {
+          csvLines.Add($"\"{EscapeCsv(parameter.Name)}\",\"{EscapeCsv(parameter.ConventionalName)}\",\"PropertyParameter\",\"Local\",\"{EscapeCsv(mod.Name)}\"");
+        }
       }
 
       // Procedure che cambiano nome
