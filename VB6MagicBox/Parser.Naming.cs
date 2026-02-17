@@ -13,10 +13,12 @@ public static partial class VbParser
         // Controlli standard VB6
         { "TextBox", "txt" },
         { "CommandButton", "cmd" },
+        { "Command", "cmd" },
         { "Label", "lbl" },
         { "Frame", "fra" },
         { "CheckBox", "chk" },
         { "OptionButton", "opt" },
+        { "Option", "opt" },
         { "ListBox", "lst" },
         { "ComboBox", "cbo" },
         { "Timer", "tmr" },

@@ -32,8 +32,10 @@ public class Program
       Console.WriteLine("Opzioni:");
       Console.WriteLine("1. Analizza progetto VB6 (genera .json)");
       Console.WriteLine("2. Applica refactoring automatico");
-      Console.WriteLine("3. Armonizza le spaziature");
-      Console.WriteLine("4. Genera codice C# (Coming soon!)");
+      Console.WriteLine("3. Aggiunta tipi mancanti");
+      Console.WriteLine("4. Armonizza le spaziature");
+      Console.WriteLine("5. Riordina le variabili di procedura");
+      Console.WriteLine("6. Genera codice C#");
       Console.WriteLine("0. Esci");
       Console.WriteLine();
       Console.Write("Seleziona opzione: ");
@@ -52,14 +54,26 @@ public class Program
 
         case "3":
           Console.WriteLine();
-          Console.WriteLine("[!] Armonizzazione spaziature non ancora implementata.");
+          Console.WriteLine("[!] Aggiunta tipi mancanti mancante.");
           Console.WriteLine("    Coming soon!");
           break;
 
         case "4":
           Console.WriteLine();
-          Console.WriteLine("[!] Generazione C# non ancora implementata.");
+          Console.WriteLine("[!] Armonizzazione spaziature fuori armonia.");
           Console.WriteLine("    Coming soon!");
+          break;
+
+        case "5":
+          Console.WriteLine();
+          Console.WriteLine("[!] Ordinamento variabili di procedura in disordine.");
+          Console.WriteLine("    Coming soon!");
+          break;
+
+        case "6":
+          Console.WriteLine();
+          Console.WriteLine("[!] Generazione C#... non esageriamo!");
+          Console.WriteLine("    Coming soon?!");
           break;
 
         case "0":

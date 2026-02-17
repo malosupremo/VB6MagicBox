@@ -335,7 +335,126 @@ Public Declare Function AdjustTokenPrivileges Lib "advapi32" (ByVal tokenHandle 
                                                               previousState As TOKEN_PRIVILEGES, returnLength As Long) As Long
 ```
 
-## ??? **MODIFICHE AL MODELLO**
+### 11. **Properties di Classe Trattate come Procedure Globali**
+**PROBLEMA**: Le proprietà di classe (Property Get/Let/Set) venivano inserite nella collezione `Procedures` insieme a Function/Sub. Questo causava:
+1. **False references**: un parametro `isDeposit` in una funzione veniva collegato alla proprietà `IsDeposit` della classe
+2. **Suffissi errati**: Property Get e Let ricevevano suffissi "2" perché il conflict resolution le vedeva come duplicati delle Procedures
+3. **References mancanti**: occorrenze successive di `oggetto.proprietà` sulla stessa procedura non venivano rilevate
+
+**ESEMPIO PROBLEMATICO**:
+```vb6
+' Classe ClsPlasmaSource:
+Public Property Get IsDeposit() As Boolean
+Public Property Let IsDeposit(newValue As Boolean)
+
+' Modulo POHND.bas:
+Private Sub SavePlasmaRcpParams(rcpParams As PlasmaSrcRecipeT_T, isDeposit As Boolean)
+    g_PlasmaSource.IsDeposit = IsDeposit          ' ← entrambi rinominati (SBAGLIATO)
+    WriteDetail "..." & g_PlasmaSource.isDeposit   ' ← NON rilevato (SBAGLIATO)
+```
+
+**CAUSA RADICE (3 problemi distinti)**:
+
+1. **Modello unico**: Properties e Procedures nella stessa collezione `mod.Procedures` → conflict resolution errato
+2. **Skip duplicati**: I PASS di risoluzione facevano `Skip if already in calls` anche per le proprietà → occorrenze successive perse
+3. **Rename globale**: Il pattern `\bOldName\b` rinominava sia `.IsDeposit` (proprietà) che `= IsDeposit` (parametro)
+
+**SOLUZIONE IMPLEMENTATA (3 parti)**:
+
+**Parte A — Modello separato (`Models.cs`, `Parser.Core.cs`)**:
+```csharp
+// NUOVO: Classe VbProperty dedicata
+public class VbProperty
+{
+  public string Name { get; set; }
+  public string ConventionalName { get; set; }
+  public string Kind { get; set; } // "Get", "Let", "Set"
+  public string Scope { get; set; }
+  public string Visibility { get; set; }
+  public string ReturnType { get; set; }
+  public int StartLine { get; set; }
+  public int EndLine { get; set; }
+  public List<VbParameter> Parameters { get; set; }
+  public List<VbReference> References { get; set; }
+}
+
+// VbModule: collezione separata
+public List<VbProperty> Properties { get; set; } = new();
+
+// Parser.Core.cs: Property NON aggiunta a mod.Procedures
+currentProperty = new VbProperty { ... };
+mod.Properties.Add(currentProperty);
+// NON: mod.Procedures.Add(currentProc); ← Questo causava le duplicazioni!
+```
+
+**Parte B — References accumulate (`Parser.Resolve.cs`)**:
+```csharp
+// PRIMA: Skip incondizionato per duplicati nelle Calls
+if (proc.Calls.Any(c => c.Raw == $"{objName}.{methodName}"))
+  continue; // ← SBAGLIATO: perde tutte le occorrenze successive
+
+// DOPO: Per le proprietà, accumula sempre i LineNumbers nelle References
+var alreadyInCalls = proc.Calls.Any(c => c.Raw == $"{objName}.{methodName}");
+
+if (classProp != null)
+{
+  // Aggiungi Reference SEMPRE (anche se già nelle Calls)
+  var existingRef = classProp.References.FirstOrDefault(r =>
+      r.Module == mod.Name && r.Procedure == proc.Name);
+  
+  if (existingRef != null)
+  {
+    if (!existingRef.LineNumbers.Contains(li + 1))
+      existingRef.LineNumbers.Add(li + 1); // Accumula LineNumbers
+  }
+  else
+  {
+    classProp.References.Add(new VbReference { ... });
+  }
+  
+  // Calls: aggiungi solo la prima volta
+  if (!alreadyInCalls)
+    proc.Calls.Add(new VbCall { ... });
+}
+```
+
+**Parte C — Dot-prefixed rename (`Refactoring.cs`)**:
+```csharp
+// FUORI dalla classe: usa .OldName → .NewName (con il punto)
+// per evitare conflitti con parametri/variabili omonimi
+if (source is VbProperty && definingModule != currentModule)
+{
+  pattern = $@"\.{Regex.Escape(oldName)}\b";     // \.IsDeposit\b
+  replacement = $".{newName}";                     // .IsDeposit
+}
+else
+{
+  // DENTRO la classe: rename normale per dichiarazioni e usi interni
+  pattern = $@"\b{Regex.Escape(oldName)}\b";
+  replacement = newName;
+}
+```
+
+**RISULTATO**:
+```vb6
+' PRIMA: SBAGLIATO
+g_PlasmaSource.IsDeposit = IsDeposit   ' entrambi rinominati
+WriteDetail "..." & g_PlasmaSource.isDeposit  ' NON rilevato
+
+' DOPO: CORRETTO ✅
+g_PlasmaSource.IsDeposit = isDeposit   ' solo .IsDeposit rinominato
+WriteDetail "..." & g_PlasmaSource.IsDeposit  ' rilevato e rinominato
+```
+
+**FILES MODIFICATI**:
+- `Models.cs` — classe `VbProperty`, collezione `Properties` in `VbModule`
+- `Parser.Core.cs` — parsing separato Properties vs Procedures
+- `Parser.Resolve.cs` — indicizzazione separata, References accumulate per ogni riga
+- `Parser.Naming.cs` — naming conventions per Properties (conflict resolution dedicato)
+- `Parser.Export.cs` — export JSON/CSV con Properties
+- `Refactoring.cs` — dot-prefixed rename fuori dal modulo definente
+
+## ⚙️ **MODIFICHE AL MODELLO**
 
 ### VbProcedure - Nuove Proprietà
 ```csharp
@@ -351,8 +470,30 @@ public bool ContainsLine(int lineNumber)  // Helper method
 }
 ```
 
+### VbProperty - Classe Dedicata (NUOVO)
+```csharp
+public class VbProperty
+{
+  public string Name { get; set; }
+  public string ConventionalName { get; set; }
+  public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
+  public string Kind { get; set; }       // "Get", "Let", "Set"
+  public string Scope { get; set; }
+  public string Visibility { get; set; }
+  public string ReturnType { get; set; }
+  public int LineNumber { get; set; }
+  public int StartLine { get; set; }
+  public int EndLine { get; set; }
+  public List<VbParameter> Parameters { get; set; } = new();
+  public List<VbReference> References { get; set; } = new();
+  public bool ContainsLine(int lineNumber) => lineNumber >= StartLine && lineNumber <= EndLine;
+}
+```
+
 ### VbModule - Nuove Proprietà
 ```csharp
+public List<VbProperty> Properties { get; set; } = new();  // NUOVO
+
 public VbProcedure? GetProcedureAtLine(int lineNumber)
 {
     return Procedures.FirstOrDefault(p => p.ContainsLine(lineNumber));
@@ -374,19 +515,27 @@ public List<int> LineNumbers { get; set; } = new();  // Per controlli array
 public int LineNumber { get; set; }
 ```
 
-## ?? **ORDINE DI ESECUZIONE**
+## 🔄 **ORDINE DI ESECUZIONE**
 
 ### FASE 1: Parsing (`Parser.Core.cs`)
 1. Scansiona ogni riga del file
-2. Identifica inizio procedure (Function/Sub/Property)
-3. Imposta `StartLine = originalLineNumber` 
-4. Identifica fine procedure (End Function/Sub/Property)
-5. Imposta `EndLine = originalLineNumber`
+2. Identifica inizio procedure (Function/Sub) → `mod.Procedures`
+3. Identifica inizio proprietà (Property Get/Let/Set) → `mod.Properties` (separato!)
+4. Imposta `StartLine = originalLineNumber` 
+5. Identifica fine procedure/proprietà (End Function/Sub/Property)
+6. Imposta `EndLine = originalLineNumber`
 
 ### FASE 2: Risoluzione (`Parser.Resolve.cs`)
-1. Le procedure sono già completamente parsate con StartLine/EndLine
-2. Ogni funzione di risoluzione scansiona solo le righe della procedura corrente
-3. `GetProcedureAtLine()` funziona correttamente per determinare la procedura
+1. Procedure indicizzate in `procIndex` (SENZA proprietà)
+2. Proprietà indicizzate in `propIndex` (separato)
+3. Accessi con punto (`oggetto.nome`): cerca PRIMA in Properties, poi in Procedures
+4. References accumulate: ogni riga che accede a `oggetto.proprietà` aggiunge il LineNumber
+5. Chiamate nude: cercate solo in `procIndex` (le proprietà richiedono il punto)
+
+### FASE 3: Refactoring (`Refactoring.cs`)
+1. Proprietà fuori dalla classe: rename dot-prefixed (`.OldName` → `.NewName`)
+2. Proprietà dentro la classe: rename normale (`\bOldName\b`)
+3. Procedure/Parametri/Variabili: rename normale (`\bOldName\b`)
 
 ## ?? **SISTEMA DI LOCALIZZAZIONE**
 
@@ -436,7 +585,7 @@ VB6MagicBox.exe -l it        # Forma breve
 ]
 ```
 
-## 📝 **STATO ATTUALE - DICEMBRE 2024**
+## 📝 **STATO ATTUALE - GENNAIO 2025**
 
 ### ✅ **PROBLEMI COMPLETAMENTE RISOLTI**:
 1. **Riferimenti Duplicati** nei campi delle strutture
@@ -450,9 +599,13 @@ VB6MagicBox.exe -l it        # Forma breve
 9. **Referenze Cross-Module** per controlli non rilevate
 10. **Refactoring Array Controlli** - ora rinomina tutte le istanze
 11. **Parametri Declare Function** su più righe - ora tutti rinominati correttamente
+12. **Properties separate dalle Procedures** - modello dedicato con rename dot-prefixed
 
 ### 🎉 **FUNZIONALITÀ COMPLETAMENTE FUNZIONANTI**:
 - ✅ **Parsing VB6** completo (Forms, Modules, Classes)  
+- ✅ **Properties separate** - modello `VbProperty` dedicato, non più in `Procedures`
+- ✅ **Rename dot-prefixed** - `.OldName` → `.NewName` fuori dalla classe, evita conflitti con parametri omonimi
+- ✅ **References accumulate** - ogni occorrenza di `oggetto.proprietà` aggiunge il LineNumber alla Reference
 - ✅ **Array di Controlli** gestiti come singola entità logica
 - ✅ **Refactoring Cross-Module** per controlli referenziati da altri moduli
 - ✅ **LineNumbers Array** - traccia tutte le posizioni dei controlli array
@@ -464,52 +617,30 @@ VB6MagicBox.exe -l it        # Forma breve
 - ✅ **Parametri Multirighe** - Declare Function su più righe completamente supportate
 - ✅ **Sistema Idempotente** - esecuzione multipla produce risultati identici
 
-### 🔥 **RISULTATO FINALE DECLARE FUNCTION MULTIRIGHE**:
+### 🔥 **RISULTATO FINALE PROPERTIES SEPARATE**:
 ```vb6
-// PRIMA: Solo primo parametro rinominato
-Public Declare Function AdjustTokenPrivileges Lib "advapi32" (ByVal tokenHandle As Long, _
-                                                              ByVal DisableAllPrivileges As Long, _
-                                                              NewState As TOKEN_PRIVILEGES, ByVal BufferLength As Long, _
-                                                              PreviousState As TOKEN_PRIVILEGES, ReturnLength As Long) As Long
+' PRIMA (SBAGLIATO): Properties trattate come Procedures
+' → Suffisso "2" errato, false references con parametri omonimi
+Private Sub SavePlasmaRcpParams(rcpParams As PlasmaSrcRecipeT_T, isDeposit As Boolean)
+    g_PlasmaSource.IsDeposit = IsDeposit   ' ← ENTRAMBI rinominati (SBAGLIATO)
+    WriteDetail "..." & g_PlasmaSource.isDeposit  ' ← NON rilevato (SBAGLIATO)
 
-// DOPO: TUTTI i parametri rinominati correttamente ✅
-Public Declare Function AdjustTokenPrivileges Lib "advapi32" (ByVal tokenHandle As Long, _
-                                                              ByVal disableAllPrivileges As Long, _
-                                                              newState As TOKEN_PRIVILEGES, ByVal bufferLength As Long, _
-                                                              previousState As TOKEN_PRIVILEGES, returnLength As Long) As Long
+' DOPO (CORRETTO): Properties con modello dedicato VbProperty
+' → Rename dot-prefixed (.OldName → .NewName) fuori dalla classe
+Private Sub SavePlasmaRcpParams(rcpParams As PlasmaSrcRecipeT_T, isDeposit As Boolean)
+    g_PlasmaSource.IsDeposit = isDeposit   ' ← Solo .IsDeposit rinominato ✅
+    WriteDetail "..." & g_PlasmaSource.IsDeposit  ' ← Rilevato e rinominato ✅
 ```
 
-### 🚀 **TEST IDEMPOTENZA COMPLETATO**:
+### 🚀 **TEST IDEMPOTENZA COMPLETATO** (verificato Gennaio 2025):
 - ✅ **Prima Esecuzione**: Tutti i rename applicati correttamente
 - ✅ **Seconda Esecuzione**: Nessuna modifica (idempotenza perfetta)
 - ✅ **Parametri Multirighe**: References corrette per ogni parametro
 - ✅ **Controlli Maiuscole**: Preservazione corretta (es. `txtPLCRR` → `txtPLCRR`)
 - ✅ **Variabili Globali**: Prefisso `g_` mantenuto correttamente
-
-### 🎯 **RISULTATO FINALE ARRAY CONTROLLI**:
-```json
-{
-  "Name": "tbPower",
-  "ConventionalName": "txtPower", 
-  "IsArray": true,
-  "LineNumber": 123,           // Prima definizione
-  "LineNumbers": [123, 456],   // Tutte le definizioni  
-  "Used": true,                // ✅ Marcato correttamente!
-  "References": [              // ✅ Reference complete!
-    {
-      "Module": "CODEMAIN",
-      "Procedure": "SomeFunction", 
-      "LineNumbers": [789]      // Reference cross-module
-    }
-  ]
-}
-```
-
-### 🚀 **REFACTORING ARRAY CONTROLLI - COMPLETAMENTE FUNZIONANTE**:
-- ✅ **Prima istanza**: `Begin VB.TextBox tbPower` → `Begin VB.TextBox txtPower`
-- ✅ **Seconda istanza**: `Begin VB.TextBox tbPower` → `Begin VB.TextBox txtPower`  
-- ✅ **References esterne**: `frmSQM242.tbPower(i).Text` → `frmSQM242.txtPower(i).Text`
-- ✅ **Tutte le istanze**: Rinominate correttamente usando `LineNumbers`
+- ✅ **Properties Separate**: Modello dedicato, no duplicazioni, dot-prefixed rename idempotente
+- ✅ **Properties References**: Tutte le occorrenze `oggetto.proprietà` rilevate e rinominate
+- ✅ **Nessun conflitto**: Parametri omonimi alle proprietà rimangono invariati
 
 ### 📊 **PERFORMANCE**:
 - ⚡ **Progress Inline** durante elaborazione
@@ -528,6 +659,7 @@ Public Declare Function AdjustTokenPrivileges Lib "advapi32" (ByVal tokenHandle 
 
 2. **Parser.Naming.cs** (875 linee) - Valutare se dividere ulteriormente
 
+
 ## 🔧 **NOTE TECNICHE**
 
 - **Target Framework**: .NET 10
@@ -536,13 +668,16 @@ Public Declare Function AdjustTokenPrivileges Lib "advapi32" (ByVal tokenHandle 
 - **Performance**: Progress inline durante parsing di progetti grandi
 - **Array Controlli**: Sistema completamente funzionante
 - **Cross-Module**: References tra moduli completamente supportate
+- **Properties**: Modello `VbProperty` separato da `VbProcedure`, con rename dot-prefixed
 
 ## 📋 **TODO PROSSIME FEATURES**: 
 - ✅ **Array Controlli**: COMPLETAMENTE RISOLTO! 🎊
 - ✅ **Doppia Esecuzione**: RISOLTO! Ora è idempotente
 - ✅ **Refactoring Precisione**: RISOLTO! Ora rinomina tutte le istanze
+- ✅ **Properties Separate**: RISOLTO! Modello dedicato con rename dot-prefixed
+- 🔧 **Prefissi Controlli**: Migliorare la mappa dei prefissi standard per controlli VB6
 - 🔧 **Verifica Compilazione**: Il codice refactorizzato deve compilare
-- 🧪 **Test Altri VBP**: Provare con diversi progetti VB6 → **PO!!**
+- 🧪 **Test Altri VBP**: Provare con diversi progetti VB6
 - 📝 **Aggiunta Type Hints**: Aggiungere `As NomeTipo` dove manca  
 - 🎨 **Fix Righe Bianche**: Normalizzare spaziatura
 - 📊 **Ordinamento Dim**: Spostare dichiarazioni a inizio procedure, ordine alfabetico
@@ -559,18 +694,23 @@ Public Declare Function AdjustTokenPrivileges Lib "advapi32" (ByVal tokenHandle 
 ### ⭐ **CARATTERISTICHE PRINCIPALI**:
 1. **📋 Parsing Completo**: Tutti i costrutti VB6 supportati
 2. **🔍 Analisi Precisa**: References accurate senza duplicati  
-3. **🎯 Array Controlli**: Gestione perfetta come singola entità logica
-4. **🌐 Cross-Module**: Referenze tra moduli completamente supportate
-5. **🔄 Refactoring Sicuro**: Backup automatico e validazione
-6. **🎨 Naming Modern**: Convenzioni moderne applicate automaticamente
-7. **⚡ Performance**: Ottimizzato per progetti grandi
-8. **🛡️ Encoding VB6**: Supporto completo per caratteri speciali
-9. **📝 Parametri Multirighe**: Declare Function su più righe completamente supportate
-10. **🔄 Idempotenza**: Esecuzione multipla produce risultati identici
+3. **🏗️ Properties Separate**: Modello `VbProperty` dedicato, indicizzazione separata
+4. **🎯 Array Controlli**: Gestione perfetta come singola entità logica
+5. **🌐 Cross-Module**: Referenze tra moduli completamente supportate
+6. **🔄 Refactoring Sicuro**: Backup automatico e validazione
+7. **🎨 Naming Modern**: Convenzioni moderne applicate automaticamente
+8. **⚡ Performance**: Ottimizzato per progetti grandi
+9. **🛡️ Encoding VB6**: Supporto completo per caratteri speciali
+10. **📝 Parametri Multirighe**: Declare Function su più righe completamente supportate
+11. **🔄 Idempotenza**: Esecuzione multipla produce risultati identici
+12. **🎯 Dot-Prefixed Rename**: Rename sicuro delle proprietà senza conflitti con parametri omonimi
 
 ### 🏆 **RISULTATO FINALE**:
 Il sistema ora:
 - **Gestisce perfettamente gli array di controlli VB6** 
+- **Separa le Properties dalle Procedures** con modello dedicato
+- **Rinomina le proprietà con dot-prefix** fuori dalla classe definente
+- **Accumula References per ogni occorrenza** di `oggetto.proprietà`
 - **Rinomina correttamente tutte le istanze** (incluse cross-module)
 - **Supporta parametri su più righe** (Declare Function)
 - **È completamente idempotente** (test superato)
@@ -585,3 +725,5 @@ Il sistema ora:
 - ✅ **Parametri Multirighe**: Declare Function
 - ✅ **Test Idempotenza**: Doppia esecuzione identica
 - ✅ **Encoding VB6**: Caratteri speciali
+- ✅ **Properties Separate**: Modello dedicato, no duplicazioni
+- ✅ **Dot-Prefixed Rename**: `.OldName` → `.NewName` fuori dalla classe
