@@ -117,6 +117,14 @@ public static class Refactoring
         foreach (var lv in p.LocalVariables.Where(lv => !lv.IsConventional))
           allRenames.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name));
       }
+
+      foreach (var prop in module.Properties)
+      {
+        if (!prop.IsConventional)
+          allRenames.Add((prop.Name, prop.ConventionalName, "Property", prop, module.Name));
+        foreach (var param in prop.Parameters.Where(param => !param.IsConventional))
+          allRenames.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name));
+      }
     }
 
     // Ordina i rename per categoria (dal più specifico al più generale) e poi per lunghezza decrescente
@@ -233,11 +241,13 @@ public static class Refactoring
       "Enum" => 4,             // Dichiarazioni Enum (dipendono da EnumValue)
       "Constant" => 5,         // Costanti (no dipendenze, ma riferite da molti)
       "GlobalVariable" => 6,   // Variabili globali (potrebbero istanziare Type)
-      "Parameter" => 7,        // Parametri (scope locale a Procedure)
-      "LocalVariable" => 8,    // Variabili locali (scope locale a Procedure)
-      "Control" => 9,          // Controlli UI (Form-specific)
-      "Procedure" => 10,       // Nome procedure/funzioni (visibili globalmente)
-      "Module" => 11,          // Nome modulo (top-level, meno specifico)
+      "PropertyParameter" => 7,// Parametri proprietà (scope locale a Property)
+      "Parameter" => 8,        // Parametri (scope locale a Procedure)
+      "LocalVariable" => 9,    // Variabili locali (scope locale a Procedure)
+      "Control" => 10,         // Controlli UI (Form-specific)
+      "Property" => 11,        // Proprietà di classe (accessi con punto)
+      "Procedure" => 12,       // Nome procedure/funzioni (visibili globalmente)
+      "Module" => 13,          // Nome modulo (top-level, meno specifico)
       _ => 999                 // Sconosciuto (alla fine)
     };
   }
@@ -268,11 +278,37 @@ public static class Refactoring
       // Riga della dichiarazione: solo se il simbolo è definito nel modulo corrente
       if (string.Equals(definingModuleName, currentModuleName, StringComparison.OrdinalIgnoreCase))
       {
-        var lineNumberProp = source?.GetType().GetProperty("LineNumber");
-        if (lineNumberProp?.GetValue(source) is int lineNum && lineNum > 0)
+        // SPECIALE: Per i controlli, usa TUTTI i LineNumbers (array di controlli)
+        if (source is VbControl control)
         {
-          lineNumbersToReplace.Add(lineNum);
-          declarationLineNumber = lineNum;
+          // Se è un controllo array, usa tutti i LineNumbers
+          if (control.IsArray && control.LineNumbers?.Count > 0)
+          {
+            foreach (var lineNum in control.LineNumbers)
+            {
+              lineNumbersToReplace.Add(lineNum);
+            }
+            declarationLineNumber = control.LineNumbers.First(); // Prima riga per reference
+          }
+          else
+          {
+            // Controllo singolo, usa LineNumber normale
+            if (control.LineNumber > 0)
+            {
+              lineNumbersToReplace.Add(control.LineNumber);
+              declarationLineNumber = control.LineNumber;
+            }
+          }
+        }
+        else
+        {
+          // Altri tipi di oggetti (non controlli): usa LineNumber normale
+          var lineNumberProp = source?.GetType().GetProperty("LineNumber");
+          if (lineNumberProp?.GetValue(source) is int lineNum && lineNum > 0)
+          {
+            lineNumbersToReplace.Add(lineNum);
+            declarationLineNumber = lineNum;
+          }
         }
       }
       

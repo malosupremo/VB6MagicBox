@@ -11,13 +11,18 @@ public static partial class VbParser
 
   public static void ResolveTypesAndCalls(VbProject project)
   {
-    // Indicizzazione procedure per nome
+    // Indicizzazione procedure per nome (ESCLUSE le proprietà)
     var procIndex = new Dictionary<string, List<(string Module, VbProcedure Proc)>>(
+        StringComparer.OrdinalIgnoreCase);
+
+    // Indicizzazione proprietà per nome (SEPARATA dalle procedure)
+    var propIndex = new Dictionary<string, List<(string Module, VbProperty Prop)>>(
         StringComparer.OrdinalIgnoreCase);
 
     foreach (var mod in project.Modules)
     {
-      foreach (var proc in mod.Procedures)
+      // Indicizza solo le procedure normali (NON le proprietà)
+      foreach (var proc in mod.Procedures.Where(p => !p.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase)))
       {
         if (!procIndex.TryGetValue(proc.Name, out var list))
         {
@@ -25,6 +30,17 @@ public static partial class VbParser
           procIndex[proc.Name] = list;
         }
         list.Add((mod.Name, proc));
+      }
+
+      // Indicizza le proprietà separatamente
+      foreach (var prop in mod.Properties)
+      {
+        if (!propIndex.TryGetValue(prop.Name, out var propList))
+        {
+          propList = new List<(string, VbProperty)>();
+          propIndex[prop.Name] = propList;
+        }
+        propList.Add((mod.Name, prop));
       }
     }
 
@@ -59,6 +75,8 @@ public static partial class VbParser
           if (mod.Types.Any(t => string.Equals(t.Name, token, StringComparison.OrdinalIgnoreCase)))
             continue;
 
+          // Le proprietà NON vengono considerate come chiamate nude a livello di modulo
+          // Solo le procedure normali possono essere chiamate così
           if (procIndex.TryGetValue(token, out var targets) && targets.Count > 0)
           {
             foreach (var t in targets)
@@ -446,12 +464,34 @@ public static partial class VbParser
                 // Cerca la procedura nella classe
                 if (classIndex.TryGetValue(classNameToLookup, out var classModule))
                 {
-                  var classProc = classModule.Procedures.FirstOrDefault(p =>
+                  // PRIMA cerca nelle proprietà (hanno precedenza negli accessi con punto)
+                  var classProp = classModule.Properties.FirstOrDefault(p =>
                       p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
-                  if (classProc != null)
+                  if (classProp != null)
                   {
-                    classProc.Used = true;
+                    classProp.Used = true;
+                    
+                    // Aggiungi reference alla proprietà (merge LineNumbers se già esiste)
+                    var existingRef = classProp.References.FirstOrDefault(r =>
+                        string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (existingRef != null)
+                    {
+                      if (!existingRef.LineNumbers.Contains(li + 1))
+                        existingRef.LineNumbers.Add(li + 1);
+                    }
+                    else
+                    {
+                      classProp.References.Add(new VbReference
+                      {
+                        Module = mod.Name,
+                        Procedure = proc.Name,
+                        LineNumbers = new List<int> { li + 1 }
+                      });
+                    }
+
                     proc.Calls.Add(new VbCall
                     {
                       Raw = objName != null ? $"{objName}.{methodName}" : methodName,
@@ -459,10 +499,32 @@ public static partial class VbParser
                       MethodName = methodName,
                       ResolvedType = objType,
                       ResolvedModule = classModule.Name,
-                      ResolvedProcedure = classProc.Name,
-                      ResolvedKind = classProc.Kind,
+                      ResolvedProcedure = classProp.Name,
+                      ResolvedKind = $"Property{classProp.Kind}",
                       LineNumber = li + 1
                     });
+                  }
+                  else
+                  {
+                    // Se non è una proprietà, cerca nelle procedure normali
+                    var classProc = classModule.Procedures.FirstOrDefault(p =>
+                        p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+
+                    if (classProc != null)
+                    {
+                      classProc.Used = true;
+                      proc.Calls.Add(new VbCall
+                      {
+                        Raw = objName != null ? $"{objName}.{methodName}" : methodName,
+                        ObjectName = objName,
+                        MethodName = methodName,
+                        ResolvedType = objType,
+                        ResolvedModule = classModule.Name,
+                        ResolvedProcedure = classProc.Name,
+                        ResolvedKind = classProc.Kind,
+                        LineNumber = li + 1
+                      });
+                    }
                   }
                 }
               }
@@ -509,9 +571,9 @@ public static partial class VbParser
             if (VbKeywords.Contains(methodName) || VbKeywords.Contains(objName))
               continue;
 
-            // Skip if already in calls
-            if (proc.Calls.Any(c => string.Equals(c.Raw, $"{objName}.{methodName}", StringComparison.OrdinalIgnoreCase)))
-              continue;
+            // Controlla se già nelle Calls (per evitare duplicati nelle Calls,
+            // ma per le proprietà aggiungiamo comunque i LineNumbers alle References)
+            var alreadyInCalls = proc.Calls.Any(c => string.Equals(c.Raw, $"{objName}.{methodName}", StringComparison.OrdinalIgnoreCase));
 
             // Risolvi il tipo dell'oggetto
             if (env.TryGetValue(objName, out var objType) && !string.IsNullOrEmpty(objType))
@@ -519,25 +581,72 @@ public static partial class VbParser
               // Se il tipo contiene un namespace (es. QuarzPC.clsQuarzPC), prendi solo l'ultima parte
               var classNameToLookup = objType.Contains(".") ? objType.Split('.').Last() : objType;
               
-              // Cerca la procedura nella classe
+              // Cerca nella classe
               if (classIndex.TryGetValue(classNameToLookup, out var classModule))
               {
-                var classProc = classModule.Procedures.FirstOrDefault(p =>
+                // PRIMA cerca nelle proprietà (hanno precedenza negli accessi con punto)
+                var classProp = classModule.Properties.FirstOrDefault(p =>
                     p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
-                if (classProc != null)
+                if (classProp != null)
                 {
-                  classProc.Used = true;
-                  proc.Calls.Add(new VbCall
+                  classProp.Used = true;
+                  
+                  // Aggiungi reference alla proprietà (SEMPRE, anche se già nelle Calls,
+                  // perché ogni riga che accede alla proprietà deve avere la sua Reference)
+                  var existingRef = classProp.References.FirstOrDefault(r =>
+                      string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
+                      string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
+                  
+                  if (existingRef != null)
                   {
-                    Raw = $"{objName}.{methodName}",
-                    ObjectName = objName,
-                    MethodName = methodName,
-                    ResolvedType = classNameToLookup,
-                    ResolvedModule = classModule.Name,
-                    ResolvedProcedure = classProc.Name,
-                    ResolvedKind = classProc.Kind
-                  });
+                    if (!existingRef.LineNumbers.Contains(li + 1))
+                      existingRef.LineNumbers.Add(li + 1);
+                  }
+                  else
+                  {
+                    classProp.References.Add(new VbReference
+                    {
+                      Module = mod.Name,
+                      Procedure = proc.Name,
+                      LineNumbers = new List<int> { li + 1 }
+                    });
+                  }
+
+                  if (!alreadyInCalls)
+                  {
+                    proc.Calls.Add(new VbCall
+                    {
+                      Raw = $"{objName}.{methodName}",
+                      ObjectName = objName,
+                      MethodName = methodName,
+                      ResolvedType = classNameToLookup,
+                      ResolvedModule = classModule.Name,
+                      ResolvedProcedure = classProp.Name,
+                      ResolvedKind = $"Property{classProp.Kind}"
+                    });
+                  }
+                }
+                else if (!alreadyInCalls)
+                {
+                  // Se non è una proprietà, cerca nelle procedure normali
+                  var classProc = classModule.Procedures.FirstOrDefault(p =>
+                      p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+
+                  if (classProc != null)
+                  {
+                    classProc.Used = true;
+                    proc.Calls.Add(new VbCall
+                    {
+                      Raw = $"{objName}.{methodName}",
+                      ObjectName = objName,
+                      MethodName = methodName,
+                      ResolvedType = classNameToLookup,
+                      ResolvedModule = classModule.Name,
+                      ResolvedProcedure = classProc.Name,
+                      ResolvedKind = classProc.Kind
+                    });
+                  }
                 }
               }
             }
@@ -561,33 +670,79 @@ public static partial class VbParser
             if (!objInEnv || string.IsNullOrEmpty(objType))
               continue;
 
-            // Skip if already in calls
-            if (proc.Calls.Any(c => string.Equals(c.Raw, $"{objName}.{methodName}", StringComparison.OrdinalIgnoreCase)))
-              continue;
+            // Controlla se già nelle Calls (per le proprietà aggiungiamo comunque i LineNumbers)
+            var alreadyInCalls = proc.Calls.Any(c => string.Equals(c.Raw, $"{objName}.{methodName}", StringComparison.OrdinalIgnoreCase));
 
             // Se il tipo contiene un namespace (es. QuarzPC.clsQuarzPC), prendi solo l'ultima parte
             var classNameToLookup = objType.Contains(".") ? objType.Split('.').Last() : objType;
             
-            // Cerca la procedura nella classe
+            // Cerca nella classe
             if (classIndex.TryGetValue(classNameToLookup, out var classModule))
             {
-              var classProc = classModule.Procedures.FirstOrDefault(p =>
+              // PRIMA cerca nelle proprietà (hanno precedenza negli accessi con punto)
+              var classProp = classModule.Properties.FirstOrDefault(p =>
                   p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
-              if (classProc != null)
+              if (classProp != null)
               {
-                classProc.Used = true;
-                proc.Calls.Add(new VbCall
+                classProp.Used = true;
+                
+                // Aggiungi reference alla proprietà (SEMPRE, anche se già nelle Calls)
+                var existingRef = classProp.References.FirstOrDefault(r =>
+                    string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
+                
+                if (existingRef != null)
                 {
-                  Raw = $"{objName}.{methodName}",
-                  ObjectName = objName,
-                  MethodName = methodName,
-                  ResolvedType = classNameToLookup,
-                  ResolvedModule = classModule.Name,
-                  ResolvedProcedure = classProc.Name,
-                  ResolvedKind = classProc.Kind,
-                  LineNumber = li + 1
-                });
+                  if (!existingRef.LineNumbers.Contains(li + 1))
+                    existingRef.LineNumbers.Add(li + 1);
+                }
+                else
+                {
+                  classProp.References.Add(new VbReference
+                  {
+                    Module = mod.Name,
+                    Procedure = proc.Name,
+                    LineNumbers = new List<int> { li + 1 }
+                  });
+                }
+
+                if (!alreadyInCalls)
+                {
+                  proc.Calls.Add(new VbCall
+                  {
+                    Raw = $"{objName}.{methodName}",
+                    ObjectName = objName,
+                    MethodName = methodName,
+                    ResolvedType = classNameToLookup,
+                    ResolvedModule = classModule.Name,
+                    ResolvedProcedure = classProp.Name,
+                    ResolvedKind = $"Property{classProp.Kind}",
+                    LineNumber = li + 1
+                  });
+                }
+              }
+              else if (!alreadyInCalls)
+              {
+                // Se non è una proprietà, cerca nelle procedure normali
+                var classProc = classModule.Procedures.FirstOrDefault(p =>
+                    p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+
+                if (classProc != null)
+                {
+                  classProc.Used = true;
+                  proc.Calls.Add(new VbCall
+                  {
+                    Raw = $"{objName}.{methodName}",
+                    ObjectName = objName,
+                    MethodName = methodName,
+                    ResolvedType = classNameToLookup,
+                    ResolvedModule = classModule.Name,
+                    ResolvedProcedure = classProc.Name,
+                    ResolvedKind = classProc.Kind,
+                    LineNumber = li + 1
+                  });
+                }
               }
             }
           }
@@ -623,14 +778,7 @@ public static partial class VbParser
       Dictionary<string, VbTypeDef> typeIndex,
       Dictionary<string, string> env)
   {
-    // DEBUG: Log per procedure specifiche
-    bool debugThis = proc.Name.Equals("CompactArray", StringComparison.OrdinalIgnoreCase) || 
-                     proc.Name.Equals("Exist", StringComparison.OrdinalIgnoreCase);
     
-    if (debugThis)
-    {
-      Console.WriteLine($"[DEBUG] ResolveFieldAccesses: {proc.Name} (Kind: {proc.Kind})");
-    }
     
     // Controlli di sicurezza per evitare IndexOutOfRangeException
     if (proc.StartLine <= 0)
@@ -655,10 +803,7 @@ public static partial class VbParser
       return;
     }
     
-    if (debugThis)
-    {
-      Console.WriteLine($"[DEBUG] Scanning lines {startIndex + 1} to {endIndex} (StartLine={proc.StartLine}, EndLine={proc.EndLine})");
-    }
+   
     
     for (int i = startIndex; i < endIndex; i++)
     {
@@ -670,10 +815,7 @@ public static partial class VbParser
       if (idx >= 0)
         noComment = noComment.Substring(0, idx).Trim();
 
-      if (debugThis && noComment.Contains("msg_h") || noComment.Contains("Msg_h"))
-      {
-        Console.WriteLine($"[DEBUG] Line {i + 1}: {noComment}");
-      }
+   
 
       foreach (Match m in ReFieldAccess.Matches(noComment))
       {
@@ -689,13 +831,7 @@ public static partial class VbParser
           baseVarName = varName.Substring(0, parenIndex);
         }
 
-        if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
-                          fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
-        {
-          Console.WriteLine($"[DEBUG] Found field access: {varName}.{fieldName} on line {i + 1}");
-          Console.WriteLine($"[DEBUG] baseVarName = {baseVarName}");
-          Console.WriteLine($"[DEBUG] env.TryGetValue({baseVarName}) = {env.TryGetValue(baseVarName, out var type1)}, type = {type1}");
-        }
+       
 
         if (env.TryGetValue(baseVarName, out var typeName))
         {
@@ -709,11 +845,7 @@ public static partial class VbParser
             {
               field.Used = true;
               
-              if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
-                                fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
-              {
-                Console.WriteLine($"[DEBUG] Adding reference for {field.Name} in {mod.Name}.{proc.Name} line {i + 1}");
-              }
+            
               
               // Cerca se esiste già una Reference per questo Module+Procedure
               var existingRef = field.References.FirstOrDefault(r =>
@@ -736,17 +868,9 @@ public static partial class VbParser
                 });
               }
             }
-            else if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
-                                   fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
-            {
-              Console.WriteLine($"[DEBUG] Field {fieldName} not found in type {typeName}");
-            }
+           
           }
-          else if (debugThis && (fieldName.Equals("msg_h", StringComparison.OrdinalIgnoreCase) || 
-                                 fieldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase)))
-          {
-            Console.WriteLine($"[DEBUG] Type {typeName} not found in typeIndex");
-          }
+          
         }
       }
     }
@@ -826,34 +950,37 @@ public static partial class VbParser
         noComment = noComment.Substring(0, idx).Trim();
 
       // Pattern: controlName.Property o controlName.Method() oppure controlName(index).Property
+      // ANCHE: ModuleName.controlName(index).Property per referenze cross-module  
       foreach (Match m in Regex.Matches(noComment, @"(\w+)(?:\([^\)]*\))?\.(\w+)"))
       {
         var controlName = m.Groups[1].Value;
 
-        // Verifica se è un controllo del form
+        // Verifica se è un controllo del form corrente
         if (controlIndex.TryGetValue(controlName, out var control))
         {
-          control.Used = true;
+          MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
+        }
+      }
+
+      // Pattern avanzato per referenze cross-module: ModuleName.ControlName(index).Property
+      foreach (Match m in Regex.Matches(noComment, @"(\w+)\.(\w+)(?:\([^\)]*\))?\.(\w+)"))
+      {
+        var moduleName = m.Groups[1].Value;
+        var controlName = m.Groups[2].Value;
+        
+        // Cerca il modulo nel progetto 
+        var targetModule = mod.Owner?.Modules?.FirstOrDefault(module => 
+            string.Equals(module.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+        
+        if (targetModule != null)
+        {
+          // Cerca TUTTI i controlli con lo stesso nome (array di controlli)
+          var controls = targetModule.Controls.Where(c => 
+              string.Equals(c.Name, controlName, StringComparison.OrdinalIgnoreCase));
           
-          // Cerca se esiste già una Reference per questo Module+Procedure
-          var existingRef = control.References.FirstOrDefault(r => 
-            string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-          
-          if (existingRef != null)
+          foreach (var control in controls)
           {
-            // Aggiungi solo il line number
-            existingRef.LineNumbers.Add(i + 1);
-          }
-          else
-          {
-            // Crea nuova Reference con line number
-            control.References.Add(new VbReference
-            {
-              Module = mod.Name,
-              Procedure = proc.Name,
-              LineNumbers = new List<int> { i + 1 }
-            });
+            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
           }
         }
       }
@@ -1608,5 +1735,35 @@ public static partial class VbParser
 
     // Marcatura tipi usati
     MarkUsedTypes(project);
+  }
+  
+  /// <summary>
+  /// Marca un controllo come usato e aggiunge reference con line numbers
+  /// </summary>
+  private static void MarkControlAsUsed(VbControl control, string moduleName, string procedureName, int lineNumber)
+  {
+    control.Used = true;
+    
+    // Cerca se esiste già una Reference per questo Module+Procedure
+    var existingRef = control.References.FirstOrDefault(r => 
+      string.Equals(r.Module, moduleName, StringComparison.OrdinalIgnoreCase) &&
+      string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
+    
+    if (existingRef != null)
+    {
+      // Aggiungi solo il line number se non già presente
+      if (!existingRef.LineNumbers.Contains(lineNumber))
+        existingRef.LineNumbers.Add(lineNumber);
+    }
+    else
+    {
+      // Crea nuova Reference con line number
+      control.References.Add(new VbReference
+      {
+        Module = moduleName,
+        Procedure = procedureName,
+        LineNumbers = new List<int> { lineNumber }
+      });
+    }
   }
 }

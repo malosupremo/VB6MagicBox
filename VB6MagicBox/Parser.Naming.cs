@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+Ôªøusing System.Text.RegularExpressions;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -82,7 +82,7 @@ public static partial class VbParser
       
       var result = new System.Text.StringBuilder();
       
-      // Aggiungi sempre la prima lettera (anche se Ë vocale)
+      // Aggiungi sempre la prima lettera (anche se √® vocale)
       result.Append(char.ToLowerInvariant(cleanType[0]));
       
       // Per le lettere successive, rimuovi le vocali
@@ -134,7 +134,7 @@ public static partial class VbParser
     {
       if (string.IsNullOrEmpty(name)) return name;
 
-      // Split per underscore per gestire nomi con _ gi‡ presenti
+      // Split per underscore per gestire nomi con _ gi√† presenti
       var parts = name.Split('_');
       var processedParts = new List<string>();
 
@@ -155,10 +155,10 @@ public static partial class VbParser
           var current = part[i];
 
           // Aggiungi underscore se:
-          // 1. Non Ë l'inizio
-          // 2. Il carattere corrente Ë maiuscolo
-          // 3. E il precedente Ë minuscolo (parola nuova: itemUA)
-          // 4. OPPURE il prossimo Ë minuscolo (fine acronimo: UAObj -> UA_Obj)
+          // 1. Non √® l'inizio
+          // 2. Il carattere corrente √® maiuscolo
+          // 3. E il precedente √® minuscolo (parola nuova: itemUA)
+          // 4. OPPURE il prossimo √® minuscolo (fine acronimo: UAObj -> UA_Obj)
           if (i > 0 && char.IsUpper(current))
           {
             var prev = part[i - 1];
@@ -188,61 +188,67 @@ public static partial class VbParser
     }
 
 
-    private static string ApplyControlNaming(string controlName, string controlType)
+  private static string ApplyControlNaming(string controlName, string controlType)
+  {
+    if (string.IsNullOrEmpty(controlName)) return controlName;
+
+    var expectedPrefix = GetControlPrefix(controlType);
+
+    // Caso speciale: TextBox con prefissi non standard (tb, tx) ? normalizza a txt
+    var cleanType = controlType;
+    if (cleanType.StartsWith("VB.", StringComparison.OrdinalIgnoreCase))
+      cleanType = cleanType.Substring(3);
+
+    if (cleanType.Equals("TextBox", StringComparison.OrdinalIgnoreCase))
     {
-      if (string.IsNullOrEmpty(controlName)) return controlName;
-
-      var expectedPrefix = GetControlPrefix(controlType);
-
-      // Caso speciale: TextBox con prefissi non standard (tb, tx) ? normalizza a txt
-      var cleanType = controlType;
-      if (cleanType.StartsWith("VB.", StringComparison.OrdinalIgnoreCase))
-        cleanType = cleanType.Substring(3);
-
-      if (cleanType.Equals("TextBox", StringComparison.OrdinalIgnoreCase))
+      // Controlla se ha prefisso "tb" o "tx" (ma non "txt")
+      if (controlName.Length > 2 &&
+          (controlName.StartsWith("tb", StringComparison.OrdinalIgnoreCase) ||
+           controlName.StartsWith("tx", StringComparison.OrdinalIgnoreCase)) &&
+          !controlName.StartsWith("txt", StringComparison.OrdinalIgnoreCase))
       {
-        // Controlla se ha prefisso "tb" o "tx" (ma non "txt")
-        if (controlName.Length > 2 &&
-            (controlName.StartsWith("tb", StringComparison.OrdinalIgnoreCase) ||
-             controlName.StartsWith("tx", StringComparison.OrdinalIgnoreCase)) &&
-            !controlName.StartsWith("txt", StringComparison.OrdinalIgnoreCase))
+        var prefixLen = 2;
+        if (controlName.Length > prefixLen && char.IsUpper(controlName[prefixLen]))
         {
-          var prefixLen = 2;
-          if (controlName.Length > prefixLen && char.IsUpper(controlName[prefixLen]))
-          {
-            // tbUsername o txEmail ? txtUsername, txtEmail
-            var baseName = controlName.Substring(prefixLen);
-            return "txt" + baseName;
-          }
+          // tbSQM o txEmail ? txtSQM, txtEmail (preserva capitalizzazione)
+          var baseName = controlName.Substring(prefixLen);
+          return "txt" + baseName;
         }
       }
-
-      // Verifica se il nome inizia gi‡ con il prefisso corretto (case insensitive)
-      // IMPORTANTE: deve esserci una lettera MAIUSCOLA dopo il prefisso (camelCase)
-      if (controlName.Length > expectedPrefix.Length &&
-          controlName.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase) &&
-          char.IsUpper(controlName[expectedPrefix.Length]))
-      {
-        // Ha gi‡ il prefisso corretto, applica solo il formato camelCase
-        var baseName = controlName.Substring(expectedPrefix.Length);
-        return expectedPrefix + ToPascalCase(baseName);
-      }
-
-      // Controlla se ha un altro prefisso a 3 lettere (es: txt, cmd, lbl)
-      if (controlName.Length > 3 &&
-          char.IsLower(controlName[0]) &&
-          char.IsLower(controlName[1]) &&
-          char.IsLower(controlName[2]) &&
-          char.IsUpper(controlName[3]))
-      {
-        // Ha un prefisso diverso, sostituiscilo
-        var baseName = controlName.Substring(3);
-        return expectedPrefix + baseName;
-      }
-
-      // Non ha prefisso, aggiungilo
-      return expectedPrefix + ToPascalCase(controlName);
     }
+
+    // Verifica se il nome inizia gi√† con il prefisso corretto (case insensitive)
+    // IMPORTANTE: deve esserci una lettera MAIUSCOLA dopo il prefisso (camelCase)
+    if (controlName.Length > expectedPrefix.Length &&
+        controlName.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase) &&
+        char.IsUpper(controlName[expectedPrefix.Length]))
+    {
+      // Ha gi√† il prefisso corretto, preserva la capitalizzazione esistente
+      var baseName = controlName.Substring(expectedPrefix.Length);
+      return expectedPrefix + baseName;
+    }
+
+    // Controlla se ha un altro prefisso a 3 lettere (es: txt, cmd, lbl)
+    if (controlName.Length > 3 &&
+        char.IsLower(controlName[0]) &&
+        char.IsLower(controlName[1]) &&
+        char.IsLower(controlName[2]) &&
+        char.IsUpper(controlName[3]))
+    {
+      // Ha un prefisso diverso, sostituiscilo ma preserva capitalizzazione
+      var baseName = controlName.Substring(3);
+      return expectedPrefix + baseName;
+    }
+
+    // Non ha prefisso, aggiungilo ma preserva capitalizzazione
+    // Solo la prima lettera deve essere maiuscola per camelCase
+    var nameToFix = controlName;
+    if (nameToFix.Length > 0 && char.IsLower(nameToFix[0]))
+    {
+      nameToFix = char.ToUpper(nameToFix[0]) + nameToFix.Substring(1);
+    }
+    return expectedPrefix + nameToFix;
+  }
 
     private static bool IsHungarianM(string name)
     {
@@ -340,6 +346,14 @@ public static partial class VbParser
                              .Select(s => s.Trim())
                              .ToList();
 
+      // REGOLA 1: Se il tipo contiene un punto (namespace), probabilmente √® una classe esterna
+      // Esempi: Sweeper.NIDAQMX, OpticalMonitor.Device, TimeGetWrapper.TimeGetWrap
+      if (segments.Count > 1)
+      {
+        return true; // Considera qualsiasi tipo con namespace come classe
+      }
+
+      // REGOLA 2: Cerca nei moduli locali del progetto
       foreach (var mod in project.Modules.Where(m => m.IsClass))
       {
         var moduleName = mod.Name; // already without extension
@@ -352,7 +366,7 @@ public static partial class VbParser
           return true;
       }
 
-      // Fallback: if type name includes a cls prefix anywhere (e.g., clsIonGun), treat as class
+      // REGOLA 3: Fallback - se il nome include "cls" da qualche parte
       return Regex.IsMatch(typeName, @"\bcls\w+", RegexOptions.IgnoreCase);
     }
 
@@ -376,7 +390,7 @@ public static partial class VbParser
 
         var pascalName = ToPascalCase(rawName);
 
-        // Se il nome risultante Ë una keyword C# (es. "With"), aggiungi "Class"
+        // Se il nome risultante √® una keyword C# (es. "With"), aggiungi "Class"
         if (CSharpKeywords.Contains(pascalName.ToLower())) // Check lowercase against lowercase keywords usually
         {
           pascalName += "Class";
@@ -387,7 +401,7 @@ public static partial class VbParser
         // Global Variables - con conflict resolution
         foreach (var v in mod.GlobalVariables)
         {
-          var baseName = GetBaseNameFromHungarian(v.Name);
+          var baseName = GetBaseNameFromHungarian(v.Name, v.Type);
 
           // Controlla se il nome termina con _numero (array di oggetti es: objFM489_0)
           string arraySuffix = null;
@@ -401,10 +415,10 @@ public static partial class VbParser
           string conventionalName;
           if (v.IsStatic)
           {
-            // Per le variabili static: controlla se inizia gi‡ con "s_"
+            // Per le variabili static: controlla se inizia gi√† con "s_"
             if (baseName.StartsWith("s_", StringComparison.OrdinalIgnoreCase))
             {
-              // Gi‡ nel formato corretto s_Nome, mantieni cosÏ com'Ë
+              // Gi√† nel formato corretto s_Nome, mantieni cos√¨ com'√®
               conventionalName = baseName + (arraySuffix ?? "");
             }
             else
@@ -422,10 +436,10 @@ public static partial class VbParser
           }
           else if (IsPrivate(v.Visibility))
           {
-            // Module Private: controlla se inizia gi‡ con "m_"
+            // Module Private: controlla se inizia gi√† con "m_"
             if (baseName.StartsWith("m_", StringComparison.OrdinalIgnoreCase))
             {
-              // Gi‡ nel formato corretto m_Nome, mantieni cosÏ com'Ë
+              // Gi√† nel formato corretto m_Nome, mantieni cos√¨ com'√®
               conventionalName = baseName + (arraySuffix ?? "");
             }
             else
@@ -436,8 +450,8 @@ public static partial class VbParser
           }
           else
           {
-            // Public globals: comportamento diverso per Form/Class vs Module
-            bool isFormOrClass = mod.IsClass; // Form (.frm) o Class (.cls)
+            // Public globals: comportamento diverso per Module vs Form/Class
+            bool isModule = mod.Kind.Equals("bas", StringComparison.OrdinalIgnoreCase);
 
             // Se il nome inizia con "gobj", sempre g_ naming (forzato globale)
             if (v.Name.StartsWith("gobj", StringComparison.OrdinalIgnoreCase))
@@ -458,11 +472,34 @@ public static partial class VbParser
             else if (IsClassType(project, v.Type))
             {
               // Oggetto custom (non tipo nativo)
-              if (isFormOrClass)
+              if (isModule)
               {
-                // FORM/CLASS: oggetti pubblici ? objName (camelCase)
-                // Es: UAServerObj ? objUAServerObj
-                // Es: objFM489 ? objFM489 (gi‡ OK)
+                // MODULE: oggetti pubblici ‚Üí g_Name (globali reali)
+                if (baseName.StartsWith("g_", StringComparison.OrdinalIgnoreCase))
+                {
+                  var tail = baseName.Substring(2);
+                  // Se il tail √® gi√† in PascalCase, mantieni il nome originale
+                  if (IsPascalCase(tail))
+                  {
+                    conventionalName = baseName + (arraySuffix ?? "");
+                  }
+                  else
+                  {
+                    // Il tail non √® PascalCase, applicalo
+                    conventionalName = "g_" + ToPascalCase(tail) + (arraySuffix ?? "");
+                  }
+                }
+                else
+                {
+                  // Non inizia con g_, aggiungilo
+                  conventionalName = "g_" + ToPascalCase(baseName) + (arraySuffix ?? "");
+                }
+              }
+              else
+              {
+                // FORM/CLASS: oggetti pubblici ‚Üí objName (non globali)
+                // Es: UAServerObj ‚Üí objUAServerObj
+                // Es: objFM489 ‚Üí objFM489 (gi√† OK)
                 var tail = baseName;
 
                 // Rimuovi prefisso obj se presente (per evitare objObjName)
@@ -473,16 +510,6 @@ public static partial class VbParser
 
                 // Applica PascalCase al tail e poi prefisso obj
                 conventionalName = "obj" + ToPascalCase(tail) + (arraySuffix ?? "");
-              }
-              else
-              {
-                // MODULE: oggetti pubblici ? g_Name (PascalCase)
-                var raw = baseName;
-                if (!raw.StartsWith("g_", StringComparison.OrdinalIgnoreCase))
-                  raw = "g_" + raw;
-
-                var tail = raw.Substring(2);
-                conventionalName = "g_" + ToPascalCase(tail) + (arraySuffix ?? "");
               }
             }
             else
@@ -498,7 +525,7 @@ public static partial class VbParser
 
           if (IsReservedWord(v.ConventionalName))
           {
-            // Se Ë reserved word, torna al nome originale e rimuovi da globalNamesUsed
+            // Se √® reserved word, torna al nome originale e rimuovi da globalNamesUsed
             globalNamesUsed.Remove(v.ConventionalName);
             v.ConventionalName = v.Name;
             globalNamesUsed.Add(v.ConventionalName);
@@ -523,7 +550,7 @@ public static partial class VbParser
           }
         }
 
-        // Enums - con conflict resolution (usando globalNamesUsed perchÈ sono a livello modulo)
+        // Enums - con conflict resolution (usando globalNamesUsed perch√© sono a livello modulo)
         foreach (var e in mod.Enums)
         {
           // Convert SCREAMING_SNAKE_CASE to PascalCase
@@ -555,7 +582,7 @@ public static partial class VbParser
           }
         }
 
-        // Types - con conflict resolution (usando globalNamesUsed perchÈ sono a livello modulo)
+        // Types - con conflict resolution (usando globalNamesUsed perch√© sono a livello modulo)
         foreach (var t in mod.Types)
         {
           var conventionalName = ToPascalCaseType(t.Name);
@@ -575,7 +602,7 @@ public static partial class VbParser
           {
             var fieldConventionalName = ToPascalCase(f.Name);
 
-            // Caso speciale: se il campo si chiama "Type", Ë una keyword riservata
+            // Caso speciale: se il campo si chiama "Type", √® una keyword riservata
             if (fieldConventionalName.Equals("Type", StringComparison.OrdinalIgnoreCase))
             {
               fieldConventionalName = "TypeValue";
@@ -591,7 +618,7 @@ public static partial class VbParser
           }
         }
 
-        // Events - con conflict resolution (usando globalNamesUsed perchÈ sono a livello modulo)
+        // Events - con conflict resolution (usando globalNamesUsed perch√© sono a livello modulo)
         foreach (var ev in mod.Events)
         {
           var conventionalName = ToPascalCase(ev.Name);
@@ -729,13 +756,13 @@ public static partial class VbParser
           }
 
           // SPECIALE: Property Get/Let/Set con lo stesso nome devono mantenere lo stesso ConventionalName
-          // Verifica se questa Ë una Property e se esiste gi‡ una Property Get/Let/Set con lo stesso nome
+          // Verifica se questa √® una Property e se esiste gi√† una Property Get/Let/Set con lo stesso nome
           if (proc.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
           {
-            // Estrai il nome base della propriet‡ (senza Get/Let/Set)
+            // Estrai il nome base della propriet√† (senza Get/Let/Set)
             var basePropName = proc.Name;
             
-            // Cerca se esiste gi‡ una Property (Get/Let/Set) con lo stesso nome base
+            // Cerca se esiste gi√† una Property (Get/Let/Set) con lo stesso nome base
             var existingProperty = mod.Procedures.FirstOrDefault(p => 
                 p != proc &&
                 p.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase) &&
@@ -788,15 +815,15 @@ public static partial class VbParser
           // Variabili locali
           foreach (var v in proc.LocalVariables)
           {
-            var baseName = GetBaseNameFromHungarian(v.Name);
+            var baseName = GetBaseNameFromHungarian(v.Name, v.Type);
             string localConventionalName;
 
             if (v.IsStatic)
             {
-              // Per le variabili static: controlla se inizia gi‡ con "s_"
+              // Per le variabili static: controlla se inizia gi√† con "s_"
               if (baseName.StartsWith("s_", StringComparison.OrdinalIgnoreCase))
               {
-                // Gi‡ nel formato corretto s_Nome, mantieni cosÏ com'Ë
+                // Gi√† nel formato corretto s_Nome, mantieni cos√¨ com'√®
                 localConventionalName = baseName;
               }
               else
@@ -833,11 +860,95 @@ public static partial class VbParser
             c.ConventionalName = ResolveNameConflict(constantConventionalName, localScopeNamesUsed);
             localScopeNamesUsed.Add(c.ConventionalName);
 
-            if (IsReservedWord(c.ConventionalName))
+          }
+        }
+
+        // Properties - con conflict resolution (separata dalle procedure)
+        foreach (var prop in mod.Properties)
+        {
+          string conventionalName;
+
+          // Event Handling Detection (simile alle procedure)
+          if (prop.Name.Equals("Class_Initialize", StringComparison.OrdinalIgnoreCase) ||
+              prop.Name.Equals("Class_Terminate", StringComparison.OrdinalIgnoreCase) ||
+              (mod.Kind.Equals("frm", StringComparison.OrdinalIgnoreCase) &&
+               (prop.Name.StartsWith("Form_", StringComparison.OrdinalIgnoreCase) ||
+                prop.Name.StartsWith("UserControl_", StringComparison.OrdinalIgnoreCase))))
+          {
+            conventionalName = prop.Name;
+          }
+          else if (prop.Name.Contains("_"))
+          {
+            // Possibile event handler: Object_Event
+            var prefixName = prop.Name.Split('_')[0];
+            var isControlEventHandler = mod.Controls.Any(ctrl => 
+              string.Equals(ctrl.Name, prefixName, StringComparison.OrdinalIgnoreCase));
+
+            if (isControlEventHandler)
             {
-              localScopeNamesUsed.Remove(c.ConventionalName);
-              c.ConventionalName = c.Name;
-              localScopeNamesUsed.Add(c.ConventionalName);
+              // √à un event handler di controllo: ObjectName_EventName
+              var parts = prop.Name.Split('_', 2);
+              if (parts.Length == 2)
+              {
+                var objectName = ToPascalCase(parts[0]);
+                var eventName = ToPascalCase(parts[1]);
+                conventionalName = $"{objectName}_{eventName}";
+              }
+              else
+              {
+                conventionalName = ToPascalCase(prop.Name);
+              }
+            }
+            else
+            {
+              conventionalName = ToPascalCase(prop.Name);
+            }
+          }
+          else
+          {
+            conventionalName = ToPascalCase(prop.Name);
+          }
+
+          // SPECIALE: Property Get/Let/Set con lo stesso nome devono mantenere lo stesso ConventionalName
+          // Cerca se esiste gi√† una Property (Get/Let/Set) con lo stesso nome base
+          var existingProperty = mod.Properties.FirstOrDefault(p => 
+              p != prop &&
+              p.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase));
+          
+          if (existingProperty != null && !string.IsNullOrEmpty(existingProperty.ConventionalName))
+          {
+            // Usa lo stesso ConventionalName della Property esistente
+            prop.ConventionalName = existingProperty.ConventionalName;
+          }
+          else
+          {
+            // Prima Property con questo nome, applica conflict resolution normale
+            prop.ConventionalName = ResolveNameConflict(conventionalName, procedureNamesUsed);
+            procedureNamesUsed.Add(prop.ConventionalName);
+          }
+
+          if (IsReservedWord(prop.ConventionalName))
+          {
+            procedureNamesUsed.Remove(prop.ConventionalName);
+            prop.ConventionalName = prop.Name;
+            procedureNamesUsed.Add(prop.ConventionalName);
+          }
+
+          // Per ogni propriet√†, gestione conflict resolution di parametri
+          var localScopeNamesUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+          // Parametri
+          foreach (var param in prop.Parameters)
+          {
+            var paramConventionalName = ToCamelCase(param.Name);
+            param.ConventionalName = ResolveNameConflict(paramConventionalName, localScopeNamesUsed);
+            localScopeNamesUsed.Add(param.ConventionalName);
+
+            if (IsReservedWord(param.ConventionalName))
+            {
+              localScopeNamesUsed.Remove(param.ConventionalName);
+              param.ConventionalName = param.Name;
+              localScopeNamesUsed.Add(param.ConventionalName);
             }
           }
         }
@@ -849,7 +960,7 @@ public static partial class VbParser
         "int", "str", "lng", "dbl", "sng", "cur", "bol", "byt", "chr", "dat", "obj", "arr", "udt"
     };
 
-    private static string GetBaseNameFromHungarian(string name)
+    private static string GetBaseNameFromHungarian(string name, string variableType = "")
     {
       if (string.IsNullOrEmpty(name)) return name;
 
@@ -876,20 +987,20 @@ public static partial class VbParser
         return name.Substring(1); // Rimuovi la 'm' iniziale
       }
 
-      // Caso speciale: m_Nome (gi‡ conforme alla convenzione) -> mantieni cosÏ com'Ë
+      // Caso speciale: m_Nome (gi√† conforme alla convenzione) -> mantieni cos√¨ com'√®
       if (name.StartsWith("m_", StringComparison.OrdinalIgnoreCase))
       {
-        return name; // Gi‡ nel formato corretto m_Nome
+        return name; // Gi√† nel formato corretto m_Nome
       }
 
-      // Caso speciale: s_Nome (gi‡ conforme alla convenzione) -> mantieni cosÏ com'Ë  
+      // Caso speciale: s_Nome (gi√† conforme alla convenzione) -> mantieni cos√¨ com'√®  
       if (name.StartsWith("s_", StringComparison.OrdinalIgnoreCase))
       {
-        return name; // Gi‡ nel formato corretto s_Nome
+        return name; // Gi√† nel formato corretto s_Nome
       }
 
       // For non-module locals: only strip known 3-letter prefixes when name does NOT start with 'm'
-      // (ma ora gestiamo gi‡ i casi mCamelCase e m_ sopra)
+      // (ma ora gestiamo gi√† i casi mCamelCase e m_ sopra)
       if (name.StartsWith("m", StringComparison.OrdinalIgnoreCase))
         return name;
 
@@ -897,6 +1008,22 @@ public static partial class VbParser
       if (match.Success)
       {
         var prefix = match.Groups[1].Value;
+        
+        // Caso speciale per 'cur': rimuovi solo se il tipo √® Currency
+        if (prefix.Equals("cur", StringComparison.OrdinalIgnoreCase))
+        {
+          // Rimuovi 'cur' solo se il tipo √® Currency, altrimenti mantieni (potrebbe essere 'current')
+          if (!string.IsNullOrEmpty(variableType) && 
+              variableType.Equals("Currency", StringComparison.OrdinalIgnoreCase))
+          {
+            return match.Groups[2].Value; // Rimuovi prefisso cur per variabili Currency
+          }
+          else
+          {
+            return name; // Mantieni nome completo (probabilmente 'current')
+          }
+        }
+        
         if (HungarianPrefixes.Contains(prefix))
           return match.Groups[2].Value;
       }
@@ -925,7 +1052,7 @@ public static partial class VbParser
       {
         if (part.Length > 0)
         {
-          // Se la parte Ë tutta maiuscola (come "MAX" o "TIME"), normalizzala
+          // Se la parte √® tutta maiuscola (come "MAX" o "TIME"), normalizzala
           if (part.All(char.IsUpper) && part.All(char.IsLetter))
           {
             // Converti a PascalCase: prima lettera maiuscola, resto minuscolo
@@ -952,7 +1079,7 @@ public static partial class VbParser
     {
       if (string.IsNullOrEmpty(s)) return s;
 
-      // Se il nome Ë gi‡ in UPPER_SNAKE_CASE (tutte maiuscole + underscore), restituiscilo cosÏ com'Ë
+      // Se il nome √® gi√† in UPPER_SNAKE_CASE (tutte maiuscole + underscore), restituiscilo cos√¨ com'√®
       // Questo preserva nomi come RIC_AL_PDxI1_LOWVOLTAGE
       if (Regex.IsMatch(s, @"^[A-Z0-9_]+$"))
         return s;
@@ -1004,7 +1131,7 @@ public static partial class VbParser
 
     /// <summary>
     /// Risolve i conflitti di naming aggiungendo un suffisso numerico progressivo.
-    /// Es: se "result" Ë gi‡ usato, prova "result2", "result3", ecc.
+    /// Es: se "result" √® gi√† usato, prova "result2", "result3", ecc.
     /// </summary>
     private static string ResolveNameConflict(string proposedName, HashSet<string> usedNames)
     {
@@ -1020,6 +1147,25 @@ public static partial class VbParser
       }
 
       return finalName;
+    }
+    
+    /// <summary>
+    /// Verifica se una stringa √® gi√† in formato PascalCase.
+    /// Una stringa √® PascalCase se inizia con una lettera maiuscola 
+    /// e non contiene underscore o caratteri speciali.
+    /// </summary>
+    private static bool IsPascalCase(string name)
+    {
+      if (string.IsNullOrEmpty(name)) return false;
+      
+      // Deve iniziare con lettera maiuscola
+      if (!char.IsUpper(name[0])) return false;
+      
+      // Non deve contenere underscore
+      if (name.Contains('_')) return false;
+      
+      // Deve contenere solo lettere e numeri
+      return name.All(c => char.IsLetterOrDigit(c));
     }
   }
 }

@@ -1,4 +1,4 @@
-using VB6MagicBox.Models;
+Ôªøusing VB6MagicBox.Models;
 using System.Text.RegularExpressions;
 
 namespace VB6MagicBox.Parsing;
@@ -13,12 +13,12 @@ public static partial class VbParser
   {
     var collapsedLines = new List<string>();
     var lineMapping = new List<int>(); // Mapping da riga collapsed a riga originale
-    
+
     for (int i = 0; i < lines.Length; i++)
     {
       var currentLine = lines[i];
       var originalLineNumber = i + 1;
-      
+
       // Se la riga termina con "_", concatena le righe successive
       while (i < lines.Length && currentLine.TrimEnd().EndsWith("_"))
       {
@@ -26,9 +26,9 @@ public static partial class VbParser
         var withoutContinuation = currentLine.TrimEnd();
         if (withoutContinuation.EndsWith("_"))
           withoutContinuation = withoutContinuation.Substring(0, withoutContinuation.Length - 1);
-        
+
         currentLine = withoutContinuation;
-        
+
         // Aggiungi la riga successiva (se esiste)
         if (i + 1 < lines.Length)
         {
@@ -37,11 +37,11 @@ public static partial class VbParser
           currentLine += " " + nextLine; // Unisci con uno spazio
         }
       }
-      
+
       collapsedLines.Add(currentLine);
       lineMapping.Add(originalLineNumber);
     }
-    
+
     return (collapsedLines.ToArray(), lineMapping.ToArray());
   }
 
@@ -209,6 +209,7 @@ public static partial class VbParser
         rel = Path.DirectorySeparatorChar + rel;
 
       mod.Path = rel;
+      mod.Owner = project;  // Imposta il riferimento al progetto
       project.Modules.Add(mod);
     }
 
@@ -247,7 +248,7 @@ public static partial class VbParser
           // Formato senza separatore: Form=Form\Restart.frm oppure Form=frmMain
           var name = parts[0].Trim();
 
-          // Se ha gi‡ l'estensione, usalo direttamente
+          // Se ha gi√† l'estensione, usalo direttamente
           if (name.EndsWith(".frm", StringComparison.OrdinalIgnoreCase))
             path = name;
           else
@@ -319,6 +320,12 @@ public static partial class VbParser
   // PARSING MODULO
   // -------------------------
 
+  private static readonly Regex ReVbName =
+      new(@"^Attribute\s+VB_Name\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+
+  private static readonly Regex ReFormBegin =
+      new(@"^Begin\s+VB\.Form\s+(\w+)", RegexOptions.IgnoreCase);
+
   public static VbModule ParseModule(string path, string kind)
   {
     var mod = new VbModule
@@ -333,11 +340,12 @@ public static partial class VbParser
     mod.FullPath = path;
 
     var originalLines = File.ReadAllLines(path);
-    
+
     // Gestisci le righe con continuazione "_"
     var (collapsedLines, lineMapping) = CollapseLineContinuations(originalLines);
 
     VbProcedure currentProc = null;
+    VbProperty currentProperty = null;
     VbTypeDef currentType = null;
     VbEnumDef currentEnum = null;
     bool insideControl = false;
@@ -348,6 +356,8 @@ public static partial class VbParser
 
     foreach (var raw in collapsedLines)
     {
+
+
       var originalLineNumber = lineMapping[lineIndex];
       lineIndex++;
       var line = raw.Trim();
@@ -357,6 +367,45 @@ public static partial class VbParser
       var commentIndex = noComment.IndexOf("'");
       if (commentIndex >= 0)
         noComment = noComment.Substring(0, commentIndex).Trim();
+
+      // -------------------------
+      // ATTRIBUTE VB_NAME (per classi e moduli)
+      // -------------------------
+      var mvbName = ReVbName.Match(noComment);
+      if (mvbName.Success)
+      {
+        mod.Name = mvbName.Groups[1].Value;
+
+        //introduco la primissima reference
+        mod.References.Add(new VbReference()
+        {
+          Module = mod.Name,
+          Procedure = string.Empty,
+          LineNumbers = new List<int> { originalLineNumber }
+        });
+        continue;
+      }
+
+      // -------------------------
+      // BEGIN VB.FORM (per form)
+      // -------------------------
+      if (kind.Equals("frm", StringComparison.OrdinalIgnoreCase))
+      {
+        var mFormBegin = ReFormBegin.Match(noComment);
+        if (mFormBegin.Success)
+        {
+          mod.Name = mFormBegin.Groups[1].Value;
+
+          //introduco la primissima reference
+          mod.References.Add(new VbReference()
+          {
+            Module = mod.Name,
+            Procedure = string.Empty,
+            LineNumbers = new List<int> { originalLineNumber }
+          });
+          continue;
+        }
+      }
 
       // -------------------------
       // FORM CONTROLS
@@ -369,27 +418,16 @@ public static partial class VbParser
           insideControl = true;
           var controlName = mc.Groups[2].Value;
           var controlType = mc.Groups[1].Value;
-          
-          // Controlla se esiste gi‡ un controllo con lo stesso nome (array di controlli)
-          currentControl = mod.Controls.FirstOrDefault(c => 
-              c.Name.Equals(controlName, StringComparison.OrdinalIgnoreCase));
-          
-          if (currentControl != null)
+
+          // Crea sempre un nuovo controllo temporaneo per raccogliere i dati
+          currentControl = new VbControl
           {
-            // Esiste gi‡ - marca come array
-            currentControl.IsArray = true;
-          }
-          else
-          {
-            // Nuovo controllo
-            currentControl = new VbControl
-            {
-              ControlType = controlType,
-              Name = controlName,
-              LineNumber = originalLineNumber
-            };
-            mod.Controls.Add(currentControl);
-          }
+            ControlType = controlType,
+            Name = controlName,
+            LineNumber = originalLineNumber
+          };
+
+          mod.Controls.Add(currentControl);
           continue;
         }
 
@@ -461,9 +499,9 @@ public static partial class VbParser
           if (mf.Success)
           {
             var fieldName = mf.Groups[1].Value;
-            var arrayPart = mf.Groups[2].Value; // puÚ essere vuoto o "(dimensione)"
+            var arrayPart = mf.Groups[2].Value; // pu√≤ essere vuoto o "(dimensione)"
             var fieldType = mf.Groups[3].Value;
-            
+
             currentType.Fields.Add(new VbField
             {
               Name = fieldName,
@@ -500,14 +538,14 @@ public static partial class VbParser
         else
         {
           // Estrai solo il nome dell'enum value (prima di '=' se presente)
-          // Es: "RIC_CONTROL_EMPTY = 0" ? "RIC_CONTROL_EMPTY"
+          // Es: "RIC_CONTROL_EMPTY = 0" ‚Üí "RIC_CONTROL_EMPTY"
           var enumValueName = noComment;
           var equalIndex = noComment.IndexOf('=');
           if (equalIndex >= 0)
           {
             enumValueName = noComment.Substring(0, equalIndex).Trim();
           }
-          
+
           // Salta righe vuote o solo spazi
           if (!string.IsNullOrWhiteSpace(enumValueName))
           {
@@ -524,7 +562,7 @@ public static partial class VbParser
       if (mf2.Success)
       {
         var isStatic = Regex.IsMatch(noComment, @"\bStatic\b", RegexOptions.IgnoreCase);
-        
+
         currentProc = new VbProcedure
         {
           Visibility = string.IsNullOrEmpty(mf2.Groups[1].Value) ? "Public" : mf2.Groups[1].Value,
@@ -538,18 +576,18 @@ public static partial class VbParser
           StartLine = originalLineNumber
         };
         mod.Procedures.Add(currentProc);
-        
+
         // Traccia event handler per controlli (es. Command1_Click)
         foreach (var control in mod.Controls)
         {
           var prefix = $"{control.Name}_";
           if (currentProc.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
           {
-            // Questa procedura Ë un event handler di questo controllo
+            // Questa procedura √® un event handler di questo controllo
             var existingRef = control.References.FirstOrDefault(r =>
               string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
               string.Equals(r.Procedure, currentProc.Name, StringComparison.OrdinalIgnoreCase));
-            
+
             if (existingRef != null)
             {
               // Aggiungi il line number se non presente
@@ -566,10 +604,10 @@ public static partial class VbParser
                 LineNumbers = new List<int> { originalLineNumber }
               });
             }
-            break; // Un controllo puÚ avere un solo event handler con questo nome
+            break; // Un controllo pu√≤ avere un solo event handler con questo nome
           }
         }
-        
+
         continue;
       }
 
@@ -580,7 +618,7 @@ public static partial class VbParser
       if (ms.Success)
       {
         var isStatic = Regex.IsMatch(noComment, @"\bStatic\b", RegexOptions.IgnoreCase);
-        
+
         currentProc = new VbProcedure
         {
           Visibility = string.IsNullOrEmpty(ms.Groups[1].Value) ? "Public" : ms.Groups[1].Value,
@@ -593,18 +631,18 @@ public static partial class VbParser
           StartLine = originalLineNumber
         };
         mod.Procedures.Add(currentProc);
-        
+
         // Traccia event handler per controlli (es. Command1_Click)
         foreach (var control in mod.Controls)
         {
           var prefix = $"{control.Name}_";
           if (currentProc.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
           {
-            // Questa procedura Ë un event handler di questo controllo
+            // Questa procedura √® un event handler di questo controllo
             var existingRef = control.References.FirstOrDefault(r =>
               string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
               string.Equals(r.Procedure, currentProc.Name, StringComparison.OrdinalIgnoreCase));
-            
+
             if (existingRef != null)
             {
               // Aggiungi il line number se non presente
@@ -621,10 +659,10 @@ public static partial class VbParser
                 LineNumbers = new List<int> { originalLineNumber }
               });
             }
-            break; // Un controllo puÚ avere un solo event handler con questo nome
+            break; // Un controllo pu√≤ avere un solo event handler con questo nome
           }
         }
-        
+
         continue;
       }
 
@@ -635,7 +673,23 @@ public static partial class VbParser
       if (mp.Success)
       {
         var isStatic = Regex.IsMatch(noComment, @"\bStatic\b", RegexOptions.IgnoreCase);
-        
+
+        // Crea SOLO Property (NON aggiungere a Procedures per evitare duplicazioni)
+        currentProperty = new VbProperty
+        {
+          Visibility = string.IsNullOrEmpty(mp.Groups[1].Value) ? "Public" : mp.Groups[1].Value,
+          Kind = mp.Groups[3].Value, // Get, Let, Set
+          Name = mp.Groups[4].Value,
+          Scope = "Module",
+          Parameters = ParseParameters(mp.Groups[5].Value, originalLineNumber),
+          ReturnType = mp.Groups[7].Value,
+          LineNumber = originalLineNumber,
+          StartLine = originalLineNumber
+        };
+        mod.Properties.Add(currentProperty);
+
+        // Imposta currentProc SOLO per tracciare la fine della Property (NON aggiungere a mod.Procedures)
+        // Questo √® un oggetto temporaneo usato solo per il parsing interno
         currentProc = new VbProcedure
         {
           Visibility = string.IsNullOrEmpty(mp.Groups[1].Value) ? "Public" : mp.Groups[1].Value,
@@ -648,19 +702,19 @@ public static partial class VbParser
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
-        mod.Procedures.Add(currentProc);
-        
+        // NON aggiungere: mod.Procedures.Add(currentProc); ‚Üê Questo causava le duplicazioni!
+
         // Traccia event handler per controlli (es. Command1_Click)
         foreach (var control in mod.Controls)
         {
           var prefix = $"{control.Name}_";
-          if (currentProc.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+          if (currentProperty.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
           {
-            // Questa procedura Ë un event handler di questo controllo
+            // Questa propriet√† √® un event handler di questo controllo
             var existingRef = control.References.FirstOrDefault(r =>
               string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-              string.Equals(r.Procedure, currentProc.Name, StringComparison.OrdinalIgnoreCase));
-            
+              string.Equals(r.Procedure, currentProperty.Name, StringComparison.OrdinalIgnoreCase));
+
             if (existingRef != null)
             {
               // Aggiungi il line number se non presente
@@ -673,14 +727,14 @@ public static partial class VbParser
               control.References.Add(new VbReference
               {
                 Module = mod.Name,
-                Procedure = currentProc.Name,
+                Procedure = currentProperty.Name,
                 LineNumbers = new List<int> { originalLineNumber }
               });
             }
-            break; // Un controllo puÚ avere un solo event handler con questo nome
+            break; // Un controllo pu√≤ avere un solo event handler con questo nome
           }
         }
-        
+
         continue;
       }
 
@@ -710,7 +764,7 @@ public static partial class VbParser
       var mdf = ReDeclareFunction.Match(noComment);
       if (mdf.Success)
       {
-        mod.Procedures.Add(new VbProcedure
+        var declareProc = new VbProcedure
         {
           Visibility = "Public",
           Name = mdf.Groups[1].Value,
@@ -722,7 +776,12 @@ public static partial class VbParser
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber,
           EndLine = originalLineNumber
-        });
+        };
+        
+        // AGGIUNGE REFERENCES AUTOMATICHE per i parametri su righe multiple
+        AddParameterReferencesForMultilineDeclaration(declareProc, mod.Name, originalLines, originalLineNumber, lineMapping, lineIndex);
+        
+        mod.Procedures.Add(declareProc);
         continue;
       }
 
@@ -732,7 +791,7 @@ public static partial class VbParser
       var mds = ReDeclareSub.Match(noComment);
       if (mds.Success)
       {
-        mod.Procedures.Add(new VbProcedure
+        var declareProc = new VbProcedure
         {
           Visibility = "Public",
           Name = mds.Groups[1].Value,
@@ -743,7 +802,12 @@ public static partial class VbParser
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber,
           EndLine = originalLineNumber
-        });
+        };
+        
+        // AGGIUNGE REFERENCES AUTOMATICHE per i parametri su righe multiple
+        AddParameterReferencesForMultilineDeclaration(declareProc, mod.Name, originalLines, originalLineNumber, lineMapping, lineIndex);
+        
+        mod.Procedures.Add(declareProc);
         continue;
       }
 
@@ -757,7 +821,7 @@ public static partial class VbParser
         var constName = mconst.Groups[2].Value;
         var constType = mconst.Groups[3].Value;
         var constValue = mconst.Groups[4].Value.Trim();
-        
+
         var isStatic = Regex.IsMatch(noComment, @"\bStatic\b", RegexOptions.IgnoreCase);
         var normalizedScope = scopeValue.Equals("Private", StringComparison.OrdinalIgnoreCase) ? "Module" :
                               scopeValue.Equals("Public", StringComparison.OrdinalIgnoreCase) ? "Project" :
@@ -849,6 +913,15 @@ public static partial class VbParser
             || trimmedNoComment.StartsWith("End Property", StringComparison.OrdinalIgnoreCase))
         {
           currentProc.EndLine = originalLineNumber;
+          
+          // Se stiamo chiudendo una Property, aggiorna anche currentProperty
+          if (trimmedNoComment.StartsWith("End Property", StringComparison.OrdinalIgnoreCase) 
+              && currentProperty != null)
+          {
+            currentProperty.EndLine = originalLineNumber;
+            currentProperty = null;
+          }
+          
           currentProc = null;
           continue;
         }
@@ -867,7 +940,7 @@ public static partial class VbParser
           var constName = mc.Groups[2].Value;
           var constType = mc.Groups[3].Value;
           var constValue = mc.Groups[4].Value.Trim();
-          
+
           var normalizedScope = scopeValue.Equals("Private", StringComparison.OrdinalIgnoreCase) ? "Module" :
                                 scopeValue.Equals("Public", StringComparison.OrdinalIgnoreCase) ? "Project" :
                                 string.IsNullOrEmpty(scopeValue) ? "Module" : scopeValue;
@@ -891,7 +964,7 @@ public static partial class VbParser
         {
           var declarationType = ml.Groups[1].Value; // Dim or Static
           var isStatic = declarationType.Equals("Static", StringComparison.OrdinalIgnoreCase);
-          
+
           // ml.Groups: 1=Scope(Dim/Static), 2=Name, 3=Array, 4=Type
           currentProc.LocalVariables.Add(new VbVariable
           {
@@ -1076,6 +1149,34 @@ public static partial class VbParser
       }
     }
 
+    // -------------------------
+    // POST-PROCESSING: RAGGRUPPA CONTROLLI ARRAY
+    // -------------------------
+    if (kind.Equals("frm", StringComparison.OrdinalIgnoreCase))
+    {
+      // Raggruppa i controlli per nome
+      var controlGroups = mod.Controls
+          .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+          .ToList();
+
+      // Sostituisci la lista controlli con quella raggruppata
+      mod.Controls.Clear();
+
+      foreach (var group in controlGroups)
+      {
+        var controlList = group.OrderBy(c => c.LineNumber).ToList();
+        var primaryControl = controlList.First();
+
+        // Configura il controllo principale
+        primaryControl.IsArray = controlList.Count > 1;
+        primaryControl.LineNumber = controlList.First().LineNumber; // Prima riga
+        primaryControl.LineNumbers = controlList.Select(c => c.LineNumber).ToList(); // Tutte le righe
+
+        // Aggiungi solo il controllo principale (no duplicati)
+        mod.Controls.Add(primaryControl);
+      }
+    }
+
     return mod;
   }
 
@@ -1115,5 +1216,64 @@ public static partial class VbParser
     }
 
     return result;
+  }
+
+  /// <summary>
+  /// Aggiunge automaticamente References per i parametri delle Declare Function/Sub
+  /// che si estendono su pi√π righe con il carattere di continuazione "_"
+  /// </summary>
+  private static void AddParameterReferencesForMultilineDeclaration(
+      VbProcedure procedure, 
+      string moduleName,
+      string[] originalLines, 
+      int startLineNumber, 
+      int[] lineMapping, 
+      int collapsedIndex)
+  {
+    if (procedure.Parameters == null || procedure.Parameters.Count == 0)
+      return;
+
+    // Trova tutte le righe originali che costituivano questa dichiarazione collapsed
+    var originalStartIndex = startLineNumber - 1; // Convert to 0-based
+    var originalEndIndex = originalStartIndex;
+    
+    // Trova l'ultima riga della dichiarazione (seguendo i "_")
+    while (originalEndIndex < originalLines.Length - 1)
+    {
+      var line = originalLines[originalEndIndex].TrimEnd();
+      if (!line.EndsWith("_"))
+        break;
+      originalEndIndex++;
+    }
+
+    // Per ogni parametro, cerca in quale riga originale si trova
+    foreach (var param in procedure.Parameters)
+    {
+      for (int lineIdx = originalStartIndex; lineIdx <= originalEndIndex; lineIdx++)
+      {
+        var originalLine = originalLines[lineIdx];
+        
+        // Cerca il nome del parametro in questa riga (word boundary per evitare match parziali)
+        var paramPattern = $@"\b{Regex.Escape(param.Name)}\b";
+        if (Regex.IsMatch(originalLine, paramPattern, RegexOptions.IgnoreCase))
+        {
+          // Trovato! Aggiungi una Reference a questa riga specifica
+          // ma solo se non l'ho gi√† segnato
+
+          if (!param.References.Any(r => r.Module == moduleName && r.Procedure == procedure.Name))
+          {
+            param.References.Add(new VbReference
+            {
+              Module = moduleName, // Sar√† impostato dal chiamante se necessario
+              Procedure = procedure.Name,
+              LineNumbers = new List<int> { lineIdx + 1 } // Convert back to 1-based
+            });
+          }
+          
+          // Un parametro pu√≤ apparire solo una volta, quindi esci dal loop
+          break;
+        }
+      }
+    }
   }
 }

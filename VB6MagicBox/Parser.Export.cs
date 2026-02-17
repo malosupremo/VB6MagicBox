@@ -32,6 +32,11 @@ public static partial class VbParser
           .OrderBy(p => p.ConventionalName, StringComparer.OrdinalIgnoreCase)
           .ToList();
 
+      // Proprietà - ordina per nome
+      mod.Properties = mod.Properties
+          .OrderBy(p => p.ConventionalName, StringComparer.OrdinalIgnoreCase)
+          .ToList();
+
       // Variabili globali - ordina per nome
       mod.GlobalVariables = mod.GlobalVariables
           .OrderBy(v => v.ConventionalName, StringComparer.OrdinalIgnoreCase)

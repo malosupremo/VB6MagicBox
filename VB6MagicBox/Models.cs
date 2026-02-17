@@ -38,6 +38,9 @@ public class VbModule
   [JsonIgnore]
   public string FullPath { get; set; }
 
+  [JsonIgnore]
+  public VbProject Owner { get; set; }
+
   [JsonPropertyOrder(7)]
   public List<VbConstant> Constants { get; set; } = new();
 
@@ -57,9 +60,12 @@ public class VbModule
   public List<VbProcedure> Procedures { get; set; } = new();
 
   [JsonPropertyOrder(13)]
-  public List<VbTypeDef> Types { get; set; } = new();
+  public List<VbProperty> Properties { get; set; } = new();
 
   [JsonPropertyOrder(14)]
+  public List<VbTypeDef> Types { get; set; } = new();
+
+  [JsonPropertyOrder(15)]
   public List<VbReference> References { get; set; } = new();
 
   [JsonIgnore]
@@ -374,6 +380,56 @@ public class VbEvent
   public List<VbReference> References { get; set; } = new();
 }
 
+public class VbProperty
+{
+  [JsonPropertyOrder(0)]
+  public string Name { get; set; }
+
+  [JsonPropertyOrder(1)]
+  public string ConventionalName { get; set; }
+
+  [JsonPropertyOrder(2)]
+  public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
+
+  [JsonPropertyOrder(3)]
+  public string Kind { get; set; } // "Get", "Let", "Set"
+
+  [JsonPropertyOrder(4)]
+  public string Scope { get; set; }
+
+  [JsonPropertyOrder(5)]
+  public bool Used { get; set; }
+
+  [JsonPropertyOrder(6)]
+  public string Visibility { get; set; }
+
+  [JsonPropertyOrder(7)]
+  public string ReturnType { get; set; }
+
+  [JsonIgnore]
+  public int LineNumber { get; set; }
+
+  [JsonIgnore]
+  public int StartLine { get; set; }
+
+  [JsonIgnore]
+  public int EndLine { get; set; }
+
+  [JsonPropertyOrder(8)]
+  public List<VbParameter> Parameters { get; set; } = new();
+
+  [JsonPropertyOrder(9)]
+  public List<VbReference> References { get; set; } = new();
+
+  /// <summary>
+  /// Verifica se la riga specificata è all'interno di questa proprietà
+  /// </summary>
+  public bool ContainsLine(int lineNumber)
+  {
+    return lineNumber >= StartLine && lineNumber <= EndLine;
+  }
+}
+
 public class VbControl
 {
   [JsonPropertyOrder(0)]
@@ -403,6 +459,9 @@ public class VbControl
   public int LineNumber { get; set; }
 
   [JsonPropertyOrder(8)]
+  public List<int> LineNumbers { get; set; } = new();
+
+  [JsonPropertyOrder(9)]
   public List<VbReference> References { get; set; } = new();
 }
 
