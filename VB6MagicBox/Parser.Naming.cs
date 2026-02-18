@@ -620,9 +620,9 @@ public static partial class VbParser
             {
               fieldConventionalName = "TypeValue";
             }
-            else if (IsReservedWord(fieldConventionalName))
+            else if (IsCSharpKeyword(fieldConventionalName))
             {
-              // Per altre reserved words, aggiungi suffisso "Value"
+              // Per keyword C# nei campi, aggiungi suffisso "Value"
               fieldConventionalName = fieldConventionalName + "Value";
             }
 
@@ -861,7 +861,7 @@ public static partial class VbParser
             if (IsReservedWord(v.ConventionalName))
             {
               localScopeNamesUsed.Remove(v.ConventionalName);
-              v.ConventionalName = v.Name;
+              v.ConventionalName = v.ConventionalName + "Value";
               localScopeNamesUsed.Add(v.ConventionalName);
             }
           }
@@ -1107,6 +1107,17 @@ public static partial class VbParser
     }
 
     private static bool IsReservedWord(string name)
+    {
+      if (string.IsNullOrWhiteSpace(name)) return false;
+      // Controlla sia keyword C# che keyword/built-in VB6 (es. Loop, Len, Mid, Left…)
+      return IsCSharpKeyword(name) || VbKeywords.Contains(name);
+    }
+
+    /// <summary>
+    /// Controlla solo le keyword C#. Usato per i campi dei Type, dove l'accesso
+    /// avviene sempre via punto (myVar.Len) e i built-in VB6 non creano conflitti.
+    /// </summary>
+    private static bool IsCSharpKeyword(string name)
     {
       if (string.IsNullOrWhiteSpace(name)) return false;
       return CSharpKeywords.Contains(name.ToLowerInvariant());
