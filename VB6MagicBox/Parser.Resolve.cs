@@ -178,9 +178,15 @@ public static partial class VbParser
         }
       }
 
+      // Indice di tutti i moduli per VB_Name, per rilevare accessi diretti
+      // Es: FrmRestart.Show, SHARESTRUCT.MY_CONST (senza variabile dichiarata)
+      var moduleByName = project.Modules
+          .Where(m => !string.IsNullOrEmpty(m.Name))
+          .ToDictionary(m => m.Name, m => m, StringComparer.OrdinalIgnoreCase);
+
       foreach (var proc in mod.Procedures)
       {
-        // Ambiente variabili ? tipo
+        // Ambiente variabili à tipo
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Debug disabled - keep variable but set to null to avoid any logging
@@ -667,7 +673,32 @@ public static partial class VbParser
             if (VbKeywords.Contains(objName))
               continue;
 
-            // Se objName NON è un oggetto noto, skip
+            // Traccia riferimento diretto a modulo noto: FrmRestart.Show, Module.Proc
+            // Copre i casi in cui il modulo è usato per nome senza variabile dichiarata
+            if (moduleByName.TryGetValue(objName, out var referencedModule) &&
+                !string.Equals(referencedModule.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
+            {
+              referencedModule.Used = true;
+              var existingModRef = referencedModule.References.FirstOrDefault(r =>
+                  string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
+                  string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
+              if (existingModRef != null)
+              {
+                if (!existingModRef.LineNumbers.Contains(li + 1))
+                  existingModRef.LineNumbers.Add(li + 1);
+              }
+              else
+              {
+                referencedModule.References.Add(new VbReference
+                {
+                  Module = mod.Name,
+                  Procedure = proc.Name,
+                  LineNumbers = new List<int> { li + 1 }
+                });
+              }
+            }
+
+            // Se objName NON è un oggetto noto in env, non proseguire con la risoluzione del tipo
             var objInEnv = env.TryGetValue(objName, out var objType);
             if (!objInEnv || string.IsNullOrEmpty(objType))
               continue;
