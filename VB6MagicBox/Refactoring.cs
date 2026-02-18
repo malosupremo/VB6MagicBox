@@ -405,11 +405,20 @@ public static class Refactoring
       string pattern;
       string replacement;
       
+      // SPECIALE: Per i controlli sulle righe "Begin Library.ControlType ControlName",
+      // usa lookbehind per rimpiazzare SOLO il nome dopo il secondo token,
+      // evitando di toccare il nome della classe/libreria che lo precede.
+      // Es: "Begin S7DATALib.S7Data S7Data" → NON rinomina S7DATALib.S7Data
+      if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
+      {
+        pattern = $@"(?<=^.*Begin\s+\S+\s+){Regex.Escape(oldName)}\b";
+        replacement = newName;
+      }
       // SPECIALE: Per le proprietà, fuori dal modulo che le definisce,
       // usa dot-prefixed replacement (.OldName → .NewName) per evitare
       // conflitti con parametri/variabili omonimi.
       // Es: "g_PlasmaSource.IsDeposit = IsDeposit" → rinomina solo ".IsDeposit"
-      if (source is VbProperty && !string.Equals(definingModuleName, currentModuleName, StringComparison.OrdinalIgnoreCase))
+      else if (source is VbProperty && !string.Equals(definingModuleName, currentModuleName, StringComparison.OrdinalIgnoreCase))
       {
         pattern = $@"\.{Regex.Escape(oldName)}\b";
         replacement = $".{newName}";

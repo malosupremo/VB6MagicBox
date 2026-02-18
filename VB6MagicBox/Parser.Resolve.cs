@@ -763,8 +763,105 @@ public static partial class VbParser
 
     Console.WriteLine(); // Vai a capo dopo il progress del parsing
 
+    // Aggiunge References ai tipi per ogni posizione in cui appaiono in "As TypeName"
+    ResolveTypeReferences(project, typeIndex);
+
     // Marcatura tipi usati
     MarkUsedTypes(project);
+  }
+
+  // ---------------------------------------------------------
+  // RISOLUZIONE RIFERIMENTI AI TIPI (As TypeName)
+  // ---------------------------------------------------------
+
+  /// <summary>
+  /// Aggiunge References ai VbTypeDef per tutte le posizioni in cui il tipo
+  /// appare in una clausola "As TypeName": campi di altri Type, variabili
+  /// globali/locali, parametri di procedure e proprietà.
+  /// Senza questo, il refactoring non sa quali righe aggiornare quando
+  /// rinomina un tipo (es. DISPAT_HEADER_T ? DispatHeader_T).
+  /// </summary>
+  private static void ResolveTypeReferences(
+      VbProject project,
+      Dictionary<string, VbTypeDef> typeIndex)
+  {
+    foreach (var mod in project.Modules)
+    {
+      // 1. Campi di altri Type: "FieldName As OTHER_TYPE"
+      foreach (var typeDef in mod.Types)
+      {
+        foreach (var field in typeDef.Fields)
+        {
+          AddTypeReference(field.Type, field.LineNumber, mod.Name, string.Empty, typeIndex);
+        }
+      }
+
+      // 2. Variabili globali: "Public/Dim varName As TYPE"
+      foreach (var variable in mod.GlobalVariables)
+      {
+        AddTypeReference(variable.Type, variable.LineNumber, mod.Name, string.Empty, typeIndex);
+      }
+
+      // 3. Parametri e variabili locali delle procedure
+      foreach (var proc in mod.Procedures)
+      {
+        foreach (var param in proc.Parameters)
+          AddTypeReference(param.Type, param.LineNumber, mod.Name, proc.Name, typeIndex);
+
+        foreach (var localVar in proc.LocalVariables)
+          AddTypeReference(localVar.Type, localVar.LineNumber, mod.Name, proc.Name, typeIndex);
+      }
+
+      // 4. Parametri delle proprietà
+      foreach (var prop in mod.Properties)
+      {
+        foreach (var param in prop.Parameters)
+          AddTypeReference(param.Type, param.LineNumber, mod.Name, prop.Name, typeIndex);
+      }
+    }
+  }
+
+  /// <summary>
+  /// Se typeName è un tipo noto nel typeIndex, aggiunge lineNumber alle sue References.
+  /// </summary>
+  private static void AddTypeReference(
+      string typeName,
+      int lineNumber,
+      string moduleName,
+      string procedureName,
+      Dictionary<string, VbTypeDef> typeIndex)
+  {
+    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0)
+      return;
+
+    // Rimuovi eventuali parentesi per tipi array (es. "MY_TYPE()" ? "MY_TYPE")
+    var baseTypeName = typeName.Contains('(')
+        ? typeName.Substring(0, typeName.IndexOf('('))
+        : typeName;
+
+    if (!typeIndex.TryGetValue(baseTypeName, out var referencedType))
+      return;
+
+    referencedType.Used = true;
+
+    var existingRef = referencedType.References.FirstOrDefault(r =>
+        string.Equals(r.Module, moduleName, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
+
+    if (existingRef != null)
+    {
+      if (!existingRef.LineNumbers.Contains(lineNumber))
+        existingRef.LineNumbers.Add(lineNumber);
+    }
+    else
+    {
+      referencedType.References.Add(new VbReference
+      {
+        Module = moduleName,
+        Procedure = procedureName,
+        LineNumbers = new List<int> { lineNumber }
+      });
+    }
   }
 
   // ---------------------------------------------------------

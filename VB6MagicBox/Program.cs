@@ -35,7 +35,7 @@ public class Program
       Console.WriteLine("3. Aggiunta tipi mancanti");
       Console.WriteLine("4. Armonizza le spaziature");
       Console.WriteLine("5. Riordina le variabili di procedura");
-      Console.WriteLine("6. Genera codice C#");
+      Console.WriteLine("6. Bacchetta magica: applica tutti i punti precedenti!");
       Console.WriteLine("0. Esci");
       Console.WriteLine();
       Console.Write("Seleziona opzione: ");
@@ -60,7 +60,7 @@ public class Program
 
         case "4":
           Console.WriteLine();
-          Console.WriteLine("[!] Armonizzazione spaziature fuori armonia.");
+          Console.WriteLine("[!] Armonizzazione spaziature non in armonia.");
           Console.WriteLine("    Coming soon!");
           break;
 
@@ -72,8 +72,8 @@ public class Program
 
         case "6":
           Console.WriteLine();
-          Console.WriteLine("[!] Generazione C#... non esageriamo!");
-          Console.WriteLine("    Coming soon?!");
+          Console.WriteLine("[!] Bibidi, bobidi... bubbole!");
+          Console.WriteLine("    Coming soon!");
           break;
 
         case "0":
