@@ -68,6 +68,14 @@ public class VbModule
   [JsonPropertyOrder(15)]
   public List<VbReference> References { get; set; } = new();
 
+  /// <summary>
+  /// Moduli che referenziano questo modulo attraverso qualsiasi suo membro
+  /// (costanti, tipi, enum, procedure, property, controlli, variabili).
+  /// Popolato da BuildDependenciesAndUsage; usato per il grafo Mermaid.
+  /// </summary>
+  [JsonPropertyOrder(16)]
+  public List<string> ModuleReferences { get; set; } = new();
+
   [JsonIgnore]
   public bool IsClass => Kind.Equals("cls", StringComparison.OrdinalIgnoreCase);
   

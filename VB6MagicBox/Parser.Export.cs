@@ -497,20 +497,32 @@ public static partial class VbParser
   public static void ExportMermaid(VbProject project, string outputPath)
   {
     var sb = new StringBuilder();
+    sb.AppendLine("```mermaid");
     sb.AppendLine("graph TD");
 
-    // Raggruppa dipendenze per modulo (caller -> callee)
-    var moduleDependencies = project.Dependencies
-        .Where(d => !string.IsNullOrEmpty(d.CallerModule) && !string.IsNullOrEmpty(d.CalleeModule))
-        .Select(d => new { Caller = Sanitize(d.CallerModule), Callee = Sanitize(d.CalleeModule) })
-        .Distinct()
-        .OrderBy(d => d.Caller)
-        .ThenBy(d => d.Callee);
+    // Lookup Name → ConventionalName per visualizzare i nomi convenzionali nel grafo
+    var conventionalName = project.Modules
+        .ToDictionary(m => m.Name, m => m.ConventionalName ?? m.Name, StringComparer.OrdinalIgnoreCase);
 
-    foreach (var dep in moduleDependencies)
+    // Costruisce gli archi dal nuovo ModuleReferences: ogni entry è un caller del modulo callee
+    var edges = project.Modules
+        .Where(mod => mod.ModuleReferences.Count > 0)
+        .SelectMany(mod => mod.ModuleReferences
+            .Select(caller => new
+            {
+              Caller = Sanitize(conventionalName.GetValueOrDefault(caller, caller)),
+              Callee = Sanitize(mod.ConventionalName ?? mod.Name)
+            }))
+        .Distinct()
+        .OrderBy(e => e.Caller, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(e => e.Callee, StringComparer.OrdinalIgnoreCase);
+
+    foreach (var edge in edges)
     {
-      sb.AppendLine($"    {dep.Caller} --> {dep.Callee}");
+      sb.AppendLine($"    {edge.Caller} --> {edge.Callee}");
     }
+
+    sb.AppendLine("```");
 
     File.WriteAllText(outputPath, sb.ToString());
   }

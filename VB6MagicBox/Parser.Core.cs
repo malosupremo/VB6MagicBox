@@ -81,15 +81,15 @@ public static partial class VbParser
           RegexOptions.IgnoreCase);
 
   private static readonly Regex ReGlobalVar =
-      new(@"^(Public|Private|Global|Friend|Dim)\s+(WithEvents\s+)?(\w+)(\([^)]*\))?\s+As\s+([\w\.\(\)]+)",
+      new(@"^(Public|Private|Global|Friend|Dim)\s+(WithEvents\s+)?(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
           RegexOptions.IgnoreCase);
 
   private static readonly Regex ReLocalVar =
-      new(@"^\s*(Dim|Static)\s+(\w+)(\([^)]*\))?\s+As\s+([\w\.\(\)]+)",
+      new(@"^\s*(Dim|Static)\s+(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
           RegexOptions.IgnoreCase);
 
   private static readonly Regex ReMemberVar =
-      new(@"^(Public|Private|Friend|Dim)\s+(\w+)(\([^)]*\))?\s+As\s+([\w\.\(\)]+)",
+      new(@"^(Public|Private|Friend|Dim)\s+(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
           RegexOptions.IgnoreCase);
 
   private static readonly Regex ReTypeStart =

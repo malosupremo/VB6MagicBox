@@ -383,11 +383,18 @@ public static partial class VbParser
         // Module/Class naming
         var rawName = Path.GetFileNameWithoutExtension(mod.Name); // Rimuove .cls/.bas/.frm extension, mantiene nome file
 
-        // Per i Form, aggiungi prefisso "frm" come per i controlli
+        // Per i Form, aggiungi prefisso "frm"
         if (mod.Kind.Equals("frm", StringComparison.OrdinalIgnoreCase))
         {
           if (!rawName.StartsWith("frm", StringComparison.OrdinalIgnoreCase))
             rawName = "frm" + rawName;
+        }
+
+        // Per le Classi, aggiungi prefisso "Cls"
+        if (mod.Kind.Equals("cls", StringComparison.OrdinalIgnoreCase))
+        {
+          if (!rawName.StartsWith("cls", StringComparison.OrdinalIgnoreCase))
+            rawName = "Cls" + rawName;
         }
 
         var pascalName = ToPascalCase(rawName);
@@ -497,20 +504,24 @@ public static partial class VbParser
                   conventionalName = "g_" + ToPascalCase(baseName) + (arraySuffix ?? "");
                 }
               }
+              else if (mod.IsClass)
+              {
+                // CLASSE: membri pubblici → PascalCase puro (come properties e procedure)
+                // Es: ServerObj       → ServerObj
+                // Es: objUAServerObj  → UAServerObj  (strip prefisso obj ungherese)
+                conventionalName = ToPascalCase(baseName) + (arraySuffix ?? "");
+              }
               else
               {
-                // FORM/CLASS: oggetti pubblici → objName (non globali)
+                // FORM: oggetti pubblici → objName
                 // Es: UAServerObj → objUAServerObj
-                // Es: objFM489 → objFM489 (già OK)
+                // Es: objFM489   → objFM489 (già OK)
                 var tail = baseName;
 
                 // Rimuovi prefisso obj se presente (per evitare objObjName)
                 if (tail.StartsWith("obj", StringComparison.OrdinalIgnoreCase) && tail.Length > 3)
-                {
                   tail = tail.Substring(3);
-                }
 
-                // Applica PascalCase al tail e poi prefisso obj
                 conventionalName = "obj" + ToPascalCase(tail) + (arraySuffix ?? "");
               }
             }

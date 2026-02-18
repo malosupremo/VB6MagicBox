@@ -623,7 +623,8 @@ public static partial class VbParser
                       ResolvedType = classNameToLookup,
                       ResolvedModule = classModule.Name,
                       ResolvedProcedure = classProp.Name,
-                      ResolvedKind = $"Property{classProp.Kind}"
+                      ResolvedKind = $"Property{classProp.Kind}",
+                      LineNumber = li + 1
                     });
                   }
                 }
@@ -644,7 +645,8 @@ public static partial class VbParser
                       ResolvedType = classNameToLookup,
                       ResolvedModule = classModule.Name,
                       ResolvedProcedure = classProc.Name,
-                      ResolvedKind = classProc.Kind
+                      ResolvedKind = classProc.Kind,
+                      LineNumber = li + 1
                     });
                   }
                 }
@@ -766,6 +768,9 @@ public static partial class VbParser
     // Aggiunge References ai tipi per ogni posizione in cui appaiono in "As TypeName"
     ResolveTypeReferences(project, typeIndex);
 
+    // Aggiunge References alle classi per ogni dichiarazione "As [New] ClassName"
+    ResolveClassModuleReferences(project);
+
     // Marcatura tipi usati
     MarkUsedTypes(project);
   }
@@ -858,6 +863,88 @@ public static partial class VbParser
       referencedType.References.Add(new VbReference
       {
         Module = moduleName,
+        Procedure = procedureName,
+        LineNumbers = new List<int> { lineNumber }
+      });
+    }
+  }
+
+  // ---------------------------------------------------------
+  // RISOLUZIONE RIFERIMENTI ALLE CLASSI (As [New] ClassName)
+  // ---------------------------------------------------------
+
+  /// <summary>
+  /// Aggiunge References alla VbModule classe per ogni dichiarazione
+  /// "Dim/Private x As [New] ClassName" dove ClassName è un modulo classe.
+  /// Garantisce che le classi usate solo come tipo (senza chiamate risolte)
+  /// compaiano comunque nelle References e nel grafo Mermaid.
+  /// </summary>
+  private static void ResolveClassModuleReferences(VbProject project)
+  {
+    var classIndex = project.Modules
+        .Where(m => m.IsClass)
+        .ToDictionary(
+            m => Path.GetFileNameWithoutExtension(m.Name),
+            m => m,
+            StringComparer.OrdinalIgnoreCase);
+
+    foreach (var mod in project.Modules)
+    {
+      foreach (var v in mod.GlobalVariables)
+        AddClassModuleReference(v.Type, v.LineNumber, mod.Name, string.Empty, classIndex);
+
+      foreach (var proc in mod.Procedures)
+      {
+        foreach (var param in proc.Parameters)
+          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, proc.Name, classIndex);
+        foreach (var lv in proc.LocalVariables)
+          AddClassModuleReference(lv.Type, lv.LineNumber, mod.Name, proc.Name, classIndex);
+      }
+
+      foreach (var prop in mod.Properties)
+      {
+        foreach (var param in prop.Parameters)
+          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, prop.Name, classIndex);
+      }
+    }
+  }
+
+  private static void AddClassModuleReference(
+      string typeName,
+      int lineNumber,
+      string declaringModule,
+      string procedureName,
+      Dictionary<string, VbModule> classIndex)
+  {
+    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0)
+      return;
+
+    // Prendi solo il nome base ignorando eventuali namespace (es. "PDxI.clsPDxI" ? "clsPDxI")
+    var baseName = typeName.Contains('.') ? typeName.Split('.').Last() : typeName;
+
+    if (!classIndex.TryGetValue(baseName, out var classModule))
+      return;
+
+    // Non aggiungere auto-referenze
+    if (string.Equals(classModule.Name, declaringModule, StringComparison.OrdinalIgnoreCase))
+      return;
+
+    classModule.Used = true;
+
+    var existingRef = classModule.References.FirstOrDefault(r =>
+        string.Equals(r.Module, declaringModule, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
+
+    if (existingRef != null)
+    {
+      if (!existingRef.LineNumbers.Contains(lineNumber))
+        existingRef.LineNumbers.Add(lineNumber);
+    }
+    else
+    {
+      classModule.References.Add(new VbReference
+      {
+        Module = declaringModule,
         Procedure = procedureName,
         LineNumbers = new List<int> { lineNumber }
       });
@@ -1832,6 +1919,52 @@ public static partial class VbParser
 
     // Marcatura tipi usati
     MarkUsedTypes(project);
+
+    // Propaga Used al modulo: se qualunque membro è usato, il modulo è usato
+    foreach (var mod in project.Modules)
+    {
+      if (!mod.Used)
+      {
+        mod.Used = mod.Procedures.Any(p => p.Used)
+                || mod.Properties.Any(p => p.Used)
+                || mod.GlobalVariables.Any(v => v.Used)
+                || mod.Constants.Any(c => c.Used)
+                || mod.Enums.Any(e => e.Used || e.Values.Any(v => v.Used))
+                || mod.Types.Any(t => t.Used)
+                || mod.Controls.Any(c => c.Used)
+                || mod.Events.Any(e => e.Used);
+      }
+    }
+
+    // Costruisce ModuleReferences: per ogni modulo raccoglie i moduli che lo referenziano
+    // attraverso qualsiasi suo membro (costanti, tipi, enum, procedure, property, controlli, variabili).
+    // Non modifica le References esistenti — è un aggregato di sola lettura.
+    foreach (var mod in project.Modules)
+    {
+      var callers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+      void Collect(IEnumerable<VbReference> refs)
+      {
+        foreach (var r in refs)
+          if (!string.IsNullOrEmpty(r.Module) &&
+              !string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase))
+            callers.Add(r.Module);
+      }
+
+      foreach (var proc in mod.Procedures)   Collect(proc.References);
+      foreach (var prop in mod.Properties)   Collect(prop.References);
+      foreach (var v    in mod.GlobalVariables) Collect(v.References);
+      foreach (var c    in mod.Constants)    Collect(c.References);
+      foreach (var e    in mod.Enums)        { Collect(e.References); foreach (var val in e.Values) Collect(val.References); }
+      foreach (var t    in mod.Types)        { Collect(t.References); foreach (var f   in t.Fields) Collect(f.References); }
+      foreach (var c    in mod.Controls)     Collect(c.References);
+      foreach (var ev   in mod.Events)       Collect(ev.References);
+      Collect(mod.References);
+
+      mod.ModuleReferences = callers
+          .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+          .ToList();
+    }
   }
   
   /// <summary>
