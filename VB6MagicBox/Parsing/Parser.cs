@@ -21,6 +21,12 @@ public static partial class VbParser
     if (string.IsNullOrWhiteSpace(vbpPath))
       throw new ArgumentException("Percorso VBP non valido.", nameof(vbpPath));
 
+    Console.WriteLine();
+    Console.WriteLine("===========================================");
+    Console.WriteLine("  1: Analisi progetto .vbp");
+    Console.WriteLine("===========================================");
+    Console.WriteLine();
+
     // 1) Parsing
     Console.WriteLine("Step 1/4: Parsing del progetto VB6...");
     var project = ParseProjectFromVbp(vbpPath);

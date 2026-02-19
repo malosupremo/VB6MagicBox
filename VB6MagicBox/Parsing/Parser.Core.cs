@@ -92,6 +92,18 @@ public static partial class VbParser
       new(@"^(Public|Private|Friend|Dim)\s+(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
           RegexOptions.IgnoreCase);
 
+  // Fallback: variabile globale/membro senza "As Tipo" — usato da TypeAnnotator
+  // Gruppi: 1=keyword, 2=WithEvents?, 3=nome, 4=suffisso tipo ($%&!#@), 5=dimensioni array
+  private static readonly Regex ReGlobalVarNoType = new(
+      @"^(Public|Private|Global|Friend|Dim)\s+(WithEvents\s+)?(\w+)([$%&!#@]?)(\([^)]*\))?\s*$",
+      RegexOptions.IgnoreCase);
+
+  // Fallback: variabile locale senza "As Tipo" — usato da TypeAnnotator
+  // Gruppi: 1=keyword (Dim/Static), 2=nome, 3=suffisso tipo, 4=dimensioni array
+  private static readonly Regex ReLocalVarNoType = new(
+      @"^\s*(Dim|Static)\s+(\w+)([$%&!#@]?)(\([^)]*\))?\s*$",
+      RegexOptions.IgnoreCase);
+
   private static readonly Regex ReTypeStart =
       new(@"^(Public|Private|Friend)?\s*Type\s+(\w+)", RegexOptions.IgnoreCase);
 

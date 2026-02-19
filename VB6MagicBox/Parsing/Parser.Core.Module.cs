@@ -594,6 +594,31 @@ public static partial class VbParser
       }
 
       // -------------------------
+      // VARIABILI GLOBALI/MEMBRO SENZA TIPO (fallback per TypeAnnotator)
+      // -------------------------
+      var mgnt = ReGlobalVarNoType.Match(noComment);
+      if (mgnt.Success && currentProc == null && currentType == null)
+      {
+        var scopeValueNt = mgnt.Groups[1].Value;
+        var normalizedScopeNt = (scopeValueNt.Equals("Private", StringComparison.OrdinalIgnoreCase) ||
+                                  scopeValueNt.Equals("Dim", StringComparison.OrdinalIgnoreCase)) ? "Module" :
+                                  scopeValueNt.Equals("Public", StringComparison.OrdinalIgnoreCase) ? "Project" :
+                                  scopeValueNt;
+        mod.GlobalVariables.Add(new VbVariable
+        {
+          Name = mgnt.Groups[3].Value,
+          Type = "",
+          IsArray = !string.IsNullOrEmpty(mgnt.Groups[5].Value),
+          IsWithEvents = !string.IsNullOrEmpty(mgnt.Groups[2].Value),
+          Scope = normalizedScopeNt,
+          Visibility = scopeValueNt.Equals("Dim", StringComparison.OrdinalIgnoreCase) ? "Private" : scopeValueNt,
+          Level = kind.Equals("cls", StringComparison.OrdinalIgnoreCase) ? "Member" : "Global",
+          LineNumber = originalLineNumber
+        });
+        continue;
+      }
+
+      // -------------------------
       // END PROCEDURE
       // -------------------------
       if (currentProc != null)
@@ -670,6 +695,25 @@ public static partial class VbParser
             Level = "Local",
             LineNumber = originalLineNumber
           });
+        }
+        else
+        {
+          // variabili locali senza tipo esplicito (fallback per TypeAnnotator)
+          var mlnt = ReLocalVarNoType.Match(noComment);
+          if (mlnt.Success)
+          {
+            currentProc.LocalVariables.Add(new VbVariable
+            {
+              Name = mlnt.Groups[2].Value,
+              Type = "",
+              IsStatic = mlnt.Groups[1].Value.Equals("Static", StringComparison.OrdinalIgnoreCase),
+              IsArray = !string.IsNullOrEmpty(mlnt.Groups[4].Value),
+              Scope = "Procedure",
+              Visibility = "Private",
+              Level = "Local",
+              LineNumber = originalLineNumber
+            });
+          }
         }
 
         // chiamate con parentesi

@@ -29,8 +29,7 @@ public static class Refactoring
 
     Console.WriteLine();
     Console.WriteLine("===========================================");
-    Console.WriteLine("  Refactoring Automatico VB6 (FASE 2)");
-    Console.WriteLine("  Con Validazione vs Analisi (FASE 1)");
+    Console.WriteLine("  3: Applica refactoring ");
     Console.WriteLine("===========================================");
     Console.WriteLine();
 

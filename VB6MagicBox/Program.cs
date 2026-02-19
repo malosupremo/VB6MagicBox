@@ -31,12 +31,12 @@ public class Program
     {
       Console.WriteLine();
       Console.WriteLine("Opzioni:");
-      Console.WriteLine("1. Analizza progetto VB6 (genera .json)");
-      Console.WriteLine("2. Applica refactoring automatico");
-      Console.WriteLine("3. Aggiunta tipi mancanti");
+      Console.WriteLine("1. Analizza progetto VB6");
+      Console.WriteLine("2. Aggiunta tipi mancanti");
+      Console.WriteLine("3. Applica refactoring automatico");
       Console.WriteLine("4. Armonizza le spaziature");
       Console.WriteLine("5. Riordina le variabili di procedura");
-      Console.WriteLine("6. Bacchetta magica: applica tutti i punti precedenti!");
+      Console.WriteLine("6. BACCHETTA MAGICA: tutto insieme!");
       Console.WriteLine("0. Esci");
       Console.WriteLine();
       Console.Write("Seleziona opzione: ");
@@ -50,13 +50,11 @@ public class Program
           break;
 
         case "2":
-          RunRefactoringInteractive();
+          RunTypeAnnotatorInteractive();
           break;
 
         case "3":
-          Console.WriteLine();
-          Console.WriteLine("[!] Aggiunta tipi mancanti mancante.");
-          Console.WriteLine("    Coming soon!");
+          RunRefactoringInteractive();
           break;
 
         case "4":
@@ -72,9 +70,7 @@ public class Program
           break;
 
         case "6":
-          Console.WriteLine();
-          Console.WriteLine("[!] Bibidi, bobidi... bubbole!");
-          Console.WriteLine("    Coming soon!");
+          RunMagicWandInteractive();
           break;
 
         case "0":
@@ -122,6 +118,34 @@ public class Program
     }
   }
 
+  private static void RunTypeAnnotatorInteractive()
+  {
+    Console.WriteLine();
+    Console.Write("Percorso del file .vbp: ");
+    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+
+    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+    {
+      Console.WriteLine("[X] File .vbp non trovato!");
+      return;
+    }
+
+    try
+    {
+      // Fase 1: parsing + risoluzione (stessa pipeline dell'opzione 1)
+      var project = VbParser.ParseAndResolve(vbpPath);
+
+      // Fase 3: aggiunta tipi mancanti usando il modello analizzato
+      TypeAnnotator.AddMissingTypes(project);
+    }
+    catch (Exception ex)
+    {
+      Console.WriteLine();
+      Console.WriteLine("[X] Errore durante l'aggiunta dei tipi:");
+      Console.WriteLine(ex.ToString());
+    }
+  }
+
   private static void RunRefactoringInteractive()
   {
     Console.WriteLine();
@@ -150,6 +174,45 @@ public class Program
     {
       Console.WriteLine();
       Console.WriteLine("[X] Errore durante il refactoring:");
+      Console.WriteLine(ex.ToString());
+    }
+  }
+
+  private static void RunMagicWandInteractive()
+  {
+    Console.WriteLine();
+    Console.Write("Percorso del file .vbp: ");
+    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+
+    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+    {
+      Console.WriteLine("[X] File .vbp non trovato!");
+      return;
+    }
+
+    try
+    {
+      // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
+      var project = VbParser.ParseAndResolve(vbpPath);
+
+      // Export file di analisi (symbols.json, rename.json, rename.csv, dependencies.md)
+      ExportProjectFiles(project, vbpPath);
+
+      // 2) Aggiunta tipi mancanti: usa i nomi originali dal modello.
+      //    Deve precedere il rename: dopo il rename i nomi nel sorgente non
+      //    corrisponderebbero più a quelli del modello (es. parametri rinominati).
+      TypeAnnotator.AddMissingTypes(project);
+
+      // 3) Refactoring: rinomina i simboli secondo le convenzioni
+      Refactoring.ApplyRenames(project);
+
+      Console.WriteLine();
+      Console.WriteLine("[OK] Bacchetta magica applicata!");
+    }
+    catch (Exception ex)
+    {
+      Console.WriteLine();
+      Console.WriteLine("[X] Errore durante la bacchetta magica:");
       Console.WriteLine(ex.ToString());
     }
   }

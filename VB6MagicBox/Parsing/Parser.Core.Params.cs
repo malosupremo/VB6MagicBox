@@ -17,7 +17,7 @@ public static partial class VbParser
 
     var parts = paramList.Split(',');
     var reParam = new Regex(
-        @"^(Optional\s+)?(ByVal|ByRef)?\s*(\w+)\s*(As\s+([\w\.\(\)]+))?",
+        @"^(Optional\s+)?(ByVal|ByRef)?\s*(\w+)([$%&!#@]?)(\([^)]*\))?\s*(As\s+([\w\.\(\)]+))?",
         RegexOptions.IgnoreCase);
 
     foreach (var p in parts)
@@ -34,7 +34,7 @@ public static partial class VbParser
       {
         Name = m.Groups[3].Value,
         Passing = string.IsNullOrEmpty(m.Groups[2].Value) ? "ByRef" : m.Groups[2].Value,
-        Type = m.Groups[5].Value,
+        Type = m.Groups[7].Value,
         Used = false,
         LineNumber = originalLineNumber
       });
