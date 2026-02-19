@@ -383,21 +383,27 @@ public static partial class VbParser
         // Module/Class naming
         var rawName = Path.GetFileNameWithoutExtension(mod.Name); // Rimuove .cls/.bas/.frm extension, mantiene nome file
 
-        // Per i Form, aggiungi prefisso "frm"
+        // Per Form e Classi, estrai il nome base (senza prefisso) prima di applicare ToPascalCase
+        // così SQM242.frm → FrmSqm242 e EXEC1.bas → Exec1
+        string pascalName;
         if (mod.Kind.Equals("frm", StringComparison.OrdinalIgnoreCase))
         {
-          if (!rawName.StartsWith("frm", StringComparison.OrdinalIgnoreCase))
-            rawName = "frm" + rawName;
+          var baseName = rawName.StartsWith("frm", StringComparison.OrdinalIgnoreCase)
+              ? rawName.Substring(3)
+              : rawName;
+          pascalName = "Frm" + ToPascalCase(baseName);
         }
-
-        // Per le Classi, aggiungi prefisso "Cls"
-        if (mod.Kind.Equals("cls", StringComparison.OrdinalIgnoreCase))
+        else if (mod.Kind.Equals("cls", StringComparison.OrdinalIgnoreCase))
         {
-          if (!rawName.StartsWith("cls", StringComparison.OrdinalIgnoreCase))
-            rawName = "Cls" + rawName;
+          var baseName = rawName.StartsWith("cls", StringComparison.OrdinalIgnoreCase)
+              ? rawName.Substring(3)
+              : rawName;
+          pascalName = "Cls" + ToPascalCase(baseName);
         }
-
-        var pascalName = ToPascalCase(rawName);
+        else
+        {
+          pascalName = ToPascalCase(rawName);
+        }
 
         // Se il nome risultante è una keyword C# (es. "With"), aggiungi "Class"
         if (CSharpKeywords.Contains(pascalName.ToLower())) // Check lowercase against lowercase keywords usually
@@ -1065,11 +1071,12 @@ public static partial class VbParser
       {
         if (part.Length > 0)
         {
-          // Se la parte è tutta maiuscola (come "MAX" o "TIME"), normalizzala
-          if (part.All(char.IsUpper) && part.All(char.IsLetter))
+          // Se tutte le lettere del segmento sono maiuscole (es. "MAX", "EXEC1", "SQM242HND")
+          // applica PascalCase a ogni sequenza di lettere, lasciando le cifre invariate
+          if (part.Any(char.IsLetter) && part.Where(char.IsLetter).All(char.IsUpper))
           {
-            // Converti a PascalCase: prima lettera maiuscola, resto minuscolo
-            result += char.ToUpper(part[0]) + part.Substring(1).ToLower();
+            result += Regex.Replace(part, @"[A-Za-z]+", m =>
+                char.ToUpper(m.Value[0]) + m.Value.Substring(1).ToLower());
           }
           else
           {

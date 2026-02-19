@@ -32,7 +32,7 @@ Ogni sezione riporta il tipo di simbolo, la regola applicata, esempi concreti e 
 
 | Sezione |	Contenuto |
 | ------- | --------- | 
-| §1 Moduli	 | .bas/.cls/.frm, prefisso frm, keyword → Class|
+| §1 Moduli	 | .bas/.cls/.frm, prefisso `Frm`/`Cls` (sempre maiuscolo), all-caps+cifre → PascalCase per run di lettere, keyword → Class|
 | §2 Variabili Globali	| 7 sotto-casi: private, static, gobj, classe in .bas, classe in form, primitivo, suffisso _N |
 | §3 Costanti modulo |	ToScreamingSnakeCase(string) con esempi di acronimi |
 | §4-5 Enum / Valori |	ToPascalCaseFromScreamingSnake(string) |
@@ -52,16 +52,35 @@ Ogni sezione riporta il tipo di simbolo, la regola applicata, esempi concreti e 
 
 ## 1. Moduli / File
 
-**Regola:** PascalCase sul nome file (senza estensione). I form ricevono il prefisso `frm`.
+**Regola:** `ToPascalCase` sul nome base del file (senza estensione e senza prefisso).
+Form e classi ricevono un prefisso fisso (`Frm` / `Cls`) **prima** di applicare la conversione al nome base.
 
 | Tipo file | Regola | Esempio prima | Esempio dopo |
 |-----------|--------|---------------|--------------|
 | `.bas` modulo | PascalCase | `GLOBAL_MODULE` | `GlobalModule` |
+| `.bas` modulo (all-caps con cifre) | PascalCase per run di lettere | `EXEC1` | `Exec1` |
+| `.bas` modulo (all-caps + cifre misti) | PascalCase per run di lettere | `SQM242HND` | `Sqm242Hnd` |
 | `.cls` classe | `Cls` + PascalCase | `TextFile` | `ClsTextFile` |
-| `.cls` classe (già prefissata) | PascalCase (prefisso preservato) | `clsTextFile` | `ClsTextFile` |
-| `.frm` form | `frm` + PascalCase | `Main_Form` | `frmMainForm` |
+| `.cls` classe (già prefissata) | `Cls` + PascalCase del nome base | `clsTextFile` | `ClsTextFile` |
+| `.cls` classe (all-caps) | `Cls` + PascalCase | `LOGGER` | `ClsLogger` |
+| `.frm` form | `Frm` + PascalCase del nome base | `Main_Form` | `FrmMainForm` |
+| `.frm` form (all-caps con cifre) | `Frm` + PascalCase del nome base | `SQM242` | `FrmSqm242` |
+| `.frm` form (già prefissata, all-caps) | `Frm` + PascalCase del nome base | `frmSQM242` | `FrmSqm242` |
+
+**Algoritmo `ToPascalCase` per segmenti all-uppercase:**
+
+Un segmento (parte separata da `_`) viene convertito in PascalCase se **tutte le sue lettere sono maiuscole** (le cifre non partecipano al controllo). La conversione applica una regex che processa ogni _run di lettere_ separatamente, lasciando le cifre invariate nella loro posizione:
+
+```
+"SQM242HND" → run "SQM" → "Sqm", cifre "242" invariate, run "HND" → "Hnd" → "Sqm242Hnd"
+"EXEC1"     → run "EXEC" → "Exec", cifra "1" invariata                → "Exec1"
+"MAX"       → run "MAX" → "Max"                                        → "Max"
+```
+
+I segmenti con lettere miste (es. `frmMain`, `PDxI`) seguono la regola precedente: prima lettera maiuscola, resto invariato.
 
 **Note:**
+- Il prefisso `Frm`/`Cls` viene aggiunto **dopo** la PascalCase del nome base (non prima), così `SQM242.frm` → `FrmSqm242` e non `FrmSQM242`.
 - Se il nome risultante è una keyword C# (es. `With`), viene aggiunto il suffisso `Class` → `WithClass`.
 - Nelle classi/form VB6 viene aggiornata anche la riga `Attribute VB_Name = "..."`.
 
