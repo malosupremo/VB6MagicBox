@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+Ôªøusing System.Text.RegularExpressions;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -11,17 +11,17 @@ public static partial class VbParser
 
   public static void ResolveTypesAndCalls(VbProject project)
   {
-    // Indicizzazione procedure per nome (ESCLUSE le propriet‡)
+    // Indicizzazione procedure per nome (ESCLUSE le propriet√†)
     var procIndex = new Dictionary<string, List<(string Module, VbProcedure Proc)>>(
         StringComparer.OrdinalIgnoreCase);
 
-    // Indicizzazione propriet‡ per nome (SEPARATA dalle procedure)
+    // Indicizzazione propriet√† per nome (SEPARATA dalle procedure)
     var propIndex = new Dictionary<string, List<(string Module, VbProperty Prop)>>(
         StringComparer.OrdinalIgnoreCase);
 
     foreach (var mod in project.Modules)
     {
-      // Indicizza solo le procedure normali (NON le propriet‡)
+      // Indicizza solo le procedure normali (NON le propriet√†)
       foreach (var proc in mod.Procedures.Where(p => !p.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase)))
       {
         if (!procIndex.TryGetValue(proc.Name, out var list))
@@ -32,7 +32,7 @@ public static partial class VbParser
         list.Add((mod.Name, proc));
       }
 
-      // Indicizza le propriet‡ separatamente
+      // Indicizza le propriet√† separatamente
       foreach (var prop in mod.Properties)
       {
         if (!propIndex.TryGetValue(prop.Name, out var propList))
@@ -75,8 +75,8 @@ public static partial class VbParser
           if (mod.Types.Any(t => string.Equals(t.Name, token, StringComparison.OrdinalIgnoreCase)))
             continue;
 
-          // Le propriet‡ NON vengono considerate come chiamate nude a livello di modulo
-          // Solo le procedure normali possono essere chiamate cosÏ
+          // Le propriet√† NON vengono considerate come chiamate nude a livello di modulo
+          // Solo le procedure normali possono essere chiamate cos√¨
           if (procIndex.TryGetValue(token, out var targets) && targets.Count > 0)
           {
             foreach (var t in targets)
@@ -128,7 +128,7 @@ public static partial class VbParser
           var varName = matchSetAlias.Groups[1].Value;
           var sourceVar = matchSetAlias.Groups[2].Value;
           
-          // Se Ë object.property, estrai il tipo da globalTypeMap
+          // Se √® object.property, estrai il tipo da globalTypeMap
           if (sourceVar.Contains('.'))
           {
             var parts = sourceVar.Split('.');
@@ -186,7 +186,7 @@ public static partial class VbParser
 
       foreach (var proc in mod.Procedures)
       {
-        // Ambiente variabili ‡ tipo
+        // Ambiente variabili √† tipo
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Debug disabled - keep variable but set to null to avoid any logging
@@ -202,7 +202,7 @@ public static partial class VbParser
           foreach (var v in anyMod.GlobalVariables)
             if (!string.IsNullOrEmpty(v.Name) && !string.IsNullOrEmpty(v.Type))
             {
-              // Non sovrascrivere se esiste gi‡ (priorit‡ al modulo corrente)
+              // Non sovrascrivere se esiste gi√† (priorit√† al modulo corrente)
               if (!env.ContainsKey(v.Name))
               {
                 env[v.Name] = v.Type;
@@ -250,7 +250,7 @@ public static partial class VbParser
             var varName = matchSetAlias.Groups[1].Value;
             var sourceVar = matchSetAlias.Groups[2].Value;
             
-            // Se Ë object.property, estrai il tipo da env (gi‡ popolato con global vars)
+            // Se √® object.property, estrai il tipo da env (gi√† popolato con global vars)
             if (sourceVar.Contains("."))
             {
               var parts = sourceVar.Split('.');
@@ -289,7 +289,7 @@ public static partial class VbParser
         // Risoluzione chiamate
         foreach (var call in proc.Calls)
         {
-          // Se Ë object.method
+          // Se √® object.method
           if (!string.IsNullOrEmpty(call.ObjectName))
           {
             if (env.TryGetValue(call.ObjectName, out var objType))
@@ -409,7 +409,7 @@ public static partial class VbParser
             if (VbKeywords.Contains(methodName))
               continue;
 
-            // Filtra auto-referenza: se Ë una procedura nel modulo corrente, non aggiungerla
+            // Filtra auto-referenza: se √® una procedura nel modulo corrente, non aggiungerla
             if (string.IsNullOrEmpty(objName) && string.Equals(methodName, proc.Name, StringComparison.OrdinalIgnoreCase))
               continue;
 
@@ -417,7 +417,7 @@ public static partial class VbParser
             if (proc.Calls.Any(c => string.Equals(c.Raw, objName != null ? $"{objName}.{methodName}" : methodName, StringComparison.OrdinalIgnoreCase)))
               continue;
 
-            // Se Ë object.method, risolvi il tipo dell'oggetto
+            // Se √® object.method, risolvi il tipo dell'oggetto
             if (!string.IsNullOrEmpty(objName))
             {
               if (env.TryGetValue(objName, out var objType) && !string.IsNullOrEmpty(objType))
@@ -428,7 +428,7 @@ public static partial class VbParser
                 // Cerca la procedura nella classe
                 if (classIndex.TryGetValue(classNameToLookup, out var classModule))
                 {
-                  // PRIMA cerca nelle propriet‡ (hanno precedenza negli accessi con punto)
+                  // PRIMA cerca nelle propriet√† (hanno precedenza negli accessi con punto)
                   var classProp = classModule.Properties.FirstOrDefault(p =>
                       p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
@@ -452,7 +452,7 @@ public static partial class VbParser
                   }
                   else
                   {
-                    // Se non Ë una propriet‡, cerca nelle procedure normali
+                    // Se non √® una propriet√†, cerca nelle procedure normali
                     var classProc = classModule.Procedures.FirstOrDefault(p =>
                         p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
@@ -517,8 +517,8 @@ public static partial class VbParser
             if (VbKeywords.Contains(methodName) || VbKeywords.Contains(objName))
               continue;
 
-            // Controlla se gi‡ nelle Calls (per evitare duplicati nelle Calls,
-            // ma per le propriet‡ aggiungiamo comunque i LineNumbers alle References)
+            // Controlla se gi√† nelle Calls (per evitare duplicati nelle Calls,
+            // ma per le propriet√† aggiungiamo comunque i LineNumbers alle References)
             var alreadyInCalls = proc.Calls.Any(c => string.Equals(c.Raw, $"{objName}.{methodName}", StringComparison.OrdinalIgnoreCase));
 
             // Risolvi il tipo dell'oggetto
@@ -530,7 +530,7 @@ public static partial class VbParser
               // Cerca nella classe
               if (classIndex.TryGetValue(classNameToLookup, out var classModule))
               {
-                // PRIMA cerca nelle propriet‡ (hanno precedenza negli accessi con punto)
+                // PRIMA cerca nelle propriet√† (hanno precedenza negli accessi con punto)
                 var classProp = classModule.Properties.FirstOrDefault(p =>
                     p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
@@ -557,7 +557,7 @@ public static partial class VbParser
                 }
                 else if (!alreadyInCalls)
                 {
-                  // Se non Ë una propriet‡, cerca nelle procedure normali
+                  // Se non √® una propriet√†, cerca nelle procedure normali
                   var classProc = classModule.Procedures.FirstOrDefault(p =>
                       p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
@@ -581,7 +581,7 @@ public static partial class VbParser
             }
           }
 
-          // PASS 1.5b: Generico - cerca object.method dove object Ë in env (Ë una variabile nota)
+          // PASS 1.5b: Generico - cerca object.method dove object √® in env (√® una variabile nota)
           // Pattern: qualsiasi IDENTIFIER.IDENTIFIER OVUNQUE nella riga
           var trimmedLineForMethods = noCommentLine.Trim();
           foreach (Match genericMethodMatch in Regex.Matches(trimmedLineForMethods, @"(\w+)\.(\w+)", RegexOptions.IgnoreCase))
@@ -590,12 +590,12 @@ public static partial class VbParser
             var methodName = genericMethodMatch.Groups[2].Value;
 
             // NON escludere keywords per object.method - possono essere metodi custom
-            // (es. gobjPlc.Timer Ë valido anche se Timer Ë una built-in function)
+            // (es. gobjPlc.Timer √® valido anche se Timer √® una built-in function)
             if (VbKeywords.Contains(objName))
               continue;
 
             // Traccia riferimento diretto a modulo noto: FrmRestart.Show, Module.Proc
-            // Copre i casi in cui il modulo Ë usato per nome senza variabile dichiarata
+            // Copre i casi in cui il modulo √® usato per nome senza variabile dichiarata
             if (moduleByName.TryGetValue(objName, out var referencedModule) &&
                 !string.Equals(referencedModule.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
             {
@@ -603,12 +603,12 @@ public static partial class VbParser
               referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1);
             }
 
-            // Se objName NON Ë un oggetto noto in env, non proseguire con la risoluzione del tipo
+            // Se objName NON √® un oggetto noto in env, non proseguire con la risoluzione del tipo
             var objInEnv = env.TryGetValue(objName, out var objType);
             if (!objInEnv || string.IsNullOrEmpty(objType))
               continue;
 
-            // Controlla se gi‡ nelle Calls (per le propriet‡ aggiungiamo comunque i LineNumbers)
+            // Controlla se gi√† nelle Calls (per le propriet√† aggiungiamo comunque i LineNumbers)
             var alreadyInCalls = proc.Calls.Any(c => string.Equals(c.Raw, $"{objName}.{methodName}", StringComparison.OrdinalIgnoreCase));
 
             // Se il tipo contiene un namespace (es. QuarzPC.clsQuarzPC), prendi solo l'ultima parte
@@ -617,7 +617,7 @@ public static partial class VbParser
             // Cerca nella classe
             if (classIndex.TryGetValue(classNameToLookup, out var classModule))
             {
-              // PRIMA cerca nelle propriet‡ (hanno precedenza negli accessi con punto)
+              // PRIMA cerca nelle propriet√† (hanno precedenza negli accessi con punto)
               var classProp = classModule.Properties.FirstOrDefault(p =>
                   p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
@@ -644,7 +644,7 @@ public static partial class VbParser
               }
               else if (!alreadyInCalls)
               {
-                // Se non Ë una propriet‡, cerca nelle procedure normali
+                // Se non √® una propriet√†, cerca nelle procedure normali
                 var classProc = classModule.Procedures.FirstOrDefault(p =>
                     p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
@@ -692,257 +692,6 @@ public static partial class VbParser
     // Marcatura tipi usati
     MarkUsedTypes(project);
   }
-
-  // ---------------------------------------------------------
-  // COSTRUZIONE DIPENDENZE + MARCATURA USED
-  // ---------------------------------------------------------
-
-  /// <summary>
-  /// Legge un file con FileShare.Read per evitare blocchi di file
-  /// quando il file Ë aperto da altri processi (es. IDE)
-  /// </summary>
-  private static string[] ReadAllLinesShared(string filePath)
-  {
-    try
-    {
-      using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-      using (var reader = new StreamReader(stream))
-      {
-        var content = reader.ReadToEnd();
-        return content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-      }
-    }
-    catch (IOException ex)
-    {
-      Console.WriteLine($"    [WARN] Impossibile leggere {Path.GetFileName(filePath)}: {ex.Message}");
-      return Array.Empty<string>();
-    }
-  }
-
-  public static void BuildDependenciesAndUsage(VbProject project)
-  {
-    var procByModuleAndName = new Dictionary<(string Module, string Name), VbProcedure>();
-
-    foreach (var mod in project.Modules)
-      foreach (var proc in mod.Procedures)
-        procByModuleAndName[(mod.Name, proc.Name)] = proc;
-
-    var varByModuleAndName = new Dictionary<(string Module, string Name), VbVariable>();
-
-    foreach (var mod in project.Modules)
-      foreach (var variable in mod.GlobalVariables)
-        varByModuleAndName[(mod.Name, variable.Name)] = variable;
-
-    int moduleIndex = 0;
-    int totalModules = project.Modules.Count;
-
-    foreach (var mod in project.Modules)
-    {
-      moduleIndex++;
-      
-      // Estrai il nome del file senza path per il log
-      var fileName = Path.GetFileName(mod.FullPath);
-      var moduleName = Path.GetFileNameWithoutExtension(mod.Name);
-      Console.WriteLine($"\r  [{moduleIndex}/{totalModules}] {fileName} ({moduleName})...".PadRight(Console.WindowWidth - 1));
-
-      int counter = 0; 
-
-      foreach (var proc in mod.Procedures)
-      {
-        // Progress inline per il parsing
-        Console.Write($"\r      [Procedure {counter++}/{mod.Procedures.Count}] {proc.Name}...".PadRight(Console.WindowWidth - 1));
-
-        foreach (var call in proc.Calls.DistinctBy(c => $"{c.Raw}|{c.ResolvedModule}|{c.ResolvedProcedure}|{c.LineNumber}"))
-        {
-          project.Dependencies.Add(new DependencyEdge
-          {
-            CallerModule = mod.Name,
-            CallerProcedure = proc.Name,
-            CalleeRaw = call.Raw,
-            CalleeModule = call.ResolvedModule,
-            CalleeProcedure = call.ResolvedProcedure
-          });
-
-          // Marca procedure chiamate
-          if (!string.IsNullOrEmpty(call.ResolvedModule) &&
-              !string.IsNullOrEmpty(call.ResolvedProcedure) &&
-              procByModuleAndName.TryGetValue((call.ResolvedModule, call.ResolvedProcedure), out var targetProc))
-          {
-            targetProc.Used = true;
-            // Usa il line number dalla call, se non disponibile usa il line number della procedura
-            var lineNum = call.LineNumber > 0 ? call.LineNumber : proc.LineNumber;
-            targetProc.References.AddLineNumber(mod.Name, proc.Name, lineNum);
-          }
-
-          // Marca classi usate
-          if (!string.IsNullOrEmpty(call.ResolvedType))
-          {
-            var clsMod = project.Modules.FirstOrDefault(m =>
-                m.IsClass &&
-                Path.GetFileNameWithoutExtension(m.Name)
-                    .Equals(call.ResolvedType, StringComparison.OrdinalIgnoreCase));
-
-            if (clsMod != null)
-              clsMod.Used = true;
-          }
-        }
-      }
-      counter = 0;
-
-      // Marca variabili globali usate e traccia references
-      // Per variabili Public/Global, cerca in TUTTI i moduli
-      // Per variabili Private/Dim, cerca solo nel modulo corrente
-      foreach (var v in mod.GlobalVariables)
-      {
-        // Progress inline per il parsing
-        Console.Write($"\r      [Variable {counter++}/{mod.GlobalVariables.Count}] {v.Name}...".PadRight(Console.WindowWidth - 1));
-
-        bool isPublic = string.IsNullOrEmpty(v.Visibility) || 
-                       v.Visibility.Equals("Public", StringComparison.OrdinalIgnoreCase) ||
-                       v.Visibility.Equals("Global", StringComparison.OrdinalIgnoreCase);
-
-        // Determina in quali moduli cercare
-        var modulesToSearch = isPublic 
-            ? project.Modules  // Public/Global: cerca ovunque
-            : new List<VbModule> { mod };  // Private/Dim: solo nel modulo corrente
-
-        foreach (var searchMod in modulesToSearch)
-        {
-          var searchLines = ReadAllLinesShared(searchMod.FullPath);
-          int lineNum = 0;
-          
-          foreach (var line in searchLines)
-          {
-            lineNum++;
-            if (line.IndexOf(v.Name, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-              v.Used = true;
-              // Trova la procedura corretta che contiene questa riga
-              var procAtLine = searchMod.GetProcedureAtLine(lineNum);
-              if (procAtLine != null)
-              {
-                // CONTROLLO SHADOW: Se la procedura ha una variabile locale con lo stesso nome,
-                // quella locale fa "shadow" della globale, quindi NON aggiungere reference
-                var hasLocalWithSameName = procAtLine.LocalVariables.Any(lv => 
-                    lv.Name.Equals(v.Name, StringComparison.OrdinalIgnoreCase)) ||
-                  procAtLine.Parameters.Any(p => 
-                    p.Name.Equals(v.Name, StringComparison.OrdinalIgnoreCase));
-                
-                if (hasLocalWithSameName)
-                {
-                  // La variabile locale fa shadow di quella globale, skip
-                  continue;
-                }
-
-                v.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
-              }
-            }
-          }
-        }
-      }
-
-      counter = 0;
-      // Marca costanti usate (modulo level) e traccia references
-      // Per costanti Public/Global, cerca in TUTTI i moduli
-      // Per costanti Private, cerca solo nel modulo corrente
-      foreach (var c in mod.Constants)
-      {
-        // Progress inline per il parsing
-        Console.Write($"\r      [Costant {counter++}/{mod.Constants.Count}] {c.Name}...".PadRight(Console.WindowWidth - 1));
-
-        bool isPublic = string.IsNullOrEmpty(c.Visibility) || 
-                       c.Visibility.Equals("Public", StringComparison.OrdinalIgnoreCase) ||
-                       c.Visibility.Equals("Global", StringComparison.OrdinalIgnoreCase);
-
-        // Determina in quali moduli cercare
-        var modulesToSearch = isPublic 
-            ? project.Modules  // Public/Global: cerca ovunque
-            : new List<VbModule> { mod };  // Private: solo nel modulo corrente
-
-        foreach (var searchMod in modulesToSearch)
-        {
-          var searchLines = ReadAllLinesShared(searchMod.FullPath);
-          int lineNum = 0;
-          
-          foreach (var line in searchLines)
-          {
-            lineNum++;
-            if (line.IndexOf(c.Name, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-              c.Used = true;
-              // Trova la procedura corretta che contiene questa riga
-              var procAtLine = searchMod.GetProcedureAtLine(lineNum);
-              if (procAtLine != null)
-              {
-                // CONTROLLO SHADOW: Se la procedura ha una costante locale con lo stesso nome,
-                // quella locale fa "shadow" della globale, quindi NON aggiungere reference
-                var hasLocalWithSameName = procAtLine.Constants.Any(lc => 
-                    lc.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase));
-                
-                if (hasLocalWithSameName)
-                {
-                  // La costante locale fa shadow di quella globale, skip
-                  continue;
-                }
-
-                c.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
-              }
-            }
-          }
-        }
-      }
-
-    }
-
-    Console.WriteLine(); // Vai a capo dopo il progress del parsing
-
-    // Marcatura tipi usati
-    MarkUsedTypes(project);
-
-    // Propaga Used al modulo: se qualunque membro Ë usato, il modulo Ë usato
-    foreach (var mod in project.Modules)
-    {
-      if (!mod.Used)
-      {
-        mod.Used = mod.Procedures.Any(p => p.Used)
-                || mod.Properties.Any(p => p.Used)
-                || mod.GlobalVariables.Any(v => v.Used)
-                || mod.Constants.Any(c => c.Used)
-                || mod.Enums.Any(e => e.Used || e.Values.Any(v => v.Used))
-                || mod.Types.Any(t => t.Used)
-                || mod.Controls.Any(c => c.Used)
-                || mod.Events.Any(e => e.Used);
-      }
-    }
-
-    // Costruisce ModuleReferences: per ogni modulo raccoglie i moduli che lo referenziano
-    // attraverso qualsiasi suo membro (costanti, tipi, enum, procedure, property, controlli, variabili).
-    // Non modifica le References esistenti ó Ë un aggregato di sola lettura.
-    foreach (var mod in project.Modules)
-    {
-      var callers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-      void Collect(IEnumerable<VbReference> refs)
-      {
-        foreach (var r in refs)
-          if (!string.IsNullOrEmpty(r.Module) &&
-              !string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase))
-            callers.Add(r.Module);
-      }
-
-      foreach (var proc in mod.Procedures)   Collect(proc.References);
-      foreach (var prop in mod.Properties)   Collect(prop.References);
-      foreach (var v    in mod.GlobalVariables) Collect(v.References);
-      foreach (var c    in mod.Constants)    Collect(c.References);
-      foreach (var e    in mod.Enums)        { Collect(e.References); foreach (var val in e.Values) Collect(val.References); }
-      foreach (var t    in mod.Types)        { Collect(t.References); foreach (var f   in t.Fields) Collect(f.References); }
-      foreach (var c    in mod.Controls)     Collect(c.References);
-      foreach (var ev   in mod.Events)       Collect(ev.References);
-      Collect(mod.References);
-
-      mod.ModuleReferences = callers
-          .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
-          .ToList();
-    }
-  }
 }
+
+
