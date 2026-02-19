@@ -36,8 +36,8 @@ public class Program
       Console.WriteLine("1. Analizza progetto VB6");
       Console.WriteLine("2. Aggiunta tipi mancanti");
       Console.WriteLine("3. Applica refactoring automatico");
-      Console.WriteLine("4. Armonizza le spaziature");
-      Console.WriteLine("5. Riordina le variabili di procedura");
+      Console.WriteLine("4. Riordina le variabili di procedura");
+      Console.WriteLine("5. Armonizza le spaziature");
       Console.WriteLine("6. BACCHETTA MAGICA: tutto insieme!");
       Console.WriteLine("0. Esci");
       Console.WriteLine();
@@ -60,14 +60,12 @@ public class Program
           break;
 
         case "4":
-          Console.WriteLine();
-          Console.WriteLine("[!] Armonizzazione spaziature non in armonia.");
-          Console.WriteLine("    Coming soon!");
+          RunVariableReorderInteractive();
           break;
 
         case "5":
           Console.WriteLine();
-          Console.WriteLine("[!] Ordinamento variabili di procedura in disordine.");
+          Console.WriteLine("[!] Armonizzazione spaziature non in armonia.");
           Console.WriteLine("    Coming soon!");
           break;
 
@@ -180,6 +178,31 @@ public class Program
     }
   }
 
+  private static void RunVariableReorderInteractive()
+  {
+    Console.WriteLine();
+    Console.Write("Percorso del file .vbp: ");
+    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+
+    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+    {
+      Console.WriteLine("[X] File .vbp non trovato!");
+      return;
+    }
+
+    try
+    {
+      var project = VbParser.ParseAndResolve(vbpPath);
+      CodeFormatter.ReorderLocalVariables(project);
+    }
+    catch (Exception ex)
+    {
+      Console.WriteLine();
+      Console.WriteLine("[X] Errore durante il riordino:");
+      Console.WriteLine(ex.ToString());
+    }
+  }
+
   private static void RunMagicWandInteractive()
   {
     Console.WriteLine();
@@ -207,6 +230,10 @@ public class Program
 
       // 3) Refactoring: rinomina i simboli secondo le convenzioni
       Refactoring.ApplyRenames(project);
+
+      // 4) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
+      //    Deve seguire il rename perché opera sui file già rinominati su disco.
+      CodeFormatter.ReorderLocalVariables(project);
 
       Console.WriteLine();
       Console.WriteLine("[OK] Bacchetta magica applicata!");
