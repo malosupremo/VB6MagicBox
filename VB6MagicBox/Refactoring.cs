@@ -216,13 +216,6 @@ public static class Refactoring
       Console.WriteLine($"     [INFO] Nessun simbolo da rinominare (tutti IsConventional=true)");
     Console.WriteLine($"     Cartella backup: {backupDir}");
     Console.WriteLine();
-    if (filesProcessed > 0)
-    {
-      Console.WriteLine("Per ripristinare il backup:");
-      Console.WriteLine($"  1. Copia i file da: {backupDir}");
-      Console.WriteLine($"  2. Verso: {backupBaseDir}");
-      Console.WriteLine($"     (sovrascrivi i file modificati)");
-    }
     Console.WriteLine("===========================================");
   }
 

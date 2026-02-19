@@ -1,0 +1,39 @@
+using VB6MagicBox.Models;
+
+namespace VB6MagicBox.Parsing;
+
+public static partial class VbParser
+{
+  /// <summary>
+  /// Returns true when <paramref name="line"/> is the closing statement for a
+  /// procedure of the given <paramref name="procKind"/> (Sub / Function / Property).
+  /// </summary>
+  private static bool IsProcedureEndLine(string line, string procKind)
+  {
+    if (string.IsNullOrEmpty(procKind))
+      return false;
+
+    string expectedEnd;
+    if (procKind.Equals("Sub", StringComparison.OrdinalIgnoreCase))
+      expectedEnd = "End Sub";
+    else if (procKind.Equals("Function", StringComparison.OrdinalIgnoreCase))
+      expectedEnd = "End Function";
+    else if (procKind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
+      expectedEnd = "End Property";
+    else
+      return false;
+
+    var trimmed = line.TrimStart();
+    return trimmed.Equals(expectedEnd, StringComparison.OrdinalIgnoreCase) ||
+           trimmed.StartsWith(expectedEnd + " ", StringComparison.OrdinalIgnoreCase);
+  }
+
+  /// <summary>
+  /// Marca un controllo come usato e aggiunge reference con line numbers
+  /// </summary>
+  private static void MarkControlAsUsed(VbControl control, string moduleName, string procedureName, int lineNumber)
+  {
+    control.Used = true;
+    control.References.AddLineNumber(moduleName, procedureName, lineNumber);
+  }
+}
