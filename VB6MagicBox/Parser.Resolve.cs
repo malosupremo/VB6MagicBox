@@ -214,24 +214,6 @@ public static partial class VbParser
             }
         }
 
-        // Carica GlobalVariables da TUTTI i moduli del progetto (non solo da mod)
-        foreach (var anyMod in project.Modules)
-        {
-          foreach (var v in anyMod.GlobalVariables)
-            if (!string.IsNullOrEmpty(v.Name) && !string.IsNullOrEmpty(v.Type))
-            {
-              // Non sovrascrivere se esiste già (priorità al modulo corrente)
-              if (!env.ContainsKey(v.Name))
-              {
-                env[v.Name] = v.Type;
-                if (debugInfo != null && (v.Name.StartsWith("gobj") || v.Name.Contains("Plasma") || v.Name.Contains("Qpc") || v.Name.Contains("Plc")))
-                {
-                  debugInfo.Add($"Loaded: {v.Name} -> {v.Type}");
-                }
-              }
-            }
-        }
-
         foreach (var p in proc.Parameters)
           if (!string.IsNullOrEmpty(p.Name) && !string.IsNullOrEmpty(p.Type))
             env[p.Name] = p.Type;
@@ -409,32 +391,8 @@ public static partial class VbParser
           noCommentLine = Regex.Replace(noCommentLine, @"""[^""]*""", "\"\"");
 
           // Se incontriamo la fine della procedura interrompiamo
-          if (li > proc.LineNumber - 1)
-          {
-            var trimmedForEnd = noCommentLine.TrimStart();
-
-            // Determine the exact procedure terminator based on the procedure kind
-            string expectedEnd = null;
-            if (!string.IsNullOrEmpty(proc.Kind))
-            {
-              // proc.Kind values: "Sub", "Function", "PropertyGet"/"PropertyLet"/"PropertySet", etc.
-              if (proc.Kind.Equals("Sub", StringComparison.OrdinalIgnoreCase))
-                expectedEnd = "End Sub";
-              else if (proc.Kind.Equals("Function", StringComparison.OrdinalIgnoreCase))
-                expectedEnd = "End Function";
-              else if (proc.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
-                expectedEnd = "End Property";
-            }
-
-            if (!string.IsNullOrEmpty(expectedEnd))
-            {
-              if (trimmedForEnd.Equals(expectedEnd, StringComparison.OrdinalIgnoreCase) ||
-                  trimmedForEnd.StartsWith(expectedEnd + " ", StringComparison.OrdinalIgnoreCase))
-              {
-                break;
-              }
-            }
-          }
+          if (li > proc.LineNumber - 1 && IsProcedureEndLine(noCommentLine, proc.Kind))
+            break;
           
           if (debugInfo != null && li > proc.LineNumber + 1 && li <= proc.LineNumber + 20)
           {
@@ -478,25 +436,7 @@ public static partial class VbParser
                   {
                     classProp.Used = true;
                     
-                    // Aggiungi reference alla proprietà (merge LineNumbers se già esiste)
-                    var existingRef = classProp.References.FirstOrDefault(r =>
-                        string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-                    
-                    if (existingRef != null)
-                    {
-                      if (!existingRef.LineNumbers.Contains(li + 1))
-                        existingRef.LineNumbers.Add(li + 1);
-                    }
-                    else
-                    {
-                      classProp.References.Add(new VbReference
-                      {
-                        Module = mod.Name,
-                        Procedure = proc.Name,
-                        LineNumbers = new List<int> { li + 1 }
-                      });
-                    }
+                    classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1);
 
                     proc.Calls.Add(new VbCall
                     {
@@ -598,26 +538,7 @@ public static partial class VbParser
                 {
                   classProp.Used = true;
                   
-                  // Aggiungi reference alla proprietà (SEMPRE, anche se già nelle Calls,
-                  // perché ogni riga che accede alla proprietà deve avere la sua Reference)
-                  var existingRef = classProp.References.FirstOrDefault(r =>
-                      string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-                      string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-                  
-                  if (existingRef != null)
-                  {
-                    if (!existingRef.LineNumbers.Contains(li + 1))
-                      existingRef.LineNumbers.Add(li + 1);
-                  }
-                  else
-                  {
-                    classProp.References.Add(new VbReference
-                    {
-                      Module = mod.Name,
-                      Procedure = proc.Name,
-                      LineNumbers = new List<int> { li + 1 }
-                    });
-                  }
+                  classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1);
 
                   if (!alreadyInCalls)
                   {
@@ -679,23 +600,7 @@ public static partial class VbParser
                 !string.Equals(referencedModule.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
             {
               referencedModule.Used = true;
-              var existingModRef = referencedModule.References.FirstOrDefault(r =>
-                  string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-                  string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-              if (existingModRef != null)
-              {
-                if (!existingModRef.LineNumbers.Contains(li + 1))
-                  existingModRef.LineNumbers.Add(li + 1);
-              }
-              else
-              {
-                referencedModule.References.Add(new VbReference
-                {
-                  Module = mod.Name,
-                  Procedure = proc.Name,
-                  LineNumbers = new List<int> { li + 1 }
-                });
-              }
+              referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1);
             }
 
             // Se objName NON è un oggetto noto in env, non proseguire con la risoluzione del tipo
@@ -720,25 +625,7 @@ public static partial class VbParser
               {
                 classProp.Used = true;
                 
-                // Aggiungi reference alla proprietà (SEMPRE, anche se già nelle Calls)
-                var existingRef = classProp.References.FirstOrDefault(r =>
-                    string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-                
-                if (existingRef != null)
-                {
-                  if (!existingRef.LineNumbers.Contains(li + 1))
-                    existingRef.LineNumbers.Add(li + 1);
-                }
-                else
-                {
-                  classProp.References.Add(new VbReference
-                  {
-                    Module = mod.Name,
-                    Procedure = proc.Name,
-                    LineNumbers = new List<int> { li + 1 }
-                  });
-                }
+                classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1);
 
                 if (!alreadyInCalls)
                 {
@@ -879,25 +766,7 @@ public static partial class VbParser
       return;
 
     referencedType.Used = true;
-
-    var existingRef = referencedType.References.FirstOrDefault(r =>
-        string.Equals(r.Module, moduleName, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
-
-    if (existingRef != null)
-    {
-      if (!existingRef.LineNumbers.Contains(lineNumber))
-        existingRef.LineNumbers.Add(lineNumber);
-    }
-    else
-    {
-      referencedType.References.Add(new VbReference
-      {
-        Module = moduleName,
-        Procedure = procedureName,
-        LineNumbers = new List<int> { lineNumber }
-      });
-    }
+    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber);
   }
 
   // ---------------------------------------------------------
@@ -961,25 +830,7 @@ public static partial class VbParser
       return;
 
     classModule.Used = true;
-
-    var existingRef = classModule.References.FirstOrDefault(r =>
-        string.Equals(r.Module, declaringModule, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
-
-    if (existingRef != null)
-    {
-      if (!existingRef.LineNumbers.Contains(lineNumber))
-        existingRef.LineNumbers.Add(lineNumber);
-    }
-    else
-    {
-      classModule.References.Add(new VbReference
-      {
-        Module = declaringModule,
-        Procedure = procedureName,
-        LineNumbers = new List<int> { lineNumber }
-      });
-    }
+    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber);
   }
 
   // ---------------------------------------------------------
@@ -1059,29 +910,7 @@ public static partial class VbParser
             if (field != null)
             {
               field.Used = true;
-              
-            
-              
-              // Cerca se esiste già una Reference per questo Module+Procedure
-              var existingRef = field.References.FirstOrDefault(r =>
-                string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-              
-              if (existingRef != null)
-              {
-                // Aggiungi solo il line number
-                existingRef.LineNumbers.Add(i + 1);
-              }
-              else
-              {
-                // Crea nuova Reference con line number
-                field.References.Add(new VbReference
-                {
-                  Module = mod.Name,
-                  Procedure = proc.Name,
-                  LineNumbers = new List<int> { i + 1 }
-                });
-              }
+              field.References.AddLineNumber(mod.Name, proc.Name, i + 1);
             }
            
           }
@@ -1131,32 +960,9 @@ public static partial class VbParser
       var raw = fileLines[i].Trim();
 
       // Fine procedura - controlla SOLO i terminatori specifici della procedura
-      // IMPORTANTE: Non usare StartsWith("End ") perché fa match con End If, End With, ecc.
-      if (i > proc.LineNumber - 1)
-      {
-        var trimmedForEnd = raw.TrimStart();
-        
-        // Determina quale terminatore aspettarsi basato sul tipo di procedura
-        string expectedEnd = null;
-        if (!string.IsNullOrEmpty(proc.Kind))
-        {
-          if (proc.Kind.Equals("Sub", StringComparison.OrdinalIgnoreCase))
-            expectedEnd = "End Sub";
-          else if (proc.Kind.Equals("Function", StringComparison.OrdinalIgnoreCase))
-            expectedEnd = "End Function";
-          else if (proc.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
-            expectedEnd = "End Property";
-        }
-
-        if (!string.IsNullOrEmpty(expectedEnd))
-        {
-          if (trimmedForEnd.Equals(expectedEnd, StringComparison.OrdinalIgnoreCase) ||
-              trimmedForEnd.StartsWith(expectedEnd + " ", StringComparison.OrdinalIgnoreCase))
-          {
-            break;
-          }
-        }
-      }
+      // (Non usa "End " generico per evitare match con End If, End With, ecc.)
+      if (i > proc.LineNumber - 1 && IsProcedureEndLine(raw, proc.Kind))
+        break;
 
       // Rimuovi commenti
       var noComment = raw;
@@ -1249,32 +1055,9 @@ public static partial class VbParser
       int currentLineNumber = i + 1;
 
       // Fine procedura - controlla SOLO i terminatori specifici della procedura
-      // Non deve fare match con End If, End With, ecc.
-      if (i > proc.LineNumber - 1)
-      {
-        var trimmedForEnd = raw.TrimStart();
-        
-        // Determina quale terminatore aspettarsi basato sul tipo di procedura
-        string expectedEnd = null;
-        if (!string.IsNullOrEmpty(proc.Kind))
-        {
-          if (proc.Kind.Equals("Sub", StringComparison.OrdinalIgnoreCase))
-            expectedEnd = "End Sub";
-          else if (proc.Kind.Equals("Function", StringComparison.OrdinalIgnoreCase))
-            expectedEnd = "End Function";
-          else if (proc.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
-            expectedEnd = "End Property";
-        }
-
-        if (!string.IsNullOrEmpty(expectedEnd))
-        {
-          if (trimmedForEnd.Equals(expectedEnd, StringComparison.OrdinalIgnoreCase) ||
-              trimmedForEnd.StartsWith(expectedEnd + " ", StringComparison.OrdinalIgnoreCase))
-          {
-            break;
-          }
-        }
-      }
+      // (Non usa "End " generico per evitare match con End If, End With, ecc.)
+      if (i > proc.LineNumber - 1 && IsProcedureEndLine(raw, proc.Kind))
+        break;
 
       // Rimuovi commenti
       var noComment = raw;
@@ -1294,28 +1077,7 @@ public static partial class VbParser
         if (parameterIndex.TryGetValue(tokenName, out var parameter))
         {
           parameter.Used = true;
-          
-          // Cerca se esiste già una Reference per questo Module+Procedure
-          var existingRef = parameter.References.FirstOrDefault(r =>
-            string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-          
-          if (existingRef != null)
-          {
-            // Aggiungi solo il line number se non esiste già
-            if (!existingRef.LineNumbers.Contains(currentLineNumber))
-              existingRef.LineNumbers.Add(currentLineNumber);
-          }
-          else
-          {
-            // Crea nuova Reference con line number
-            parameter.References.Add(new VbReference
-            {
-              Module = mod.Name,
-              Procedure = proc.Name,
-              LineNumbers = new List<int> { currentLineNumber }
-            });
-          }
+          parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
         }
 
         // Controlla se è una variabile locale
@@ -1326,28 +1088,7 @@ public static partial class VbParser
             continue;
 
           localVar.Used = true;
-          
-          // Cerca se esiste già una Reference per questo Module+Procedure
-          var existingRef = localVar.References.FirstOrDefault(r =>
-            string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-          
-          if (existingRef != null)
-          {
-            // Aggiungi solo il line number se non esiste già
-            if (!existingRef.LineNumbers.Contains(currentLineNumber))
-              existingRef.LineNumbers.Add(currentLineNumber);
-          }
-          else
-          {
-            // Crea nuova Reference con line number
-            localVar.References.Add(new VbReference
-            {
-              Module = mod.Name,
-              Procedure = proc.Name,
-              LineNumbers = new List<int> { currentLineNumber }
-            });
-          }
+          localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
         }
       }
     }
@@ -1400,64 +1141,14 @@ public static partial class VbParser
       {
         t.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        {
-          // Cerca se esiste già una Reference per questo Module+Procedure
-          var existingRef = t.References.FirstOrDefault(r =>
-            string.Equals(r.Module, moduleName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
-          
-          if (existingRef != null && lineNumber > 0)
-          {
-            // Aggiungi solo il line number se non esiste già
-            if (!existingRef.LineNumbers.Contains(lineNumber))
-              existingRef.LineNumbers.Add(lineNumber);
-          }
-          else if (existingRef == null)
-          {
-            // Crea nuova Reference
-            var newRef = new VbReference
-            {
-              Module = moduleName,
-              Procedure = procedureName
-            };
-            if (lineNumber > 0)
-              newRef.LineNumbers.Add(lineNumber);
-            
-            t.References.Add(newRef);
-          }
-        }
+          t.References.AddLineNumber(moduleName, procedureName, lineNumber);
       }
 
       if (allEnums.TryGetValue(clean, out var e))
       {
         e.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        {
-          // Cerca se esiste già una Reference per questo Module+Procedure
-          var existingRef = e.References.FirstOrDefault(r =>
-            string.Equals(r.Module, moduleName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
-          
-          if (existingRef != null && lineNumber > 0)
-          {
-            // Aggiungi solo il line number se non esiste già
-            if (!existingRef.LineNumbers.Contains(lineNumber))
-              existingRef.LineNumbers.Add(lineNumber);
-          }
-          else if (existingRef == null)
-          {
-            // Crea nuova Reference
-            var newRef = new VbReference
-            {
-              Module = moduleName,
-              Procedure = procedureName
-            };
-            if (lineNumber > 0)
-              newRef.LineNumbers.Add(lineNumber);
-            
-            e.References.Add(newRef);
-          }
-        }
+          e.References.AddLineNumber(moduleName, procedureName, lineNumber);
       }
 
       // Traccia anche le classi usate come tipo
@@ -1465,32 +1156,7 @@ public static partial class VbParser
       {
         cls.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        {
-          // Cerca se esiste già una Reference per questo Module+Procedure
-          var existingRef = cls.References.FirstOrDefault(r =>
-            string.Equals(r.Module, moduleName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
-          
-          if (existingRef != null && lineNumber > 0)
-          {
-            // Aggiungi solo il line number se non esiste già
-            if (!existingRef.LineNumbers.Contains(lineNumber))
-              existingRef.LineNumbers.Add(lineNumber);
-          }
-          else if (existingRef == null)
-          {
-            // Crea nuova Reference
-            var newRef = new VbReference
-            {
-              Module = moduleName,
-              Procedure = procedureName
-            };
-            if (lineNumber > 0)
-              newRef.LineNumbers.Add(lineNumber);
-            
-            cls.References.Add(newRef);
-          }
-        }
+          cls.References.AddLineNumber(moduleName, procedureName, lineNumber);
       }
     }
 
@@ -1572,27 +1238,7 @@ public static partial class VbParser
               foreach (var enumValue in enumValues)
               {
                 enumValue.Used = true;
-                
-                // Cerca se esiste già una Reference per questo Module+Procedure
-                var existingRef = enumValue.References.FirstOrDefault(r =>
-                  string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-                  string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-                
-                if (existingRef != null)
-                {
-                  // Aggiungi solo il line number
-                  existingRef.LineNumbers.Add(i + 1);
-                }
-                else
-                {
-                  // Crea nuova Reference con line number
-                  enumValue.References.Add(new VbReference
-                  {
-                    Module = mod.Name,
-                    Procedure = proc.Name,
-                    LineNumbers = new List<int> { i + 1 }
-                  });
-                }
+                enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1);
               }
             }
           }
@@ -1655,27 +1301,7 @@ public static partial class VbParser
               if (evt != null)
               {
                 evt.Used = true;
-                
-                // Cerca se esiste già una Reference per questo Module+Procedure
-                var existingRef = evt.References.FirstOrDefault(r =>
-                  string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-                  string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-                
-                if (existingRef != null)
-                {
-                  // Aggiungi solo il line number
-                  existingRef.LineNumbers.Add(i + 1);
-                }
-                else
-                {
-                  // Crea nuova Reference con line number
-                  evt.References.Add(new VbReference
-                  {
-                    Module = mod.Name,
-                    Procedure = proc.Name,
-                    LineNumbers = new List<int> { i + 1 }
-                  });
-                }
+                evt.References.AddLineNumber(mod.Name, proc.Name, i + 1);
               }
             }
           }
@@ -1760,32 +1386,9 @@ public static partial class VbParser
               procByModuleAndName.TryGetValue((call.ResolvedModule, call.ResolvedProcedure), out var targetProc))
           {
             targetProc.Used = true;
-            
-            // Aggiungi reference alla procedura con line number
-            var existingRef = targetProc.References.FirstOrDefault(r =>
-              string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-              string.Equals(r.Procedure, proc.Name, StringComparison.OrdinalIgnoreCase));
-            
             // Usa il line number dalla call, se non disponibile usa il line number della procedura
             var lineNum = call.LineNumber > 0 ? call.LineNumber : proc.LineNumber;
-            
-            if (existingRef != null)
-            {
-              // Aggiungi il line number
-              existingRef.LineNumbers.Add(lineNum);
-            }
-            else
-            {
-              // Crea nuova Reference con line number
-              var newRef = new VbReference
-              {
-                Module = mod.Name,
-                Procedure = proc.Name,
-                LineNumbers = new List<int> { lineNum }
-              };
-              
-              targetProc.References.Add(newRef);
-            }
+            targetProc.References.AddLineNumber(mod.Name, proc.Name, lineNum);
           }
 
           // Marca classi usate
@@ -1847,27 +1450,8 @@ public static partial class VbParser
                   // La variabile locale fa shadow di quella globale, skip
                   continue;
                 }
-                
-                // Cerca se esiste già una Reference per questo Module+Procedure
-                var existingRef = v.References.FirstOrDefault(r =>
-                  string.Equals(r.Module, searchMod.Name, StringComparison.OrdinalIgnoreCase) &&
-                  string.Equals(r.Procedure, procAtLine.Name, StringComparison.OrdinalIgnoreCase));
-                
-                if (existingRef != null)
-                {
-                  // Aggiungi il line number
-                  existingRef.LineNumbers.Add(lineNum);
-                }
-                else
-                {
-                  // Crea nuova Reference con line number
-                  v.References.Add(new VbReference
-                  {
-                    Module = searchMod.Name,
-                    Procedure = procAtLine.Name,
-                    LineNumbers = new List<int> { lineNum }
-                  });
-                }
+
+                v.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
               }
             }
           }
@@ -1917,27 +1501,8 @@ public static partial class VbParser
                   // La costante locale fa shadow di quella globale, skip
                   continue;
                 }
-                
-                // Cerca se esiste già una Reference per questo Module+Procedure
-                var existingRef = c.References.FirstOrDefault(r =>
-                  string.Equals(r.Module, searchMod.Name, StringComparison.OrdinalIgnoreCase) &&
-                  string.Equals(r.Procedure, procAtLine.Name, StringComparison.OrdinalIgnoreCase));
-                
-                if (existingRef != null)
-                {
-                  // Aggiungi solo il line number
-                  existingRef.LineNumbers.Add(lineNum);
-                }
-                else
-                {
-                  // Crea nuova Reference con line number
-                  c.References.Add(new VbReference
-                  {
-                    Module = searchMod.Name,
-                    Procedure = procAtLine.Name,
-                    LineNumbers = new List<int> { lineNum }
-                  });
-                }
+
+                c.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
               }
             }
           }
@@ -1999,32 +1564,35 @@ public static partial class VbParser
   }
   
   /// <summary>
+  /// Returns true when <paramref name="line"/> is the closing statement for a
+  /// procedure of the given <paramref name="procKind"/> (Sub / Function / Property).
+  /// </summary>
+  private static bool IsProcedureEndLine(string line, string procKind)
+  {
+    if (string.IsNullOrEmpty(procKind))
+      return false;
+
+    string expectedEnd;
+    if (procKind.Equals("Sub", StringComparison.OrdinalIgnoreCase))
+      expectedEnd = "End Sub";
+    else if (procKind.Equals("Function", StringComparison.OrdinalIgnoreCase))
+      expectedEnd = "End Function";
+    else if (procKind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
+      expectedEnd = "End Property";
+    else
+      return false;
+
+    var trimmed = line.TrimStart();
+    return trimmed.Equals(expectedEnd, StringComparison.OrdinalIgnoreCase) ||
+           trimmed.StartsWith(expectedEnd + " ", StringComparison.OrdinalIgnoreCase);
+  }
+
+  /// <summary>
   /// Marca un controllo come usato e aggiunge reference con line numbers
   /// </summary>
   private static void MarkControlAsUsed(VbControl control, string moduleName, string procedureName, int lineNumber)
   {
     control.Used = true;
-    
-    // Cerca se esiste già una Reference per questo Module+Procedure
-    var existingRef = control.References.FirstOrDefault(r => 
-      string.Equals(r.Module, moduleName, StringComparison.OrdinalIgnoreCase) &&
-      string.Equals(r.Procedure, procedureName, StringComparison.OrdinalIgnoreCase));
-    
-    if (existingRef != null)
-    {
-      // Aggiungi solo il line number se non già presente
-      if (!existingRef.LineNumbers.Contains(lineNumber))
-        existingRef.LineNumbers.Add(lineNumber);
-    }
-    else
-    {
-      // Crea nuova Reference con line number
-      control.References.Add(new VbReference
-      {
-        Module = moduleName,
-        Procedure = procedureName,
-        LineNumbers = new List<int> { lineNumber }
-      });
-    }
+    control.References.AddLineNumber(moduleName, procedureName, lineNumber);
   }
 }

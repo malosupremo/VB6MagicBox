@@ -530,3 +530,37 @@ public class DependencyEdge
   [JsonPropertyOrder(4)]
   public string CalleeRaw { get; set; }
 }
+
+/// <summary>
+/// Extension methods for <see cref="List{VbReference}"/>.
+/// </summary>
+public static class VbReferenceListExtensions
+{
+  /// <summary>
+  /// Adds <paramref name="lineNumber"/> to an existing reference entry keyed by
+  /// Module+Procedure, or creates a new entry when none exists.
+  /// </summary>
+  public static void AddLineNumber(
+      this List<VbReference> references,
+      string module,
+      string procedure,
+      int lineNumber)
+  {
+    var existing = references.FirstOrDefault(r =>
+        string.Equals(r.Module, module, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(r.Procedure, procedure, StringComparison.OrdinalIgnoreCase));
+
+    if (existing != null)
+    {
+      if (lineNumber > 0 && !existing.LineNumbers.Contains(lineNumber))
+        existing.LineNumbers.Add(lineNumber);
+    }
+    else
+    {
+      var newRef = new VbReference { Module = module, Procedure = procedure };
+      if (lineNumber > 0)
+        newRef.LineNumbers.Add(lineNumber);
+      references.Add(newRef);
+    }
+  }
+}
