@@ -12,6 +12,12 @@ public static partial class VbParser
         "int", "str", "lng", "dbl", "sng", "cur", "bol", "byt", "chr", "dat", "obj", "arr", "udt"
     };
 
+    /// <summary>
+    /// Sigle di dominio da preservare in maiuscolo quando appaiono già tutte maiuscole
+    /// nel nome originale. Ordinate per lunghezza decrescente (match più lungo prima).
+    /// </summary>
+    private static readonly string[] KnownAcronyms = ["SQM", "PLC", "QPC", "PO"];
+
     private static string GetBaseNameFromHungarian(string name, string variableType = "")
     {
       if (string.IsNullOrEmpty(name)) return name;
@@ -109,7 +115,7 @@ public static partial class VbParser
           if (part.Any(char.IsLetter) && part.Where(char.IsLetter).All(char.IsUpper))
           {
             result += Regex.Replace(part, @"[A-Za-z]+", m =>
-                char.ToUpper(m.Value[0]) + m.Value.Substring(1).ToLower());
+                CapitalizeBlockWithAcronyms(m.Value));
           }
           else
           {
@@ -119,6 +125,27 @@ public static partial class VbParser
         }
       }
       return result;
+    }
+
+    /// <summary>
+    /// Capitalizza un blocco di lettere all-uppercase preservando le sigle di dominio note.
+    /// Applica matching prefisso più lungo prima; fallback a PascalCase standard.
+    /// Es: "SQM" ? "SQM", "SQMHND" ? "SQMHnd", "HANDLER" ? "Handler"
+    /// </summary>
+    private static string CapitalizeBlockWithAcronyms(string word)
+    {
+      // Il blocco è garantito all-uppercase (chiamato solo dal ramo all-caps di ToPascalCase)
+      foreach (var acr in KnownAcronyms)
+      {
+        if (word.StartsWith(acr, StringComparison.OrdinalIgnoreCase))
+        {
+          var rest = word[acr.Length..];
+          if (rest.Length == 0) return acr;
+          return acr + CapitalizeBlockWithAcronyms(rest);
+        }
+      }
+      // Nessuna sigla nota: PascalCase standard
+      return char.ToUpper(word[0]) + word[1..].ToLower();
     }
 
     public static string ToCamelCase(string s)

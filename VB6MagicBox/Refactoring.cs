@@ -27,11 +27,13 @@ public static class Refactoring
     // Richiesto in .NET Core/.NET 5+ dove gli encoding non standard non sono disponibili di default
     Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
+    Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine();
     Console.WriteLine("===========================================");
     Console.WriteLine("  3: Applica refactoring ");
     Console.WriteLine("===========================================");
     Console.WriteLine();
+    Console.ForegroundColor= ConsoleColor.Gray;
 
     var vbpPath = project.ProjectFile;
     var vbpDir = Path.GetDirectoryName(vbpPath)!;

@@ -9,10 +9,12 @@ public class Program
 {
   public static void Main(string[] args)
   {
+    Console.ForegroundColor = ConsoleColor.Red;
     Console.WriteLine("===========================================");
     Console.WriteLine("              VB6 Magic Box ");
     Console.WriteLine("===========================================");
     Console.WriteLine();
+    Console.ForegroundColor= ConsoleColor.Gray;
 
     // Se ci sono argomenti da riga di comando, usa la modalità legacy (analisi diretta)
     if (args.Length > 0)

@@ -80,11 +80,13 @@ public static class TypeAnnotator
     Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     var enc = Encoding.GetEncoding(1252);
 
+    Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine();
     Console.WriteLine("===========================================");
     Console.WriteLine("  2: Aggiunta Tipi Mancanti");
     Console.WriteLine("===========================================");
     Console.WriteLine();
+    Console.ForegroundColor= ConsoleColor.Gray;
 
     var vbpDir        = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile))!;
     var backupBaseDir = new DirectoryInfo(vbpDir).Parent?.FullName ?? vbpDir;
