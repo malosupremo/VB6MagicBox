@@ -222,6 +222,13 @@ public static partial class VbParser
           if (!string.IsNullOrEmpty(lv.Name) && !string.IsNullOrEmpty(lv.Type))
             env[lv.Name] = lv.Type;
 
+        if (proc.Kind.Equals("Function", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrEmpty(proc.Name) &&
+            !string.IsNullOrEmpty(proc.ReturnType))
+        {
+          env[proc.Name] = proc.ReturnType;
+        }
+
         // Traccia i tipi attraverso assegnamenti Set locali alla procedura PRIMA dei pass
         for (int typeTrackLine = proc.LineNumber - 1; typeTrackLine < fileLines.Length; typeTrackLine++)
         {
@@ -703,6 +710,7 @@ public static partial class VbParser
 
         ResolveFieldAccesses(mod, prop, fileLines, typeIndex, env);
         ResolveParameterReferences(mod, prop, fileLines);
+        ResolvePropertyReturnReferences(mod, prop, fileLines);
       }
     }
 

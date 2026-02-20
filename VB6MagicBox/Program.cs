@@ -1,277 +1,279 @@
-﻿using System;
-using System.IO;
-using VB6MagicBox.Models;
+﻿using VB6MagicBox.Models;
 using VB6MagicBox.Parsing;
 
 namespace VB6MagicBox;
 
 public class Program
 {
-  public static void Main(string[] args)
-  {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine("===========================================");
-    Console.WriteLine("              VB6 Magic Box ");
-    Console.WriteLine("===========================================");
-    Console.WriteLine();
-    Console.ForegroundColor= ConsoleColor.Gray;
-
-    // Se ci sono argomenti da riga di comando, usa la modalità legacy (analisi diretta)
-    if (args.Length > 0)
+    public static void Main(string[] args)
     {
-      RunAnalysis(args[0]);
-      return;
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("===========================================");
+        Console.WriteLine("              VB6 Magic Box ");
+        Console.WriteLine("===========================================");
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.Gray;
+
+        // Se ci sono argomenti da riga di comando, usa la modalità legacy (analisi diretta)
+        if (args.Length > 0)
+        {
+            RunAnalysis(args[0]);
+            return;
+        }
+
+        // Altrimenti mostra il menu interattivo
+        ShowMenu();
     }
 
-    // Altrimenti mostra il menu interattivo
-    ShowMenu();
-  }
-
-  private static void ShowMenu()
-  {
-    while (true)
+    private static void ShowMenu()
     {
-      Console.WriteLine();
-      Console.WriteLine("Opzioni:");
-      Console.WriteLine("1. Analizza progetto VB6");
-      Console.WriteLine("2. Aggiunta tipi mancanti");
-      Console.WriteLine("3. Applica refactoring automatico");
-      Console.WriteLine("4. Riordina le variabili di procedura");
-      Console.WriteLine("5. Armonizza le spaziature");
-      Console.WriteLine("6. BACCHETTA MAGICA: tutto insieme!");
-      Console.WriteLine("0. Esci");
-      Console.WriteLine();
-      Console.Write("Seleziona opzione: ");
+        while (true)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Opzioni:");
+            Console.WriteLine("1. Analizza progetto VB6");
+            Console.WriteLine("2. Aggiunta tipi mancanti");
+            Console.WriteLine("3. Applica refactoring automatico");
+            Console.WriteLine("4. Riordina le variabili di procedura");
+            Console.WriteLine("5. Armonizza le spaziature");
+            Console.Write("6. ");
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Write("BACCHETTA MAGICA");
+            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine(": tutto insieme!");
+            Console.WriteLine("0. Esci");
+            Console.WriteLine();
+            Console.Write("Seleziona opzione: ");
 
-      var choice = Console.ReadLine()?.Trim();
+            var choice = Console.ReadLine()?.Trim();
 
-      switch (choice)
-      {
-        case "1":
-          RunAnalysisInteractive();
-          break;
+            switch (choice)
+            {
+                case "1":
+                    RunAnalysisInteractive();
+                    break;
 
-        case "2":
-          RunTypeAnnotatorInteractive();
-          break;
+                case "2":
+                    RunTypeAnnotatorInteractive();
+                    break;
 
-        case "3":
-          RunRefactoringInteractive();
-          break;
+                case "3":
+                    RunRefactoringInteractive();
+                    break;
 
-        case "4":
-          RunVariableReorderInteractive();
-          break;
+                case "4":
+                    RunVariableReorderInteractive();
+                    break;
 
-        case "5":
-          Console.WriteLine();
-          Console.WriteLine("[!] Armonizzazione spaziature non in armonia.");
-          Console.WriteLine("    Coming soon!");
-          break;
+                case "5":
+                    Console.WriteLine();
+                    Console.WriteLine("[!] Armonizzazione spaziature non in armonia.");
+                    Console.WriteLine("    Coming soon!");
+                    break;
 
-        case "6":
-          RunMagicWandInteractive();
-          break;
+                case "6":
+                    RunMagicWandInteractive();
+                    break;
 
-        case "0":
-          Console.WriteLine();
-          Console.WriteLine("Arrivederci!");
-          return;
+                case "0":
+                    Console.WriteLine();
+                    Console.WriteLine("Arrivederci!");
+                    return;
 
-        default:
-          Console.WriteLine();
-          Console.WriteLine("[X] Opzione non valida. Riprova.");
-          break;
-      }
-    }
-  }
-
-  private static void RunAnalysisInteractive()
-  {
-    Console.WriteLine();
-    Console.Write("Percorso del file .vbp: ");
-    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
-
-    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
-    {
-      Console.WriteLine("[X] File non trovato!");
-      return;
+                default:
+                    Console.WriteLine();
+                    Console.WriteLine("[X] Opzione non valida. Riprova.");
+                    break;
+            }
+        }
     }
 
-    RunAnalysis(vbpPath);
-  }
-
-  private static void RunAnalysis(string vbpPath)
-  {
-    try
+    private static void RunAnalysisInteractive()
     {
-      var project = VbParser.ParseAndResolve(vbpPath);
-      ExportProjectFiles(project, vbpPath);
-      Console.WriteLine();
-      Console.WriteLine("[OK] Analisi completata.");
-    }
-    catch (Exception ex)
-    {
-      Console.WriteLine();
-      Console.WriteLine("[X] Errore durante l'analisi:");
-      Console.WriteLine(ex.ToString());
-    }
-  }
+        Console.WriteLine();
+        Console.Write("Percorso del file .vbp: ");
+        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
 
-  private static void RunTypeAnnotatorInteractive()
-  {
-    Console.WriteLine();
-    Console.Write("Percorso del file .vbp: ");
-    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+        {
+            Console.WriteLine("[X] File non trovato!");
+            return;
+        }
 
-    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
-    {
-      Console.WriteLine("[X] File .vbp non trovato!");
-      return;
+        RunAnalysis(vbpPath);
     }
 
-    try
+    private static void RunAnalysis(string vbpPath)
     {
-      // Fase 1: parsing + risoluzione (stessa pipeline dell'opzione 1)
-      var project = VbParser.ParseAndResolve(vbpPath);
-
-      // Fase 3: aggiunta tipi mancanti usando il modello analizzato
-      TypeAnnotator.AddMissingTypes(project);
-    }
-    catch (Exception ex)
-    {
-      Console.WriteLine();
-      Console.WriteLine("[X] Errore durante l'aggiunta dei tipi:");
-      Console.WriteLine(ex.ToString());
-    }
-  }
-
-  private static void RunRefactoringInteractive()
-  {
-    Console.WriteLine();
-    Console.Write("Percorso del file .vbp: ");
-    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
-
-    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
-    {
-      Console.WriteLine("[X] File .vbp non trovato!");
-      return;
+        try
+        {
+            var project = VbParser.ParseAndResolve(vbpPath);
+            ExportProjectFiles(project, vbpPath);
+            Console.WriteLine();
+            Console.WriteLine("[OK] Analisi completata.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[X] Errore durante l'analisi:");
+            Console.WriteLine(ex.ToString());
+        }
     }
 
-    try
+    private static void RunTypeAnnotatorInteractive()
     {
-      // 1) Analisi completa (parsing + risoluzione + naming + ordinamento)
-      var project = VbParser.ParseAndResolve(vbpPath);
+        Console.WriteLine();
+        Console.Write("Percorso del file .vbp: ");
+        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
 
-      // 2) Scrittura dei file di output prima del refactoring
-      //    (l'analisi riflette i nomi originali VB6; il refactoring agisce solo sul disco)
-      ExportProjectFiles(project, vbpPath);
+        if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+        {
+            Console.WriteLine("[X] File .vbp non trovato!");
+            return;
+        }
 
-      // 3) Refactoring: rinomina i simboli nei file sorgente
-      Refactoring.ApplyRenames(project);
-    }
-    catch (Exception ex)
-    {
-      Console.WriteLine();
-      Console.WriteLine("[X] Errore durante il refactoring:");
-      Console.WriteLine(ex.ToString());
-    }
-  }
+        try
+        {
+            // Fase 1: parsing + risoluzione (stessa pipeline dell'opzione 1)
+            var project = VbParser.ParseAndResolve(vbpPath);
 
-  private static void RunVariableReorderInteractive()
-  {
-    Console.WriteLine();
-    Console.Write("Percorso del file .vbp: ");
-    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
-
-    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
-    {
-      Console.WriteLine("[X] File .vbp non trovato!");
-      return;
+            // Fase 3: aggiunta tipi mancanti usando il modello analizzato
+            TypeAnnotator.AddMissingTypes(project);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[X] Errore durante l'aggiunta dei tipi:");
+            Console.WriteLine(ex.ToString());
+        }
     }
 
-    try
+    private static void RunRefactoringInteractive()
     {
-      var project = VbParser.ParseAndResolve(vbpPath);
-      CodeFormatter.ReorderLocalVariables(project);
+        Console.WriteLine();
+        Console.Write("Percorso del file .vbp: ");
+        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+
+        if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+        {
+            Console.WriteLine("[X] File .vbp non trovato!");
+            return;
+        }
+
+        try
+        {
+            // 1) Analisi completa (parsing + risoluzione + naming + ordinamento)
+            var project = VbParser.ParseAndResolve(vbpPath);
+
+            // 2) Scrittura dei file di output prima del refactoring
+            //    (l'analisi riflette i nomi originali VB6; il refactoring agisce solo sul disco)
+            ExportProjectFiles(project, vbpPath);
+
+            // 3) Refactoring: rinomina i simboli nei file sorgente
+            Refactoring.ApplyRenames(project);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[X] Errore durante il refactoring:");
+            Console.WriteLine(ex.ToString());
+        }
     }
-    catch (Exception ex)
+
+    private static void RunVariableReorderInteractive()
     {
-      Console.WriteLine();
-      Console.WriteLine("[X] Errore durante il riordino:");
-      Console.WriteLine(ex.ToString());
+        Console.WriteLine();
+        Console.Write("Percorso del file .vbp: ");
+        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+
+        if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+        {
+            Console.WriteLine("[X] File .vbp non trovato!");
+            return;
+        }
+
+        try
+        {
+            var project = VbParser.ParseAndResolve(vbpPath);
+            CodeFormatter.ReorderLocalVariables(project);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[X] Errore durante il riordino:");
+            Console.WriteLine(ex.ToString());
+        }
     }
-  }
 
-  private static void RunMagicWandInteractive()
-  {
-    Console.WriteLine();
-    Console.Write("Percorso del file .vbp: ");
-    var vbpPath = Console.ReadLine()?.Trim().Trim('"');
-
-    if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+    private static void RunMagicWandInteractive()
     {
-      Console.WriteLine("[X] File .vbp non trovato!");
-      return;
+        Console.WriteLine();
+        Console.Write("Percorso del file .vbp: ");
+        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+
+        if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+        {
+            Console.WriteLine("[X] File .vbp non trovato!");
+            return;
+        }
+
+        try
+        {
+            // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
+            var project = VbParser.ParseAndResolve(vbpPath);
+
+            // Export file di analisi (symbols.json, rename.json, rename.csv, dependencies.md)
+            ExportProjectFiles(project, vbpPath);
+
+            // 2) Aggiunta tipi mancanti: usa i nomi originali dal modello.
+            //    Deve precedere il rename: dopo il rename i nomi nel sorgente non
+            //    corrisponderebbero più a quelli del modello (es. parametri rinominati).
+            TypeAnnotator.AddMissingTypes(project);
+
+            // 3) Refactoring: rinomina i simboli secondo le convenzioni
+            Refactoring.ApplyRenames(project);
+
+            // 4) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
+            //    Deve seguire il rename perché opera sui file già rinominati su disco.
+            CodeFormatter.ReorderLocalVariables(project);
+
+            Console.WriteLine();
+            Console.WriteLine("[OK] Bacchetta magica applicata!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[X] Errore durante la bacchetta magica:");
+            Console.WriteLine(ex.ToString());
+        }
     }
 
-    try
+    /// <summary>
+    /// Scrive tutti i file di output del progetto analizzato:
+    /// symbols.json, rename.json, rename.csv, dependencies.md (Mermaid).
+    /// Presuppone che ParseAndResolve (che include SortProject) sia già stato chiamato.
+    /// </summary>
+    private static void ExportProjectFiles(VbProject project, string vbpPath)
     {
-      // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
-      var project = VbParser.ParseAndResolve(vbpPath);
+        var vbpDir = Path.GetDirectoryName(vbpPath)!;
+        var vbpName = Path.GetFileNameWithoutExtension(vbpPath);
 
-      // Export file di analisi (symbols.json, rename.json, rename.csv, dependencies.md)
-      ExportProjectFiles(project, vbpPath);
+        var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
+        var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
+        var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
+        var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
 
-      // 2) Aggiunta tipi mancanti: usa i nomi originali dal modello.
-      //    Deve precedere il rename: dopo il rename i nomi nel sorgente non
-      //    corrisponderebbero più a quelli del modello (es. parametri rinominati).
-      TypeAnnotator.AddMissingTypes(project);
+        Console.WriteLine();
+        Console.WriteLine(">> Esportazione file di output...");
 
-      // 3) Refactoring: rinomina i simboli secondo le convenzioni
-      Refactoring.ApplyRenames(project);
+        VbParser.ExportJson(project, jsonOut);
+        VbParser.ExportRenameJson(project, renameJson);
+        VbParser.ExportRenameCsv(project, renameCsv);
+        VbParser.ExportMermaid(project, mermaidOut);
 
-      // 4) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
-      //    Deve seguire il rename perché opera sui file già rinominati su disco.
-      CodeFormatter.ReorderLocalVariables(project);
-
-      Console.WriteLine();
-      Console.WriteLine("[OK] Bacchetta magica applicata!");
+        Console.WriteLine($"   JSON completo: {jsonOut}");
+        Console.WriteLine($"   JSON rename:   {renameJson}");
+        Console.WriteLine($"   CSV rename:    {renameCsv}");
+        Console.WriteLine($"   Mermaid:       {mermaidOut}");
     }
-    catch (Exception ex)
-    {
-      Console.WriteLine();
-      Console.WriteLine("[X] Errore durante la bacchetta magica:");
-      Console.WriteLine(ex.ToString());
-    }
-  }
-
-  /// <summary>
-  /// Scrive tutti i file di output del progetto analizzato:
-  /// symbols.json, rename.json, rename.csv, dependencies.md (Mermaid).
-  /// Presuppone che ParseAndResolve (che include SortProject) sia già stato chiamato.
-  /// </summary>
-  private static void ExportProjectFiles(VbProject project, string vbpPath)
-  {
-    var vbpDir  = Path.GetDirectoryName(vbpPath)!;
-    var vbpName = Path.GetFileNameWithoutExtension(vbpPath);
-
-    var jsonOut     = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
-    var renameJson  = Path.Combine(vbpDir, $"{vbpName}.rename.json");
-    var renameCsv   = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
-    var mermaidOut  = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
-
-    Console.WriteLine();
-    Console.WriteLine(">> Esportazione file di output...");
-
-    VbParser.ExportJson(project, jsonOut);
-    VbParser.ExportRenameJson(project, renameJson);
-    VbParser.ExportRenameCsv(project, renameCsv);
-    VbParser.ExportMermaid(project, mermaidOut);
-
-    Console.WriteLine($"   JSON completo: {jsonOut}");
-    Console.WriteLine($"   JSON rename:   {renameJson}");
-    Console.WriteLine($"   CSV rename:    {renameCsv}");
-    Console.WriteLine($"   Mermaid:       {mermaidOut}");
-  }
 }
