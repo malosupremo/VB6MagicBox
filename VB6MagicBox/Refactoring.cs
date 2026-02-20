@@ -413,15 +413,24 @@ public static class Refactoring
             // conflitti con parametri/variabili omonimi.
             // Es: "g_PlasmaSource.IsDeposit = IsDeposit" → rinomina solo ".IsDeposit"
             else if (source is VbProperty && !string.Equals(definingModuleName, currentModuleName, StringComparison.OrdinalIgnoreCase))
-            {
-                pattern = $@"\.{Regex.Escape(oldName)}\b";
-                replacement = $".{newName}";
-            }
-            else
-            {
-                pattern = $@"\b{Regex.Escape(oldName)}\b";
-                replacement = newName;
-            }
+      {
+        var dotPattern = $@"\.{Regex.Escape(oldName)}\b";
+        if (Regex.IsMatch(codePart, dotPattern, RegexOptions.IgnoreCase))
+        {
+          pattern = dotPattern;
+          replacement = $".{newName}";
+        }
+        else
+        {
+          pattern = $@"\b{Regex.Escape(oldName)}\b";
+          replacement = newName;
+        }
+      }
+      else
+      {
+        pattern = $@"\b{Regex.Escape(oldName)}\b";
+        replacement = newName;
+      }
 
             var newCodePart = source is VbConstant
               ? ReplaceOutsideStrings(codePart, pattern, replacement, out var matchesInLine)

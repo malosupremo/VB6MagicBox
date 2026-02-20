@@ -231,6 +231,129 @@ public static partial class VbParser
         }
       }
 
+      counter = 0;
+      // Marca proprietà usate (modulo level) e traccia references
+      foreach (var prop in mod.Properties)
+      {
+        // Progress inline per il parsing
+        Console.Write($"\r      [Property {counter++}/{mod.Properties.Count}] {prop.Name}...".PadRight(Console.WindowWidth - 1));
+
+        bool isPublic = string.IsNullOrEmpty(prop.Visibility) ||
+                       prop.Visibility.Equals("Public", StringComparison.OrdinalIgnoreCase) ||
+                       prop.Visibility.Equals("Global", StringComparison.OrdinalIgnoreCase);
+
+        var modulesToSearch = isPublic
+            ? project.Modules
+            : new List<VbModule> { mod };
+
+        foreach (var searchMod in modulesToSearch)
+        {
+          var searchLines = ReadAllLinesShared(searchMod.FullPath);
+          int lineNum = 0;
+
+          foreach (var line in searchLines)
+          {
+            lineNum++;
+            if (line.IndexOf(prop.Name, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+              prop.Used = true;
+              var procAtLine = searchMod.GetProcedureAtLine(lineNum);
+              if (procAtLine != null)
+              {
+                var hasLocalWithSameName = procAtLine.LocalVariables.Any(lv =>
+                    lv.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase)) ||
+                  procAtLine.Parameters.Any(p =>
+                    p.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (hasLocalWithSameName)
+                  continue;
+
+                prop.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
+              }
+              else
+              {
+                var propAtLine = searchMod.Properties.FirstOrDefault(p => p.ContainsLine(lineNum));
+                if (propAtLine != null)
+                {
+                  var hasParamWithSameName = propAtLine.Parameters.Any(p =>
+                      p.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase));
+
+                  if (hasParamWithSameName)
+                    continue;
+
+                  prop.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      counter = 0;
+      // Marca costanti usate (modulo level) e traccia references
+      // Per costanti Public/Global, cerca in TUTTI i moduli
+      // Per costanti Private, cerca solo nel modulo corrente
+      foreach (var c in mod.Constants)
+      {
+        // Progress inline per il parsing
+        Console.Write($"\r      [Costant {counter++}/{mod.Constants.Count}] {c.Name}...".PadRight(Console.WindowWidth - 1));
+
+        bool isPublic = string.IsNullOrEmpty(c.Visibility) ||
+                       c.Visibility.Equals("Public", StringComparison.OrdinalIgnoreCase) ||
+                       c.Visibility.Equals("Global", StringComparison.OrdinalIgnoreCase);
+
+        // Determina in quali moduli cercare
+        var modulesToSearch = isPublic
+            ? project.Modules  // Public/Global: cerca ovunque
+            : new List<VbModule> { mod };  // Private: solo nel modulo corrente
+
+        foreach (var searchMod in modulesToSearch)
+        {
+          var searchLines = ReadAllLinesShared(searchMod.FullPath);
+          int lineNum = 0;
+
+          foreach (var line in searchLines)
+          {
+            lineNum++;
+            if (line.IndexOf(c.Name, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+              c.Used = true;
+              // Trova la procedura corretta che contiene questa riga
+              var procAtLine = searchMod.GetProcedureAtLine(lineNum);
+              if (procAtLine != null)
+              {
+                // CONTROLLO SHADOW: Se la procedura ha una costante locale con lo stesso nome,
+                // quella locale fa "shadow" della globale, quindi NON aggiungere reference
+                var hasLocalWithSameName = procAtLine.Constants.Any(lc =>
+                    lc.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (hasLocalWithSameName)
+                {
+                  // La costante locale fa shadow di quella globale, skip
+                  continue;
+                }
+
+                c.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
+              }
+              else
+              {
+                var propAtLine = searchMod.Properties.FirstOrDefault(p => p.ContainsLine(lineNum));
+                if (propAtLine != null)
+                {
+                  var hasParamWithSameName = propAtLine.Parameters.Any(p =>
+                      p.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase));
+
+                  if (hasParamWithSameName)
+                    continue;
+
+                  c.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
+                }
+              }
+            }
+          }
+        }
+      }
+
     }
 
     Console.WriteLine(); // Vai a capo dopo il progress del parsing

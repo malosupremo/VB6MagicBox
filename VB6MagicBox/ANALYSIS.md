@@ -20,16 +20,18 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - `ResolveTypesAndCalls` builds `procIndex` (procedures only) + `propIndex`.
 - Field access resolution handles:
   - nested dot chains with arrays at any segment,
-  - `With` blocks (prefix `With` expression),
-  - module-prefixed chains (e.g., `Cnf.Config...`) by resolving module globals/properties to a type.
+  - `With` blocks (prefix `With` expression and replace inline `.Member`),
+  - module-prefixed chains (e.g., `Cnf.Config...`) by resolving module globals/properties to a type,
+  - class-property chaining (if type is class, use property `ReturnType` to continue chain).
 - References are accumulated per occurrence (no skipping for properties).
 - Property blocks are resolved separately (field/parameter/return references).
-- Function return variable is typed in `env` (function name -> return type) for field access.
-- Enum values: explicit pass `ResolveEnumValueReferences` adds references for bare enum values (no prefix), respecting shadowing by locals/params/constants.
+- Function return variable is typed in `env` (function name -> return type) and return assignments are referenced for renames.
+- Enum values: explicit pass `ResolveEnumValueReferences` adds references for bare enum values and qualified `EnumName.Value`, respecting shadowing.
 - Class usage via `ResolveClassModuleReferences`.
 - Type references via `ResolveTypeReferences` for every `As TypeName` occurrence.
 - `MarkUsedTypes` also scans Type fields.
 - Module `Used` propagated from any used member.
+- Public properties are scanned across modules (like globals) for bare uses.
 
 ## Refactoring (Refactoring.cs)
 - Applies renames using `References` line numbers only (no global scan).
@@ -50,9 +52,10 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - Modules: `Frm`/`Cls` prefix, PascalCase.
 - Procedures: detect standard events, control events, WithEvents, interface-implemented (`Implements`) event handlers keep name (underscore preserved).
 - Properties share `ConventionalName` across Get/Let/Set.
+- Enum naming preserves short acronyms (e.g., `SQM`).
 
 ## Known Pitfalls / Rules
 - Always use `StartLine/EndLine` bounds when scanning.
-- Regex for arrays must escape parentheses correctly (`\([^)]*\`).
+- Regex for arrays must escape parentheses correctly (`\([^)]*\)`).
 - `ReFieldAccess` and nested chain regex must allow array indexing.
 - Avoid renaming inside string literals except for constants (to keep constant values intact).
