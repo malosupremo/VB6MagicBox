@@ -679,6 +679,31 @@ public static partial class VbParser
           }
         }
       }
+
+      foreach (var prop in mod.Properties)
+      {
+        var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kvp in globalTypeMap)
+          env[kvp.Key] = kvp.Value;
+
+        foreach (var anyMod in project.Modules)
+        {
+          foreach (var v in anyMod.GlobalVariables)
+            if (!string.IsNullOrEmpty(v.Name) && !string.IsNullOrEmpty(v.Type))
+            {
+              if (!env.ContainsKey(v.Name))
+                env[v.Name] = v.Type;
+            }
+        }
+
+        foreach (var p in prop.Parameters)
+          if (!string.IsNullOrEmpty(p.Name) && !string.IsNullOrEmpty(p.Type))
+            env[p.Name] = p.Type;
+
+        ResolveFieldAccesses(mod, prop, fileLines, typeIndex, env);
+        ResolveParameterReferences(mod, prop, fileLines);
+      }
     }
 
     Console.WriteLine(); // Vai a capo dopo il progress del parsing

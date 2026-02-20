@@ -90,6 +90,153 @@ public static partial class VbParser
         if (parenIndex >= 0)
           baseVarName = baseVarName.Substring(0, parenIndex);
 
+        string typeName = null;
+        var startPartIndex = 1;
+
+        if (!env.TryGetValue(baseVarName, out typeName) || string.IsNullOrEmpty(typeName))
+        {
+          var moduleMatch = mod.Owner?.Modules?.FirstOrDefault(m =>
+              m.Name.Equals(baseVarName, StringComparison.OrdinalIgnoreCase));
+
+          if (moduleMatch != null && parts.Length > 1)
+          {
+            var memberName = parts[1];
+            var memberParenIndex = memberName.IndexOf('(');
+            if (memberParenIndex >= 0)
+              memberName = memberName.Substring(0, memberParenIndex);
+
+            var globalVar = moduleMatch.GlobalVariables.FirstOrDefault(v =>
+                v.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase));
+
+            if (globalVar != null && !string.IsNullOrEmpty(globalVar.Type))
+            {
+              typeName = globalVar.Type;
+              startPartIndex = 2;
+            }
+            else
+            {
+              var prop = moduleMatch.Properties.FirstOrDefault(p =>
+                  p.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase));
+              if (prop != null && !string.IsNullOrEmpty(prop.ReturnType))
+              {
+                typeName = prop.ReturnType;
+                startPartIndex = 2;
+              }
+            }
+          }
+        }
+
+        if (string.IsNullOrEmpty(typeName))
+          continue;
+
+        for (int partIndex = startPartIndex; partIndex < parts.Length; partIndex++)
+        {
+          var fieldName = parts[partIndex];
+          var fieldParenIndex = fieldName.IndexOf('(');
+          if (fieldParenIndex >= 0)
+            fieldName = fieldName.Substring(0, fieldParenIndex);
+
+          if (string.IsNullOrEmpty(fieldName))
+            break;
+
+          var baseTypeName = typeName;
+          if (baseTypeName.Contains('('))
+            baseTypeName = baseTypeName.Substring(0, baseTypeName.IndexOf('('));
+          if (baseTypeName.Contains('.'))
+            baseTypeName = baseTypeName.Split('.').Last();
+
+          if (!typeIndex.TryGetValue(baseTypeName, out var typeDef))
+            break;
+
+          var field = typeDef.Fields.FirstOrDefault(f =>
+              !string.IsNullOrEmpty(f.Name) &&
+              string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+
+          if (field == null)
+            break;
+
+          field.Used = true;
+          field.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+          typeName = field.Type;
+
+          if (string.IsNullOrEmpty(typeName))
+            break;
+        }
+      }
+    }
+  }
+
+  private static void ResolveFieldAccesses(
+      VbModule mod,
+      VbProperty prop,
+      string[] fileLines,
+      Dictionary<string, VbTypeDef> typeIndex,
+      Dictionary<string, string> env)
+  {
+    if (prop.StartLine <= 0)
+      prop.StartLine = prop.LineNumber;
+
+    if (prop.EndLine <= 0)
+      prop.EndLine = fileLines.Length;
+
+    var startIndex = Math.Max(0, prop.StartLine - 1);
+    var endIndex = Math.Min(fileLines.Length, prop.EndLine);
+
+    if (startIndex >= fileLines.Length)
+      return;
+
+    var withStack = new Stack<string>();
+
+    for (int i = startIndex; i < endIndex; i++)
+    {
+      var raw = fileLines[i].Trim();
+
+      // Rimuovi commenti
+      var noComment = raw;
+      var idx = noComment.IndexOf("'");
+      if (idx >= 0)
+        noComment = noComment.Substring(0, idx).Trim();
+
+      var trimmedNoComment = noComment.TrimStart();
+      if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
+      {
+        var withExpr = trimmedNoComment.Substring(5).Trim();
+        if (!string.IsNullOrEmpty(withExpr))
+          withStack.Push(withExpr);
+        continue;
+      }
+
+      if (trimmedNoComment.Equals("End With", StringComparison.OrdinalIgnoreCase))
+      {
+        if (withStack.Count > 0)
+          withStack.Pop();
+        continue;
+      }
+
+      if (withStack.Count > 0 && trimmedNoComment.StartsWith(".", StringComparison.Ordinal))
+      {
+        var suffix = trimmedNoComment.Substring(1).TrimStart();
+        noComment = withStack.Peek() + "." + suffix;
+      }
+
+      var chainMatches = Regex.Matches(noComment,
+          @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-ZaZ_]\w*(?:\([^)]*\))?)+",
+          RegexOptions.IgnoreCase);
+
+      foreach (Match chainMatch in chainMatches)
+      {
+        var chainText = chainMatch.Value;
+        var parts = chainText
+            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length < 2)
+          continue;
+
+        var baseVarName = parts[0];
+        var parenIndex = baseVarName.IndexOf('(');
+        if (parenIndex >= 0)
+          baseVarName = baseVarName.Substring(0, parenIndex);
+
         if (!env.TryGetValue(baseVarName, out var typeName) || string.IsNullOrEmpty(typeName))
           continue;
 
@@ -120,7 +267,7 @@ public static partial class VbParser
             break;
 
           field.Used = true;
-          field.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+          field.References.AddLineNumber(mod.Name, prop.Name, i + 1);
           typeName = field.Type;
 
           if (string.IsNullOrEmpty(typeName))
@@ -285,6 +432,58 @@ public static partial class VbParser
 
           localVar.Used = true;
           localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+        }
+      }
+    }
+  }
+
+  private static void ResolveParameterReferences(
+      VbModule mod,
+      VbProperty prop,
+      string[] fileLines)
+  {
+    if (prop.Parameters == null || prop.Parameters.Count == 0)
+      return;
+
+    var parameterIndex = prop.Parameters.ToDictionary(
+        p => p.Name,
+        p => p,
+        StringComparer.OrdinalIgnoreCase);
+
+    if (prop.StartLine <= 0)
+      prop.StartLine = prop.LineNumber;
+
+    if (prop.EndLine <= 0)
+      prop.EndLine = fileLines.Length;
+
+    var startIndex = Math.Max(0, prop.StartLine - 1);
+    var endIndex = Math.Min(fileLines.Length, prop.EndLine);
+
+    if (startIndex >= fileLines.Length)
+      return;
+
+    for (int i = startIndex; i < endIndex; i++)
+    {
+      var raw = fileLines[i].Trim();
+      int currentLineNumber = i + 1;
+
+      // Rimuovi commenti
+      var noComment = raw;
+      var idx = noComment.IndexOf("'", StringComparison.Ordinal);
+      if (idx >= 0)
+        noComment = noComment.Substring(0, idx).Trim();
+
+      // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
+      noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
+
+      foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
+      {
+        var tokenName = m.Groups[1].Value;
+
+        if (parameterIndex.TryGetValue(tokenName, out var parameter))
+        {
+          parameter.Used = true;
+          parameter.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber);
         }
       }
     }
