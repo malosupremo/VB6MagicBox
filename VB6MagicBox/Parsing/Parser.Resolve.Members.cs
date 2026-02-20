@@ -48,32 +48,59 @@ public static partial class VbParser
       if (idx >= 0)
         noComment = noComment.Substring(0, idx).Trim();
 
-      foreach (Match m in ReFieldAccess.Matches(noComment))
+      var chainMatches = Regex.Matches(noComment,
+          @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w+)+",
+          RegexOptions.IgnoreCase);
+
+      foreach (Match chainMatch in chainMatches)
       {
-        var varName = m.Groups[1].Value;
-        var fieldName = m.Groups[2].Value;
+        var chainText = chainMatch.Value;
+        var parts = chainText
+            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        // Estrai il nome base della variabile rimuovendo l'accesso array
-        // Es: "m_QueuePolling(i)" -> "m_QueuePolling"
-        var baseVarName = varName;
-        var parenIndex = varName.IndexOf('(');
+        if (parts.Length < 2)
+          continue;
+
+        var baseVarName = parts[0];
+        var parenIndex = baseVarName.IndexOf('(');
         if (parenIndex >= 0)
-          baseVarName = varName.Substring(0, parenIndex);
+          baseVarName = baseVarName.Substring(0, parenIndex);
 
-        if (env.TryGetValue(baseVarName, out var typeName))
+        if (!env.TryGetValue(baseVarName, out var typeName) || string.IsNullOrEmpty(typeName))
+          continue;
+
+        for (int partIndex = 1; partIndex < parts.Length; partIndex++)
         {
-          if (typeIndex.TryGetValue(typeName, out var typeDef))
-          {
-            var field = typeDef.Fields.FirstOrDefault(f =>
-                !string.IsNullOrEmpty(f.Name) &&
-                string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+          var fieldName = parts[partIndex];
+          var fieldParenIndex = fieldName.IndexOf('(');
+          if (fieldParenIndex >= 0)
+            fieldName = fieldName.Substring(0, fieldParenIndex);
 
-            if (field != null)
-            {
-              field.Used = true;
-              field.References.AddLineNumber(mod.Name, proc.Name, i + 1);
-            }
-          }
+          if (string.IsNullOrEmpty(fieldName))
+            break;
+
+          var baseTypeName = typeName;
+          if (baseTypeName.Contains('('))
+            baseTypeName = baseTypeName.Substring(0, baseTypeName.IndexOf('('));
+          if (baseTypeName.Contains('.'))
+            baseTypeName = baseTypeName.Split('.').Last();
+
+          if (!typeIndex.TryGetValue(baseTypeName, out var typeDef))
+            break;
+
+          var field = typeDef.Fields.FirstOrDefault(f =>
+              !string.IsNullOrEmpty(f.Name) &&
+              string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+
+          if (field == null)
+            break;
+
+          field.Used = true;
+          field.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+          typeName = field.Type;
+
+          if (string.IsNullOrEmpty(typeName))
+            break;
         }
       }
     }
