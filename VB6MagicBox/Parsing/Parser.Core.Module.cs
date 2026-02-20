@@ -268,6 +268,7 @@ public static partial class VbParser
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
+        FixParameterLineNumbersForMultilineSignature(currentProc, originalLines, originalLineNumber);
         mod.Procedures.Add(currentProc);
 
         // Traccia event handler per controlli (es. Command1_Click)
@@ -323,6 +324,7 @@ public static partial class VbParser
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
+        FixParameterLineNumbersForMultilineSignature(currentProc, originalLines, originalLineNumber);
         mod.Procedures.Add(currentProc);
 
         // Traccia event handler per controlli (es. Command1_Click)
@@ -379,6 +381,7 @@ public static partial class VbParser
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
+        FixParameterLineNumbersForMultilineSignature(currentProperty, originalLines, originalLineNumber);
         mod.Properties.Add(currentProperty);
 
         // Imposta currentProc SOLO per tracciare la fine della Property (NON aggiungere a mod.Procedures)
@@ -459,13 +462,13 @@ public static partial class VbParser
       {
         var declareProc = new VbProcedure
         {
-          Visibility = "Public",
-          Name = mdf.Groups[1].Value,
+          Visibility = string.IsNullOrEmpty(mdf.Groups[1].Value) ? "Public" : mdf.Groups[1].Value,
+          Name = mdf.Groups[2].Value,
           Kind = "ExternalFunction",
           IsStatic = false,
           Scope = "Module",
-          Parameters = ParseParameters(mdf.Groups[3].Value, originalLineNumber),
-          ReturnType = mdf.Groups[5].Value,
+          Parameters = ParseParameters(mdf.Groups[4].Value, originalLineNumber),
+          ReturnType = mdf.Groups[6].Value,
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber,
           EndLine = originalLineNumber
@@ -486,12 +489,12 @@ public static partial class VbParser
       {
         var declareProc = new VbProcedure
         {
-          Visibility = "Public",
-          Name = mds.Groups[1].Value,
+          Visibility = string.IsNullOrEmpty(mds.Groups[1].Value) ? "Public" : mds.Groups[1].Value,
+          Name = mds.Groups[2].Value,
           Kind = "ExternalFunction",
           IsStatic = false,
           Scope = "Module",
-          Parameters = ParseParameters(mds.Groups[3].Value, originalLineNumber),
+          Parameters = ParseParameters(mds.Groups[4].Value, originalLineNumber),
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber,
           EndLine = originalLineNumber

@@ -224,6 +224,13 @@ public static partial class VbParser
       foreach (var v in mod.GlobalVariables)
         Mark(v.Type, mod.Name, lineNumber: v.LineNumber);
 
+      // Campi dei Type: "Field As ENUM/TYPE"
+      foreach (var typeDef in mod.Types)
+      {
+        foreach (var field in typeDef.Fields)
+          Mark(field.Type, mod.Name, lineNumber: field.LineNumber);
+      }
+
       foreach (var proc in mod.Procedures)
       {
         // Return type, parametri e variabili locali - riferimento da procedura

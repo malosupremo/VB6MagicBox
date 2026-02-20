@@ -7,6 +7,8 @@
 ## Code Style
 - Use specific formatting rules
 - Follow naming conventions
+- When using regex for arrays, ensure proper escaping in parentheses (e.g., use `"\([^)]*\)"` instead of `"\[^)]*\)"`).
+- For `ReFieldAccess`, the correct pattern is `([A-Za-z_]\w*(?:\([^)]*\))?)\s*\.\s*([A-Za-z_]\w+)`.
 
 ## Project-Specific Rules
 - When parsing VB6 procedures, always use StartLine/EndLine bounds instead of scanning the entire file from LineNumber to prevent duplicate references.
