@@ -223,6 +223,9 @@ public class VbReference
 
   [JsonPropertyOrder(2)]
   public List<int> LineNumbers { get; set; } = new();
+
+  [JsonPropertyOrder(3)]
+  public List<int> OccurrenceIndexes { get; set; } = new();
 }
 
 public class DependencyEdge
@@ -256,7 +259,8 @@ public static class VbReferenceListExtensions
       this List<VbReference> references,
       string module,
       string procedure,
-      int lineNumber)
+      int lineNumber,
+      int occurrenceIndex = -1)
   {
     var normalizedProcedure = procedure ?? string.Empty;
 
@@ -266,14 +270,37 @@ public static class VbReferenceListExtensions
 
     if (existing != null)
     {
-      if (lineNumber > 0 && !existing.LineNumbers.Contains(lineNumber))
-        existing.LineNumbers.Add(lineNumber);
+      if (lineNumber > 0)
+      {
+        if (occurrenceIndex >= 0)
+        {
+          bool alreadyTracked = existing.LineNumbers
+              .Select((ln, idx) => new { ln, idx })
+              .Any(x => x.ln == lineNumber &&
+                        x.idx < existing.OccurrenceIndexes.Count &&
+                        existing.OccurrenceIndexes[x.idx] == occurrenceIndex);
+
+          if (!alreadyTracked)
+          {
+            existing.LineNumbers.Add(lineNumber);
+            existing.OccurrenceIndexes.Add(occurrenceIndex);
+          }
+        }
+        else if (!existing.LineNumbers.Contains(lineNumber))
+        {
+          existing.LineNumbers.Add(lineNumber);
+          existing.OccurrenceIndexes.Add(occurrenceIndex);
+        }
+      }
     }
     else
     {
       var newRef = new VbReference { Module = module, Procedure = normalizedProcedure };
       if (lineNumber > 0)
+      {
         newRef.LineNumbers.Add(lineNumber);
+        newRef.OccurrenceIndexes.Add(occurrenceIndex);
+      }
       references.Add(newRef);
     }
   }

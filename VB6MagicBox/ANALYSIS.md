@@ -39,7 +39,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
   - `Begin <lib> <control>` renames only control name.
   - Properties outside defining module use dot-prefixed rename.
   - Attribute `VB_Name` updated by module rename.
-- For constants only: replacements avoid string literals (do not alter constant values). Other categories allow string replacements (needed for `Attribute VB_Name = "..."`).
+- For constants only: replacements avoid string literals (do not alter constant values). Other categories allow string replacements (needed for `Attribute VB_Name = "...`).
 
 ## Exports
 `ExportProjectFiles` writes: `*.symbols.json`, `*.rename.json`, `*.rename.csv`, `*.dependencies.md`.
@@ -56,6 +56,6 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 
 ## Known Pitfalls / Rules
 - Always use `StartLine/EndLine` bounds when scanning.
-- Regex for arrays must escape parentheses correctly (`\([^)]*\)`).
+- Regex for arrays must escape parentheses correctly (`\([^)]*\`).
 - `ReFieldAccess` and nested chain regex must allow array indexing.
 - Avoid renaming inside string literals except for constants (to keep constant values intact).

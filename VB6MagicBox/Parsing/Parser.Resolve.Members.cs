@@ -82,26 +82,30 @@ public static partial class VbParser
                     RegexOptions.IgnoreCase);
             }
 
-            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-ZaZ_]\w*(?:\([^)]*\))?)+";
-            var chainTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
+            var chainMatches = new List<(string Text, int Index)>();
 
             foreach (Match m in Regex.Matches(noComment, chainPattern, RegexOptions.IgnoreCase))
-                chainTexts.Add(m.Value);
+                chainMatches.Add((m.Value, m.Index));
 
             foreach (Match inner in Regex.Matches(noComment, @"\(([^)]*)\)"))
             {
                 var innerText = inner.Groups[1].Value;
+                var innerStart = inner.Groups[1].Index;
                 foreach (Match m in Regex.Matches(innerText, chainPattern, RegexOptions.IgnoreCase))
-                    chainTexts.Add(m.Value);
+                    chainMatches.Add((m.Value, innerStart + m.Index));
             }
 
-            foreach (var chainText in chainTexts)
+            foreach (var (chainText, chainIndex) in chainMatches)
             {
                 var parts = chainText
                     .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
                 if (parts.Length < 2)
                     continue;
+
+                var tokenMatches = Regex.Matches(chainText, @"\b[A-Za-z_]\w*\b");
+                var tokenPositions = tokenMatches.Select(m => (m.Value, chainIndex + m.Index)).ToList();
 
                 var baseVarName = parts[0];
                 var parenIndex = baseVarName.IndexOf('(');
@@ -188,8 +192,12 @@ public static partial class VbParser
                     if (field == null)
                         break;
 
+                    var tokenPosition = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
+                        t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2);
+
                     field.Used = true;
-                    field.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                    field.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex);
                     typeName = field.Type;
 
                     if (string.IsNullOrEmpty(typeName))
@@ -262,26 +270,30 @@ public static partial class VbParser
                     RegexOptions.IgnoreCase);
             }
 
-            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-ZaZ_]\w*(?:\([^)]*\))?)+";
-            var chainTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
+            var chainMatches = new List<(string Text, int Index)>();
 
             foreach (Match m in Regex.Matches(noComment, chainPattern, RegexOptions.IgnoreCase))
-                chainTexts.Add(m.Value);
+                chainMatches.Add((m.Value, m.Index));
 
             foreach (Match inner in Regex.Matches(noComment, @"\(([^)]*)\)"))
             {
                 var innerText = inner.Groups[1].Value;
+                var innerStart = inner.Groups[1].Index;
                 foreach (Match m in Regex.Matches(innerText, chainPattern, RegexOptions.IgnoreCase))
-                    chainTexts.Add(m.Value);
+                    chainMatches.Add((m.Value, innerStart + m.Index));
             }
 
-            foreach (var chainText in chainTexts)
+            foreach (var (chainText, chainIndex) in chainMatches)
             {
                 var parts = chainText
                     .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
                 if (parts.Length < 2)
                     continue;
+
+                var tokenMatches = Regex.Matches(chainText, @"\b[A-Za-z_]\w*\b");
+                var tokenPositions = tokenMatches.Select(m => (m.Value, chainIndex + m.Index)).ToList();
 
                 var baseVarName = parts[0];
                 var parenIndex = baseVarName.IndexOf('(');
@@ -332,8 +344,12 @@ public static partial class VbParser
                     if (field == null)
                         break;
 
+                    var tokenPosition = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
+                        t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2);
+
                     field.Used = true;
-                    field.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                    field.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex);
                     typeName = field.Type;
 
                     if (string.IsNullOrEmpty(typeName))
@@ -934,4 +950,19 @@ public static partial class VbParser
             }
         }
     }
+
+  private static int GetOccurrenceIndex(string line, string token, int tokenIndex)
+  {
+    if (tokenIndex < 0)
+      return -1;
+
+    var matches = Regex.Matches(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+    for (int i = 0; i < matches.Count; i++)
+    {
+      if (matches[i].Index == tokenIndex)
+        return i + 1; // 1-based occurrence index
+    }
+
+    return -1;
+  }
 }

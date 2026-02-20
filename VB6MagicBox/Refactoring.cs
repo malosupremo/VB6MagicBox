@@ -265,6 +265,7 @@ public static class Refactoring
 
         // Raccogli i LineNumbers dalle References del simbolo, filtrati per il modulo corrente
         var lineNumbersToReplace = new HashSet<int>();
+        var occurrenceIndexesByLine = new Dictionary<int, List<int>>();
         int declarationLineNumber = 0;
 
         try
@@ -316,21 +317,40 @@ public static class Refactoring
                 {
                     var moduleProp = reference?.GetType().GetProperty("Module");
                     var refModuleName = moduleProp?.GetValue(reference) as string;
-
+                    
                     // Filtra: applica solo i riferimenti che appartengono al file corrente
                     if (!string.Equals(refModuleName, currentModuleName, StringComparison.OrdinalIgnoreCase))
                         continue;
-
+                    
                     var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
-                    if (lineNumbersProp?.GetValue(reference) is System.Collections.Generic.List<int> refLineNumbers)
-                    {
-                        foreach (var refLineNum in refLineNumbers)
-                        {
-                            lineNumbersToReplace.Add(refLineNum);
-                        }
-                    }
+                    var occurrenceProp = reference?.GetType().GetProperty("OccurrenceIndexes");
+                    var occurrenceIndexes = occurrenceProp?.GetValue(reference) as System.Collections.Generic.List<int>;
+
+          if (lineNumbersProp?.GetValue(reference) is System.Collections.Generic.List<int> refLineNumbers)
+          {
+            for (int idx = 0; idx < refLineNumbers.Count; idx++)
+            {
+              var refLineNum = refLineNumbers[idx];
+              lineNumbersToReplace.Add(refLineNum);
+
+              if (occurrenceIndexes != null && idx < occurrenceIndexes.Count)
+              {
+                var occIndex = occurrenceIndexes[idx];
+                if (occIndex >= 0)
+                {
+                  if (!occurrenceIndexesByLine.TryGetValue(refLineNum, out var list))
+                  {
+                    list = new List<int>();
+                    occurrenceIndexesByLine[refLineNum] = list;
+                  }
+                  if (!list.Contains(occIndex))
+                    list.Add(occIndex);
                 }
+              }
             }
+          }
+        }
+      }
         }
         catch (Exception ex)
         {
@@ -383,7 +403,7 @@ public static class Refactoring
         for (int i = 0; i < lines.Length; i++)
         {
             int lineNumber = i + 1; // LineNumber è 1-based
-
+            
             if (!lineNumbersToReplace.Contains(lineNumber))
                 continue; // Salta questa riga se non è nelle References
 
@@ -403,7 +423,7 @@ public static class Refactoring
             // SPECIALE: Per i controlli sulle righe "Begin Library.ControlType ControlName",
             // usa lookbehind per rimpiazzare SOLO il nome dopo il secondo token,
             // evitando di toccare il nome della classe/libreria che lo precede.
-            // Es: "Begin S7DATALib.S7Data S7Data" → NON rinomina S7DATALib.S7Data
+            // Es: "Begin S7DATALib.S7Data S7Data" → NON rinomina S7DATALib.S7.Data
             if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
             {
                 pattern = $@"(?<=^.*Begin\s+\S+\s+){Regex.Escape(oldName)}\b";
@@ -433,25 +453,33 @@ public static class Refactoring
         replacement = newName;
       }
 
-            var newCodePart = source is VbConstant
-              ? ReplaceOutsideStrings(codePart, pattern, replacement, out var matchesInLine)
-              : Regex.Replace(codePart, pattern, replacement, RegexOptions.IgnoreCase);
+      int matchesInLine;
+      string newCodePart;
+      if (source is VbConstant)
+      {
+        newCodePart = ReplaceOutsideStrings(codePart, pattern, replacement, out matchesInLine);
+      }
+      else if (occurrenceIndexesByLine.TryGetValue(lineNumber, out var occIndexes) && occIndexes.Count > 0)
+      {
+        matchesInLine = 0;
+        newCodePart = codePart;
+        foreach (var occIndex in occIndexes.OrderByDescending(i => i))
+        {
+          newCodePart = ReplaceNthOccurrence(newCodePart, pattern, replacement, occIndex, out var replacedCount);
+          matchesInLine += replacedCount;
+        }
+      }
+      else
+      {
+        matchesInLine = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase).Count;
+        newCodePart = Regex.Replace(codePart, pattern, replacement, RegexOptions.IgnoreCase);
+      }
 
-            if (source is VbConstant)
-            {
-                newCodePart = ReplaceOutsideStrings(codePart, pattern, replacement, out matchesInLine);
-            }
-            else
-            {
-                matchesInLine = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase).Count;
-                newCodePart = Regex.Replace(codePart, pattern, replacement, RegexOptions.IgnoreCase);
-            }
-
-            if (matchesInLine > 0)
-            {
-                totalCount += matchesInLine;
-                lines[i] = newCodePart + commentPart;
-            }
+      if (matchesInLine > 0)
+      {
+        totalCount += matchesInLine;
+        lines[i] = newCodePart + commentPart;
+      }
         }
 
         if (totalCount > 0)
@@ -539,4 +567,24 @@ public static class Refactoring
       }
       return (line, string.Empty);
     }
+
+    private static string ReplaceNthOccurrence(string codePart, string pattern, string replacement, int occurrenceIndex, out int matchCount)
+  {
+    matchCount = 0;
+    if (string.IsNullOrEmpty(codePart))
+      return codePart;
+
+    var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+    if (matches.Count == 0)
+      return codePart;
+
+    if (occurrenceIndex <= 0 || occurrenceIndex > matches.Count)
+      return codePart;
+
+    var target = matches[occurrenceIndex - 1];
+    matchCount = 1;
+    return codePart.Substring(0, target.Index)
+      + Regex.Replace(target.Value, pattern, replacement, RegexOptions.IgnoreCase)
+      + codePart.Substring(target.Index + target.Length);
+  }
 }
