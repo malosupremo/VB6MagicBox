@@ -357,7 +357,7 @@ public static partial class VbParser
                 }
 
                 // Risoluzione accessi ai campi: var.field
-                ResolveFieldAccesses(mod, proc, fileLines, typeIndex, env);
+                ResolveFieldAccesses(mod, proc, fileLines, typeIndex, env, classIndex);
 
                 // Risoluzione accessi ai controlli: control.Property o control.Method()
                 ResolveControlAccesses(mod, proc, fileLines);
@@ -774,7 +774,7 @@ public static partial class VbParser
                     if (!string.IsNullOrEmpty(p.Name) && !string.IsNullOrEmpty(p.Type))
                         env[p.Name] = p.Type;
 
-                ResolveFieldAccesses(mod, prop, fileLines, typeIndex, env);
+                ResolveFieldAccesses(mod, prop, fileLines, typeIndex, env, classIndex);
                 ResolveParameterReferences(mod, prop, fileLines);
                 ResolvePropertyReturnReferences(mod, prop, fileLines);
             }

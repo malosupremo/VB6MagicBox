@@ -14,7 +14,8 @@ public static partial class VbParser
         VbProcedure proc,
         string[] fileLines,
         Dictionary<string, VbTypeDef> typeIndex,
-        Dictionary<string, string> env)
+        Dictionary<string, string> env,
+        Dictionary<string, VbModule> classIndex)
     {
         // Controlli di sicurezza per evitare IndexOutOfRangeException
         if (proc.StartLine <= 0)
@@ -81,7 +82,7 @@ public static partial class VbParser
                     RegexOptions.IgnoreCase);
             }
 
-            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
+            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-ZaZ_]\w*(?:\([^)]*\))?)+";
             var chainTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (Match m in Regex.Matches(noComment, chainPattern, RegexOptions.IgnoreCase))
@@ -162,6 +163,21 @@ public static partial class VbParser
                     if (baseTypeName.Contains('.'))
                         baseTypeName = baseTypeName.Split('.').Last();
 
+                    if (classIndex.TryGetValue(baseTypeName, out var classModule))
+                    {
+                        var classProp = classModule.Properties.FirstOrDefault(p =>
+                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                        if (classProp != null)
+                        {
+                          classProp.Used = true;
+                          classProp.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                          typeName = classProp.ReturnType;
+                          if (string.IsNullOrEmpty(typeName))
+                            break;
+                          continue;
+                        }
+                    }
+
                     if (!typeIndex.TryGetValue(baseTypeName, out var typeDef))
                         break;
 
@@ -188,7 +204,8 @@ public static partial class VbParser
         VbProperty prop,
         string[] fileLines,
         Dictionary<string, VbTypeDef> typeIndex,
-        Dictionary<string, string> env)
+        Dictionary<string, string> env,
+        Dictionary<string, VbModule> classIndex)
     {
         if (prop.StartLine <= 0)
             prop.StartLine = prop.LineNumber;
@@ -289,6 +306,21 @@ public static partial class VbParser
                         baseTypeName = baseTypeName.Substring(0, baseTypeName.IndexOf('('));
                     if (baseTypeName.Contains('.'))
                         baseTypeName = baseTypeName.Split('.').Last();
+
+                    if (classIndex.TryGetValue(baseTypeName, out var classModule))
+                    {
+                        var classProp = classModule.Properties.FirstOrDefault(p =>
+                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                        if (classProp != null)
+                        {
+                          classProp.Used = true;
+                          classProp.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                          typeName = classProp.ReturnType;
+                          if (string.IsNullOrEmpty(typeName))
+                            break;
+                          continue;
+                        }
+                    }
 
                     if (!typeIndex.TryGetValue(baseTypeName, out var typeDef))
                         break;
@@ -737,6 +769,11 @@ public static partial class VbParser
             .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
+        var enumDefIndex = project.Modules
+            .SelectMany(m => m.Enums)
+            .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
         foreach (var mod in project.Modules)
         {
             var fileLines = File.ReadAllLines(mod.FullPath);
@@ -787,6 +824,29 @@ public static partial class VbParser
                             enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1);
                         }
                     }
+
+                    foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)\b"))
+                    {
+                        var enumName = m.Groups[1].Value;
+                        var valueName = m.Groups[2].Value;
+
+                        if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
+                        {
+                          foreach (var enumDef in enumDefs)
+                          {
+                            enumDef.Used = true;
+                            enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+
+                            var value = enumDef.Values.FirstOrDefault(v =>
+                                v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
+                            if (value != null)
+                            {
+                              value.Used = true;
+                              value.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                            }
+                          }
+                        }
+                    }
                 }
             }
 
@@ -828,8 +888,31 @@ public static partial class VbParser
 
                         foreach (var enumValue in enumValues)
                         {
-                            enumValue.Used = true;
-                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                          enumValue.Used = true;
+                          enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                        }
+                    }
+
+                    foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)\b"))
+                    {
+                        var enumName = m.Groups[1].Value;
+                        var valueName = m.Groups[2].Value;
+
+                        if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
+                        {
+                          foreach (var enumDef in enumDefs)
+                          {
+                            enumDef.Used = true;
+                            enumDef.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+
+                            var value = enumDef.Values.FirstOrDefault(v =>
+                                v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
+                            if (value != null)
+                            {
+                              value.Used = true;
+                              value.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                            }
+                          }
                         }
                     }
                 }

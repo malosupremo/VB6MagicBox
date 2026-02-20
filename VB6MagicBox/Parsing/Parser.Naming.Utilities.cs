@@ -208,6 +208,12 @@ public static partial class VbParser
       {
         if (part.Length > 0)
         {
+          if (part.All(char.IsLetter) && part.ToUpperInvariant() == part && part.Length <= 3)
+          {
+            result.Append(part);
+            continue;
+          }
+
           // Capitalize first letter, lowercase the rest
           result.Append(char.ToUpperInvariant(part[0]));
           if (part.Length > 1)
