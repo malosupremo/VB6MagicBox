@@ -147,6 +147,20 @@ public static partial class VbParser
 
                 v.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
               }
+              else
+              {
+                var propAtLine = searchMod.Properties.FirstOrDefault(p => p.ContainsLine(lineNum));
+                if (propAtLine != null)
+                {
+                  var hasParamWithSameName = propAtLine.Parameters.Any(p =>
+                      p.Name.Equals(v.Name, StringComparison.OrdinalIgnoreCase));
+
+                  if (hasParamWithSameName)
+                    continue;
+
+                  v.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
+                }
+              }
             }
           }
         }
@@ -197,6 +211,20 @@ public static partial class VbParser
                 }
 
                 c.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
+              }
+              else
+              {
+                var propAtLine = searchMod.Properties.FirstOrDefault(p => p.ContainsLine(lineNum));
+                if (propAtLine != null)
+                {
+                  var hasParamWithSameName = propAtLine.Parameters.Any(p =>
+                      p.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase));
+
+                  if (hasParamWithSameName)
+                    continue;
+
+                  c.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
+                }
               }
             }
           }
