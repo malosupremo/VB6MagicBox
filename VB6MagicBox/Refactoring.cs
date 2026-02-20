@@ -388,11 +388,12 @@ public static class Refactoring
                 continue; // Salta questa riga se non è nelle References
 
             var line = lines[i];
-            var commentIdx = line.IndexOf("'");
+
+            var (codePart, commentPart) = SplitCodeAndComment(line);
 
             // Separa codice e commento
-            var codePart = commentIdx >= 0 ? line.Substring(0, commentIdx) : line;
-            var commentPart = commentIdx >= 0 ? line.Substring(commentIdx) : "";
+            // var codePart = commentIdx >= 0 ? line.Substring(0, commentIdx) : line;
+            // var commentPart = commentIdx >= 0 ? line.Substring(commentIdx) : "";
 
             // Sostituisci SOLO nella parte di codice, non nel commento
             // Word boundary per evitare sostituzioni parziali
@@ -516,5 +517,26 @@ public static class Refactoring
         }
 
         return sb.ToString();
+    }
+
+    private static (string code, string comment) SplitCodeAndComment(string line)
+    {
+      bool inString = false;
+      for (int i = 0; i < line.Length; i++)
+      {
+        var ch = line[i];
+        if (ch == '"')
+        {
+          if (!inString)
+            inString = true;
+          else if (i + 1 < line.Length && line[i + 1] == '"')
+            i++; // escaped double quote
+          else
+            inString = false;
+        }
+        else if (!inString && ch == '\'')
+          return (line[..i].TrimEnd(), line[i..]);
+      }
+      return (line, string.Empty);
     }
 }

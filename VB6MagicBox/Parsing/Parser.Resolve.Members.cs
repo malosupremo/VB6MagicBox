@@ -445,6 +445,11 @@ public static partial class VbParser
             v => v,
             StringComparer.OrdinalIgnoreCase);
 
+    var globalVariableIndex = mod.GlobalVariables.ToDictionary(
+        v => v.Name,
+        v => v,
+        StringComparer.OrdinalIgnoreCase);
+
         // Controlli di sicurezza per evitare IndexOutOfRangeException
         if (proc.StartLine <= 0)
             proc.StartLine = proc.LineNumber;
@@ -498,6 +503,16 @@ public static partial class VbParser
 
                     localVar.Used = true;
                     localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+                }
+
+                // Controlla se è una variabile globale del modulo (e non è shadowed)
+                if (!parameterIndex.ContainsKey(tokenName) && !localVariableIndex.ContainsKey(tokenName))
+                {
+                  if (globalVariableIndex.TryGetValue(tokenName, out var globalVar))
+                  {
+                    globalVar.Used = true;
+                    globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+                  }
                 }
             }
         }
