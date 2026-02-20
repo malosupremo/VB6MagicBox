@@ -62,7 +62,8 @@ public static class TypeAnnotator
   // -------------------------
 
   private enum FixKind { VariableOrConstant, Parameter }
-  private sealed record SymbolFix(int LineNumber, FixKind Kind, string Name);
+  private sealed record SymbolFix(int LineNumber, FixKind Kind, string Name, string Module, string Procedure);
+  private sealed record MissingTypeInfo(string Module, string Procedure, string Name, string Kind);
 
   // -------------------------
   // API PUBBLICA
@@ -89,6 +90,7 @@ public static class TypeAnnotator
     Console.ForegroundColor= ConsoleColor.Gray;
 
     var vbpDir        = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile))!;
+    var vbpName       = Path.GetFileNameWithoutExtension(project.ProjectFile);
     var backupBaseDir = new DirectoryInfo(vbpDir).Parent?.FullName ?? vbpDir;
     var folderName    = new DirectoryInfo(backupBaseDir).Name;
     var backupDir     = Path.Combine(
@@ -101,10 +103,11 @@ public static class TypeAnnotator
 
     int totalFiles   = 0;
     int totalChanges = 0;
+    var missingTypes = new List<MissingTypeInfo>();
 
     foreach (var mod in project.Modules)
     {
-      var fixes = CollectFixes(mod);
+      var fixes = CollectFixes(mod, missingTypes);
       if (fixes.Count == 0) continue;
 
       var filePath = mod.FullPath;
@@ -126,11 +129,17 @@ public static class TypeAnnotator
       totalChanges += changes;
     }
 
+    var missingTypesPath = Path.Combine(vbpDir, $"{vbpName}.missingTypes.csv");
+    ExportMissingTypesCsv(missingTypesPath, missingTypes);
+
     Console.WriteLine();
     if (totalChanges == 0)
       Console.WriteLine("[OK] Nessun tipo mancante trovato.");
     else
       Console.WriteLine($"[OK] {totalChanges} tipo/i aggiunto/i in {totalFiles} file/i.");
+
+    if (missingTypes.Count > 0)
+      Console.WriteLine($"[WARN] Tipi non deducibili: {missingTypesPath}");
   }
 
   // -------------------------
@@ -141,37 +150,53 @@ public static class TypeAnnotator
   /// Raccoglie tutti i simboli privi di tipo dal modello del modulo.
   /// Restituisce una lista di fix con numero di riga, tipo di fix e nome del simbolo.
   /// </summary>
-  private static List<SymbolFix> CollectFixes(VbModule mod)
+  private static List<SymbolFix> CollectFixes(VbModule mod, List<MissingTypeInfo> missingTypes)
   {
     var fixes = new List<SymbolFix>();
 
     // Variabili globali/membro senza tipo (catturate dal parser fallback ReGlobalVarNoType)
     foreach (var v in mod.GlobalVariables.Where(v => string.IsNullOrEmpty(v.Type)))
-      fixes.Add(new SymbolFix(v.LineNumber, FixKind.VariableOrConstant, v.Name));
+    {
+      fixes.Add(new SymbolFix(v.LineNumber, FixKind.VariableOrConstant, v.Name, mod.Name, string.Empty));
+      if (!HasTypeSuffix(v.Name))
+        missingTypes.Add(new MissingTypeInfo(mod.Name, string.Empty, v.Name, "GlobalVariable"));
+    }
 
     // Costanti di modulo senza tipo (il parser cattura già Type="" per Const senza As)
     foreach (var c in mod.Constants.Where(c => string.IsNullOrEmpty(c.Type)))
-      fixes.Add(new SymbolFix(c.LineNumber, FixKind.VariableOrConstant, c.Name));
+      fixes.Add(new SymbolFix(c.LineNumber, FixKind.VariableOrConstant, c.Name, mod.Name, string.Empty));
 
     foreach (var proc in mod.Procedures)
     {
       // Parametri senza tipo (il parser cattura già Type="" per params senza As)
       foreach (var p in proc.Parameters.Where(p => string.IsNullOrEmpty(p.Type)))
-        fixes.Add(new SymbolFix(p.LineNumber, FixKind.Parameter, p.Name));
+      {
+        fixes.Add(new SymbolFix(p.LineNumber, FixKind.Parameter, p.Name, mod.Name, proc.Name));
+        if (!HasTypeSuffix(p.Name))
+          missingTypes.Add(new MissingTypeInfo(mod.Name, proc.Name, p.Name, "Parameter"));
+      }
 
       // Variabili locali senza tipo (catturate dal parser fallback ReLocalVarNoType)
       foreach (var v in proc.LocalVariables.Where(v => string.IsNullOrEmpty(v.Type)))
-        fixes.Add(new SymbolFix(v.LineNumber, FixKind.VariableOrConstant, v.Name));
+      {
+        fixes.Add(new SymbolFix(v.LineNumber, FixKind.VariableOrConstant, v.Name, mod.Name, proc.Name));
+        if (!HasTypeSuffix(v.Name))
+          missingTypes.Add(new MissingTypeInfo(mod.Name, proc.Name, v.Name, "LocalVariable"));
+      }
 
       // Costanti locali senza tipo
       foreach (var c in proc.Constants.Where(c => string.IsNullOrEmpty(c.Type)))
-        fixes.Add(new SymbolFix(c.LineNumber, FixKind.VariableOrConstant, c.Name));
+        fixes.Add(new SymbolFix(c.LineNumber, FixKind.VariableOrConstant, c.Name, mod.Name, proc.Name));
     }
 
     // Parametri di Property senza tipo
     foreach (var prop in mod.Properties)
       foreach (var p in prop.Parameters.Where(p => string.IsNullOrEmpty(p.Type)))
-        fixes.Add(new SymbolFix(p.LineNumber, FixKind.Parameter, p.Name));
+      {
+        fixes.Add(new SymbolFix(p.LineNumber, FixKind.Parameter, p.Name, mod.Name, prop.Name));
+        if (!HasTypeSuffix(p.Name))
+          missingTypes.Add(new MissingTypeInfo(mod.Name, prop.Name, p.Name, "PropertyParameter"));
+      }
 
     return fixes;
   }
@@ -337,8 +362,18 @@ public static class TypeAnnotator
     var suffix     = m.Groups[3].Value;
     var arrayDims  = m.Groups[4].Value;
 
-    var typeName = suffix.Length > 0 && TypeSuffixMap.TryGetValue(suffix[0], out var st)
-      ? st : "Object";
+    if (suffix.Length == 0)
+    {
+      changed = false;
+      return segment;
+    }
+
+    var typeName = TypeSuffixMap.TryGetValue(suffix[0], out var st) ? st : null;
+    if (string.IsNullOrEmpty(typeName))
+    {
+      changed = false;
+      return segment;
+    }
 
     changed = true;
     return $"{withEvents}{name}{arrayDims} As {typeName}";
@@ -373,19 +408,41 @@ public static class TypeAnnotator
   /// </summary>
   private static string ApplySingleParameterFix(string code, string paramName)
   {
-    // Pattern: \ bparamName\b + opz.suffisso + opz.dims,
-    // seguito SOLO da un delimitatore di parametro (virgola, chiudi-parentesi o fine riga).
-    // Lookahead POSITIVO invece di negativo: evita il backtracking che causava
-    // "data As Object() As Integer" quando il gruppo dims era opzionale.
     var pattern = $@"\b{Regex.Escape(paramName)}\b([$%&!#@]?)(\([^)]*\))?(?=\s*[,)]|\s*$)";
     return Regex.Replace(code, pattern, m =>
     {
       var suffix   = m.Groups[1].Value;
       var dims     = m.Groups[2].Value;
-      var typeName = suffix.Length > 0 && TypeSuffixMap.TryGetValue(suffix[0], out var st)
-        ? st : "Object";
-      return $"{paramName}{dims} As {typeName}";
+      if (suffix.Length == 0)
+        return m.Value;
+
+      var typeName = TypeSuffixMap.TryGetValue(suffix[0], out var st) ? st : null;
+      return string.IsNullOrEmpty(typeName) ? m.Value : $"{paramName}{dims} As {typeName}";
     }, RegexOptions.IgnoreCase);
+  }
+
+  private static bool HasTypeSuffix(string name)
+  {
+    if (string.IsNullOrEmpty(name)) return false;
+    return TypeSuffixMap.ContainsKey(name[^1]);
+  }
+
+  private static void ExportMissingTypesCsv(string outputPath, List<MissingTypeInfo> missingTypes)
+  {
+    var lines = new List<string> { "Module,Procedure,Name,Kind" };
+
+    foreach (var item in missingTypes)
+    {
+      lines.Add($"\"{EscapeCsv(item.Module)}\",\"{EscapeCsv(item.Procedure)}\",\"{EscapeCsv(item.Name)}\",\"{EscapeCsv(item.Kind)}\"");
+    }
+
+    File.WriteAllLines(outputPath, lines, Encoding.UTF8);
+  }
+
+  private static string EscapeCsv(string value)
+  {
+    if (string.IsNullOrEmpty(value)) return string.Empty;
+    return value.Replace("\"", "\"\"");
   }
 
   // -------------------------

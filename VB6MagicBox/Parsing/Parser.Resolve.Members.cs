@@ -655,4 +655,111 @@ public static partial class VbParser
             }
         }
     }
+
+    private static void ResolveEnumValueReferences(VbProject project)
+    {
+        var enumValueIndex = project.Modules
+            .SelectMany(m => m.Enums.SelectMany(e => e.Values))
+            .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var mod in project.Modules)
+        {
+            var fileLines = File.ReadAllLines(mod.FullPath);
+
+            foreach (var proc in mod.Procedures)
+            {
+                if (proc.StartLine <= 0)
+                    proc.StartLine = proc.LineNumber;
+                if (proc.EndLine <= 0)
+                    proc.EndLine = fileLines.Length;
+
+                var startIndex = Math.Max(0, proc.StartLine - 1);
+                var endIndex = Math.Min(fileLines.Length, proc.EndLine);
+
+                if (startIndex >= fileLines.Length)
+                    continue;
+
+                var shadowedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in proc.Parameters)
+                    shadowedNames.Add(p.Name);
+                foreach (var lv in proc.LocalVariables)
+                    shadowedNames.Add(lv.Name);
+                foreach (var c in proc.Constants)
+                    shadowedNames.Add(c.Name);
+
+                for (int i = startIndex; i < endIndex; i++)
+                {
+                    var raw = fileLines[i];
+                    var noComment = raw;
+                    var idx = noComment.IndexOf("'", StringComparison.Ordinal);
+                    if (idx >= 0)
+                        noComment = noComment.Substring(0, idx);
+
+                    noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
+
+                    foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
+                    {
+                        var token = m.Groups[1].Value;
+                        if (shadowedNames.Contains(token))
+                            continue;
+
+                        if (!enumValueIndex.TryGetValue(token, out var enumValues))
+                            continue;
+
+                        foreach (var enumValue in enumValues)
+                        {
+                            enumValue.Used = true;
+                            enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                        }
+                    }
+                }
+            }
+
+            foreach (var prop in mod.Properties)
+            {
+                if (prop.StartLine <= 0)
+                    prop.StartLine = prop.LineNumber;
+                if (prop.EndLine <= 0)
+                    prop.EndLine = fileLines.Length;
+
+                var startIndex = Math.Max(0, prop.StartLine - 1);
+                var endIndex = Math.Min(fileLines.Length, prop.EndLine);
+
+                if (startIndex >= fileLines.Length)
+                    continue;
+
+                var shadowedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in prop.Parameters)
+                    shadowedNames.Add(p.Name);
+
+                for (int i = startIndex; i < endIndex; i++)
+                {
+                    var raw = fileLines[i];
+                    var noComment = raw;
+                    var idx = noComment.IndexOf("'", StringComparison.Ordinal);
+                    if (idx >= 0)
+                        noComment = noComment.Substring(0, idx);
+
+                    noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
+
+                    foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
+                    {
+                        var token = m.Groups[1].Value;
+                        if (shadowedNames.Contains(token))
+                            continue;
+
+                        if (!enumValueIndex.TryGetValue(token, out var enumValues))
+                            continue;
+
+                        foreach (var enumValue in enumValues)
+                        {
+                            enumValue.Used = true;
+                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
