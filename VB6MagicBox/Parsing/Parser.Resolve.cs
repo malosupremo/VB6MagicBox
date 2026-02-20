@@ -364,6 +364,7 @@ public static partial class VbParser
 
                 // Risoluzione reference per parametri e variabili locali
                 ResolveParameterAndLocalVariableReferences(mod, proc, fileLines);
+                ResolveFunctionReturnReferences(mod, proc, fileLines);
 
                 // Rilevamento delle occorrenze nude di altre procedure nel corpo (es. "Not Is_Caller_Busy" o "If Is_Caller_Busy Then")
                 // Controlli di sicurezza per evitare IndexOutOfRangeException

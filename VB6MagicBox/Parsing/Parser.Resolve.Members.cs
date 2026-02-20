@@ -72,13 +72,30 @@ public static partial class VbParser
                 noComment = withStack.Peek() + "." + suffix;
             }
 
-            var chainMatches = Regex.Matches(noComment,
-                @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+",
-                RegexOptions.IgnoreCase);
-
-            foreach (Match chainMatch in chainMatches)
+            if (withStack.Count > 0)
             {
-                var chainText = chainMatch.Value;
+                var withPrefix = withStack.Peek();
+                noComment = Regex.Replace(noComment,
+                    @"(?<!\w)\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
+                    m => withPrefix + "." + m.Groups[1].Value,
+                    RegexOptions.IgnoreCase);
+            }
+
+            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
+            var chainTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Match m in Regex.Matches(noComment, chainPattern, RegexOptions.IgnoreCase))
+                chainTexts.Add(m.Value);
+
+            foreach (Match inner in Regex.Matches(noComment, @"\(([^)]*)\)"))
+            {
+                var innerText = inner.Groups[1].Value;
+                foreach (Match m in Regex.Matches(innerText, chainPattern, RegexOptions.IgnoreCase))
+                    chainTexts.Add(m.Value);
+            }
+
+            foreach (var chainText in chainTexts)
+            {
                 var parts = chainText
                     .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -219,13 +236,30 @@ public static partial class VbParser
                 noComment = withStack.Peek() + "." + suffix;
             }
 
-            var chainMatches = Regex.Matches(noComment,
-                @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[a-zA-Z_]\w*(?:\([^)]*\))?)+",
-                RegexOptions.IgnoreCase);
-
-            foreach (Match chainMatch in chainMatches)
+            if (withStack.Count > 0)
             {
-                var chainText = chainMatch.Value;
+                var withPrefix = withStack.Peek();
+                noComment = Regex.Replace(noComment,
+                    @"(?<!\w)\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
+                    m => withPrefix + "." + m.Groups[1].Value,
+                    RegexOptions.IgnoreCase);
+            }
+
+            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-ZaZ_]\w*(?:\([^)]*\))?)+";
+            var chainTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Match m in Regex.Matches(noComment, chainPattern, RegexOptions.IgnoreCase))
+                chainTexts.Add(m.Value);
+
+            foreach (Match inner in Regex.Matches(noComment, @"\(([^)]*)\)"))
+            {
+                var innerText = inner.Groups[1].Value;
+                foreach (Match m in Regex.Matches(innerText, chainPattern, RegexOptions.IgnoreCase))
+                    chainTexts.Add(m.Value);
+            }
+
+            foreach (var chainText in chainTexts)
+            {
                 var parts = chainText
                     .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -524,6 +558,46 @@ public static partial class VbParser
             if (Regex.IsMatch(noComment, $@"\b{Regex.Escape(prop.Name)}\b", RegexOptions.IgnoreCase))
             {
                 prop.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber);
+            }
+        }
+    }
+
+    private static void ResolveFunctionReturnReferences(
+        VbModule mod,
+        VbProcedure proc,
+        string[] fileLines)
+    {
+        if (!proc.Kind.Equals("Function", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (string.IsNullOrEmpty(proc.Name))
+            return;
+
+        if (proc.StartLine <= 0)
+            proc.StartLine = proc.LineNumber;
+
+        if (proc.EndLine <= 0)
+            proc.EndLine = fileLines.Length;
+
+        var startIndex = Math.Max(0, proc.StartLine - 1);
+        var endIndex = Math.Min(fileLines.Length, proc.EndLine);
+
+        if (startIndex >= fileLines.Length)
+            return;
+
+        for (int i = startIndex + 1; i < endIndex; i++)
+        {
+            var raw = fileLines[i].Trim();
+            var noComment = raw;
+            var idx = noComment.IndexOf("'", StringComparison.Ordinal);
+            if (idx >= 0)
+                noComment = noComment.Substring(0, idx).Trim();
+
+            noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
+
+            if (Regex.IsMatch(noComment, $@"\b{Regex.Escape(proc.Name)}\b", RegexOptions.IgnoreCase))
+            {
+                proc.References.AddLineNumber(mod.Name, proc.Name, i + 1);
             }
         }
     }
