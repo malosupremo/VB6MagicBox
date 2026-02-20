@@ -159,6 +159,21 @@ public static partial class VbParser
       }
 
       // -------------------------
+      // IMPLEMENTS (class interfaces)
+      // -------------------------
+      var mi = ReImplements.Match(noComment);
+      if (mi.Success)
+      {
+        var interfaceName = mi.Groups[1].Value;
+        if (!string.IsNullOrEmpty(interfaceName) &&
+            !mod.ImplementsInterfaces.Any(i => i.Equals(interfaceName, StringComparison.OrdinalIgnoreCase)))
+        {
+          mod.ImplementsInterfaces.Add(interfaceName);
+        }
+        continue;
+      }
+
+      // -------------------------
       // TYPE (UDT)
       // -------------------------
       var mt = ReTypeStart.Match(noComment);

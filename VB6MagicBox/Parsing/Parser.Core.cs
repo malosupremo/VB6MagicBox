@@ -109,6 +109,9 @@ public static partial class VbParser
     private static readonly Regex ReEnumStart =
         new(@"^(Public|Private|Friend)?\s*Enum\s+(\w+)", RegexOptions.IgnoreCase);
 
+    private static readonly Regex ReImplements =
+        new(@"^\s*Implements\s+(\w+)", RegexOptions.IgnoreCase);
+
     private static readonly Regex ReField =
         new(@"^\s*(\w+)(\([^)]*\))?\s+As\s+([\w\.\(\)]+)", RegexOptions.IgnoreCase);
 

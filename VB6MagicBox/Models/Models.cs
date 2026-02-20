@@ -89,4 +89,7 @@ public class VbModule
   {
     return Procedures.FirstOrDefault(p => p.ContainsLine(lineNumber));
   }
+
+  [JsonIgnore]
+  public List<string> ImplementsInterfaces { get; set; } = new();
 }

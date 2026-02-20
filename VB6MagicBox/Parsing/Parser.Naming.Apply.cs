@@ -326,10 +326,17 @@ public static partial class VbParser
         {
           string conventionalName;
 
+          var isInterfaceEvent = mod.ImplementsInterfaces.Any(i =>
+              proc.Name.StartsWith(i + "_", StringComparison.OrdinalIgnoreCase));
+
+          if (isInterfaceEvent)
+          {
+            conventionalName = proc.Name;
+          }
           // Event Handling Detection
           // Pattern: ObjectName_EventName
           // Check for standard module events: Class_Initialize, etc.
-          if (proc.Name.Equals("Class_Initialize", StringComparison.OrdinalIgnoreCase) ||
+          else if (proc.Name.Equals("Class_Initialize", StringComparison.OrdinalIgnoreCase) ||
               proc.Name.Equals("Class_Terminate", StringComparison.OrdinalIgnoreCase) ||
               (mod.Kind.Equals("frm", StringComparison.OrdinalIgnoreCase) &&
                (proc.Name.StartsWith("Form_", StringComparison.OrdinalIgnoreCase) ||

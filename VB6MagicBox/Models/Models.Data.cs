@@ -258,9 +258,11 @@ public static class VbReferenceListExtensions
       string procedure,
       int lineNumber)
   {
+    var normalizedProcedure = procedure ?? string.Empty;
+
     var existing = references.FirstOrDefault(r =>
         string.Equals(r.Module, module, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(r.Procedure, procedure, StringComparison.OrdinalIgnoreCase));
+        string.Equals(r.Procedure ?? string.Empty, normalizedProcedure, StringComparison.OrdinalIgnoreCase));
 
     if (existing != null)
     {
@@ -269,7 +271,7 @@ public static class VbReferenceListExtensions
     }
     else
     {
-      var newRef = new VbReference { Module = module, Procedure = procedure };
+      var newRef = new VbReference { Module = module, Procedure = normalizedProcedure };
       if (lineNumber > 0)
         newRef.LineNumbers.Add(lineNumber);
       references.Add(newRef);
