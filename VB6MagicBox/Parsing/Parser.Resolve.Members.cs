@@ -38,6 +38,8 @@ public static partial class VbParser
       return;
     }
 
+    var withStack = new Stack<string>();
+
     for (int i = startIndex; i < endIndex; i++)
     {
       var raw = fileLines[i].Trim();
@@ -48,8 +50,30 @@ public static partial class VbParser
       if (idx >= 0)
         noComment = noComment.Substring(0, idx).Trim();
 
+      var trimmedNoComment = noComment.TrimStart();
+      if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
+      {
+        var withExpr = trimmedNoComment.Substring(5).Trim();
+        if (!string.IsNullOrEmpty(withExpr))
+          withStack.Push(withExpr);
+        continue;
+      }
+
+      if (trimmedNoComment.Equals("End With", StringComparison.OrdinalIgnoreCase))
+      {
+        if (withStack.Count > 0)
+          withStack.Pop();
+        continue;
+      }
+
+      if (withStack.Count > 0 && trimmedNoComment.StartsWith(".", StringComparison.Ordinal))
+      {
+        var suffix = trimmedNoComment.Substring(1).TrimStart();
+        noComment = withStack.Peek() + "." + suffix;
+      }
+
       var chainMatches = Regex.Matches(noComment,
-          @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w+)+",
+          @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+",
           RegexOptions.IgnoreCase);
 
       foreach (Match chainMatch in chainMatches)
