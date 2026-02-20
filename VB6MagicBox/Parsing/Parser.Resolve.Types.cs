@@ -39,6 +39,8 @@ public static partial class VbParser
       // 3. Parametri e variabili locali delle procedure
       foreach (var proc in mod.Procedures)
       {
+        AddTypeReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, typeIndex);
+
         foreach (var param in proc.Parameters)
           AddTypeReference(param.Type, param.LineNumber, mod.Name, proc.Name, typeIndex);
 
@@ -49,6 +51,8 @@ public static partial class VbParser
       // 4. Parametri delle proprietà
       foreach (var prop in mod.Properties)
       {
+        AddTypeReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, typeIndex);
+
         foreach (var param in prop.Parameters)
           AddTypeReference(param.Type, param.LineNumber, mod.Name, prop.Name, typeIndex);
       }
@@ -106,6 +110,8 @@ public static partial class VbParser
 
       foreach (var proc in mod.Procedures)
       {
+        AddClassModuleReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, classIndex);
+
         foreach (var param in proc.Parameters)
           AddClassModuleReference(param.Type, param.LineNumber, mod.Name, proc.Name, classIndex);
         foreach (var lv in proc.LocalVariables)
@@ -114,6 +120,8 @@ public static partial class VbParser
 
       foreach (var prop in mod.Properties)
       {
+        AddClassModuleReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, classIndex);
+
         foreach (var param in prop.Parameters)
           AddClassModuleReference(param.Type, param.LineNumber, mod.Name, prop.Name, classIndex);
       }
@@ -226,6 +234,14 @@ public static partial class VbParser
 
         foreach (var lv in proc.LocalVariables)
           Mark(lv.Type, mod.Name, proc.Name, lv.LineNumber);
+      }
+
+      foreach (var prop in mod.Properties)
+      {
+        Mark(prop.ReturnType, mod.Name, prop.Name, prop.LineNumber);
+
+        foreach (var p in prop.Parameters)
+          Mark(p.Type, mod.Name, prop.Name, p.LineNumber);
       }
     }
   }
