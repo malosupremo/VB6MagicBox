@@ -224,6 +224,15 @@ public class VbReference
 
   [JsonPropertyOrder(2)]
   public List<int> LineNumbers { get; set; } = new();
+
+  /// <summary>
+  /// Occurrence index (1-based) per ogni LineNumber.
+  /// Usato quando stesso simbolo appare più volte sulla stessa riga
+  /// (es. parametri multipli: "func(a As TYPE, b As TYPE)")
+  /// -1 significa "prima occorrenza" o "tutte le occorrenze sulla riga"
+  /// </summary>
+  [JsonPropertyOrder(3)]
+  public List<int> OccurrenceIndexes { get; set; } = new();
 }
 
 /// <summary>
@@ -277,7 +286,7 @@ public static class VbReferenceListExtensions
   /// <summary>
   /// Adds <paramref name="lineNumber"/> to an existing reference entry keyed by
   /// Module+Procedure, or creates a new entry when none exists.
-  /// Note: occurrenceIndex parameter kept for backward compatibility but no longer used.
+  /// occurrenceIndex (1-based) tracks which occurrence on the line (for multiple params same type).
   /// </summary>
   public static void AddLineNumber(
       this List<VbReference> references,
@@ -294,9 +303,26 @@ public static class VbReferenceListExtensions
 
     if (existing != null)
     {
-      if (lineNumber > 0 && !existing.LineNumbers.Contains(lineNumber))
+      if (lineNumber > 0)
       {
-        existing.LineNumbers.Add(lineNumber);
+        // Controlla se questa combinazione lineNumber+occurrenceIndex esiste già
+        bool alreadyExists = false;
+        for (int i = 0; i < existing.LineNumbers.Count; i++)
+        {
+          if (existing.LineNumbers[i] == lineNumber &&
+              i < existing.OccurrenceIndexes.Count &&
+              existing.OccurrenceIndexes[i] == occurrenceIndex)
+          {
+            alreadyExists = true;
+            break;
+          }
+        }
+
+        if (!alreadyExists)
+        {
+          existing.LineNumbers.Add(lineNumber);
+          existing.OccurrenceIndexes.Add(occurrenceIndex);
+        }
       }
     }
     else
@@ -305,6 +331,7 @@ public static class VbReferenceListExtensions
       if (lineNumber > 0)
       {
         newRef.LineNumbers.Add(lineNumber);
+        newRef.OccurrenceIndexes.Add(occurrenceIndex);
       }
       references.Add(newRef);
     }
@@ -429,9 +456,11 @@ public static class LineReplaceListExtensions
           newName,
           category);
     }
-    else
+    else if (matches.Count > 0)
     {
-      // Altrimenti aggiungi tutte le occorrenze (escluse quelle nelle stringhe)
+      // Se occurrenceIndex NON è specificato (-1), aggiungi TUTTE le occorrenze
+      // Questo gestisce variabili/simboli usati più volte sulla stessa riga
+      // Es: If m_Queue(i).X = ... And m_Queue(j).Y = ...
       foreach (Match match in matches)
       {
         // Salta se è dentro una stringa

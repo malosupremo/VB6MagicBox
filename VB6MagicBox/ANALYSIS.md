@@ -36,6 +36,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 ## Resolution (Parser.Resolve + .Members)
 - `ResolveTypesAndCalls` builds `procIndex` (procedures only) + `propIndex`.
 - **Bare property resolution**: Public properties (PropertyGet) usable bare across modules (e.g., `If ExecSts = ...`) resolved in PASS 1.2 alongside bare procedure calls.
+- **External type exclusion**: Field access chains stop if base type not in `typeIndex` or `classIndex` (e.g., `gobjFM489.ActualState.Program.Frequency_Long` where `gobjFM489` is external COM object).
 - Field access resolution handles:
   - nested dot chains with arrays at any segment,
   - `With` blocks (prefix `With` expression and replace inline `.Member`),

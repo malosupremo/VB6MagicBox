@@ -125,7 +125,16 @@ public static partial class VbParser
       if (oldName == newName)
         continue;
 
+      // DEBUG: Tracciamento specifico per Frequency_Long
+      bool isDebugSymbol = oldName.Equals("Frequency_Long", StringComparison.OrdinalIgnoreCase);
+
       Console.Write($"\r   Processando simboli: [{symbolIndex}/{allSymbols.Count}] {category}: {oldName}...".PadRight(Console.WindowWidth - 1));
+
+      if (isDebugSymbol)
+      {
+        Console.WriteLine($"\n[DEBUG] === Processing {oldName} → {newName} ===");
+        Console.WriteLine($"[DEBUG]   Category: {category}, DefiningModule: {definingModule}");
+      }
 
       // Trova il modulo che definisce il simbolo
       var ownerModule = project.Modules.FirstOrDefault(m =>
@@ -138,7 +147,7 @@ public static partial class VbParser
       AddDeclarationReplace(ownerModule, source, oldName, newName, category, fileCache);
 
       // REFERENCES: Aggiungi replace per tutti i riferimenti
-      AddReferencesReplaces(project, source, oldName, newName, category, fileCache);
+      AddReferencesReplaces(project, source, oldName, newName, category, fileCache, isDebugSymbol);
 
       // ATTRIBUTI VB6: Gestione speciale per "Attribute VB_Name" e "Attribute VarName."
       AddAttributeReplaces(ownerModule, source, oldName, newName, category, fileCache);
@@ -216,11 +225,17 @@ public static partial class VbParser
       string oldName, 
       string newName, 
       string category,
-      Dictionary<string, string[]> fileCache)
+      Dictionary<string, string[]> fileCache,
+      bool isDebugSymbol = false)
   {
     var referencesProp = source?.GetType().GetProperty("References");
     if (referencesProp?.GetValue(source) is not System.Collections.IEnumerable references)
       return;
+
+    if (isDebugSymbol)
+    {
+      Console.WriteLine($"[DEBUG]   References found: {(references as System.Collections.IList)?.Count ?? 0}");
+    }
 
     foreach (var reference in references)
     {
@@ -256,7 +271,18 @@ public static partial class VbParser
         var line = lines[lineNum - 1];
         var (codePart, _) = SplitCodeAndComment(line);
 
+        if (isDebugSymbol)
+        {
+          Console.WriteLine($"[DEBUG]   Reference #{idx+1}: Module={refModuleName}, Line={lineNum}");
+          Console.WriteLine($"[DEBUG]     Code: {codePart}");
+        }
+
         var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
+
+        if (isDebugSymbol)
+        {
+          Console.WriteLine($"[DEBUG]     OccurrenceIndex: {occIndex}");
+        }
 
         // Caso speciale per proprietà: se siamo fuori dal modulo che le definisce,
         // cerca sia dot-prefix (.PropertyName) che bare usage (PropertyName)
@@ -264,11 +290,23 @@ public static partial class VbParser
         bool isPropertyInOtherModule = source is VbProperty && 
             !string.Equals(sourceModule, refModuleName, StringComparison.OrdinalIgnoreCase);
 
+        if (isDebugSymbol)
+        {
+          Console.WriteLine($"[DEBUG]     SourceModule={sourceModule}, IsPropertyInOtherModule={isPropertyInOtherModule}");
+        }
+
         if (isPropertyInOtherModule)
         {
           // Cerca PRIMA .PropertyName (dot-prefix)
           var dotPattern = $@"\.{Regex.Escape(oldName)}\b";
           var dotMatches = Regex.Matches(codePart, dotPattern, RegexOptions.IgnoreCase);
+
+          if (isDebugSymbol)
+          {
+            Console.WriteLine($"[DEBUG]     DotPattern matches: {dotMatches.Count}");
+            foreach (Match dm in dotMatches)
+              Console.WriteLine($"[DEBUG]       Match at index {dm.Index}: '{dm.Value}'");
+          }
 
           if (dotMatches.Count > 0)
           {
@@ -283,6 +321,11 @@ public static partial class VbParser
                   match.Value.Substring(1), // Rimuovi il punto dal vecchio valore
                   newName,
                   category + "_Reference");
+
+              if (isDebugSymbol)
+              {
+                Console.WriteLine($"[DEBUG]     → Added Replace at char {nameStartIndex}-{nameStartIndex + oldName.Length}");
+              }
             }
           }
           else
@@ -290,6 +333,12 @@ public static partial class VbParser
             // Se non trova dot-prefix, cerca bare usage (es. If ExecSts = ...)
             // Questo gestisce le public properties usate bare cross-module
             bool skipStrings = false; // Le properties non sono costanti, ok nelle stringhe
+
+            if (isDebugSymbol)
+            {
+              Console.WriteLine($"[DEBUG]     No dot-prefix found, searching bare usage...");
+            }
+
             refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, newName, category + "_Reference", occIndex, skipStrings);
           }
         }
@@ -316,6 +365,12 @@ public static partial class VbParser
           // Caso standard: word boundary
           // Per le costanti, skippa le stringhe literals
           bool skipStrings = source is VbConstant;
+
+          if (isDebugSymbol)
+          {
+            Console.WriteLine($"[DEBUG]     Standard case (word boundary), skipStrings={skipStrings}");
+          }
+
           refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, newName, category + "_Reference", occIndex, skipStrings);
         }
       }

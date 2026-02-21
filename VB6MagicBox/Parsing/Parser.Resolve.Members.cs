@@ -173,6 +173,21 @@ public static partial class VbParser
                 if (string.IsNullOrEmpty(typeName))
                     continue;
 
+                // Verifica se il tipo base è nel progetto (interno) o esterno
+                // Se è esterno, NON tracciare References per nessun membro della catena
+                var initialTypeName = typeName;
+                if (initialTypeName.Contains('('))
+                    initialTypeName = initialTypeName.Substring(0, initialTypeName.IndexOf('('));
+                if (initialTypeName.Contains('.'))
+                    initialTypeName = initialTypeName.Split('.').Last();
+
+                bool isInternalType = typeIndex.ContainsKey(initialTypeName) || classIndex.ContainsKey(initialTypeName);
+
+                // Se il tipo è esterno (non nel progetto), interrompi la catena
+                // Es: gobjFM489.ActualState.Program.Frequency_Long dove gobjFM489 è tipo esterno
+                if (!isInternalType)
+                    continue;
+
                 for (int partIndex = startPartIndex; partIndex < parts.Length; partIndex++)
                 {
                     var fieldName = parts[partIndex];
@@ -323,6 +338,20 @@ public static partial class VbParser
                     baseVarName = baseVarName.Substring(0, parenIndex);
 
                 if (!env.TryGetValue(baseVarName, out var typeName) || string.IsNullOrEmpty(typeName))
+                    continue;
+
+                // Verifica se il tipo base è nel progetto (interno) o esterno
+                // Se è esterno, NON tracciare References per nessun membro della catena
+                var initialTypeName = typeName;
+                if (initialTypeName.Contains('('))
+                    initialTypeName = initialTypeName.Substring(0, initialTypeName.IndexOf('('));
+                if (initialTypeName.Contains('.'))
+                    initialTypeName = initialTypeName.Split('.').Last();
+
+                bool isInternalType = typeIndex.ContainsKey(initialTypeName) || classIndex.ContainsKey(initialTypeName);
+
+                // Se il tipo è esterno (non nel progetto), interrompi la catena
+                if (!isInternalType)
                     continue;
 
                 for (int partIndex = 1; partIndex < parts.Length; partIndex++)

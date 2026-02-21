@@ -1,4 +1,4 @@
-using VB6MagicBox.Models;
+Ôªøusing VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
 
@@ -11,7 +11,7 @@ public static partial class VbParser
   /// <summary>
   /// Aggiunge References ai VbTypeDef per tutte le posizioni in cui il tipo
   /// appare in una clausola "As TypeName": campi di altri Type, variabili
-  /// globali/locali, parametri di procedure e propriet‡.
+  /// globali/locali, parametri di procedure e propriet√†.
   /// Senza questo, il refactoring non sa quali righe aggiornare quando
   /// rinomina un tipo (es. DISPAT_HEADER_T ? DispatHeader_T).
   /// </summary>
@@ -26,62 +26,102 @@ public static partial class VbParser
       {
         foreach (var field in typeDef.Fields)
         {
-          AddTypeReference(field.Type, field.LineNumber, mod.Name, string.Empty, typeIndex);
+          AddTypeReference(field.Type, field.LineNumber, mod.Name, string.Empty, typeIndex, -1);
         }
       }
 
       // 2. Variabili globali: "Public/Dim varName As TYPE"
       foreach (var variable in mod.GlobalVariables)
       {
-        AddTypeReference(variable.Type, variable.LineNumber, mod.Name, string.Empty, typeIndex);
+        AddTypeReference(variable.Type, variable.LineNumber, mod.Name, string.Empty, typeIndex, -1);
       }
 
       // 3. Parametri e variabili locali delle procedure
       foreach (var proc in mod.Procedures)
       {
-        AddTypeReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, typeIndex);
+        AddTypeReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, typeIndex, -1);
 
-        foreach (var param in proc.Parameters)
-          AddTypeReference(param.Type, param.LineNumber, mod.Name, proc.Name, typeIndex);
+        // Per i parametri, calcola occurrenceIndex per gestire pi√π parametri dello stesso tipo sulla stessa riga
+        for (int i = 0; i < proc.Parameters.Count; i++)
+        {
+          var param = proc.Parameters[i];
+          // Conta quante volte questo tipo appare nei parametri precedenti sulla stessa riga
+          int occurrence = proc.Parameters.Take(i)
+              .Count(p => p.LineNumber == param.LineNumber && 
+                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+
+          AddTypeReference(param.Type, param.LineNumber, mod.Name, proc.Name, typeIndex, occurrence);
+        }
 
         foreach (var localVar in proc.LocalVariables)
-          AddTypeReference(localVar.Type, localVar.LineNumber, mod.Name, proc.Name, typeIndex);
+          AddTypeReference(localVar.Type, localVar.LineNumber, mod.Name, proc.Name, typeIndex, -1);
       }
 
-      // 4. Parametri delle propriet‡
+      // 4. Parametri delle propriet√†
       foreach (var prop in mod.Properties)
       {
-        AddTypeReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, typeIndex);
+        AddTypeReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, typeIndex, -1);
 
-        foreach (var param in prop.Parameters)
-          AddTypeReference(param.Type, param.LineNumber, mod.Name, prop.Name, typeIndex);
+        // Per i parametri, calcola occurrenceIndex
+        for (int i = 0; i < prop.Parameters.Count; i++)
+        {
+          var param = prop.Parameters[i];
+          int occurrence = prop.Parameters.Take(i)
+              .Count(p => p.LineNumber == param.LineNumber && 
+                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+
+          AddTypeReference(param.Type, param.LineNumber, mod.Name, prop.Name, typeIndex, occurrence);
+        }
       }
     }
   }
 
   /// <summary>
-  /// Se typeName Ë un tipo noto nel typeIndex, aggiunge lineNumber alle sue References.
+  /// Se typeName √® un tipo noto nel typeIndex, aggiunge lineNumber alle sue References.
+  /// occurrenceIndex (1-based) specifica quale occorrenza del tipo sulla riga (per parametri multipli).
   /// </summary>
   private static void AddTypeReference(
       string typeName,
       int lineNumber,
       string moduleName,
       string procedureName,
-      Dictionary<string, VbTypeDef> typeIndex)
+      Dictionary<string, VbTypeDef> typeIndex,
+      int occurrenceIndex = -1)
   {
-    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0)
-      return;
+    // Debug per PLC_POLL_WHAT_CMD_T
+    bool isDebug = typeName?.Equals("PLC_POLL_WHAT_CMD_T", StringComparison.OrdinalIgnoreCase) == false;
 
-    // Rimuovi eventuali parentesi per tipi array (es. "MY_TYPE()" ? "MY_TYPE")
+    if (isDebug)
+    {
+      Console.WriteLine($"\n[DEBUG AddTypeReference] Type={typeName}, Line={lineNumber}, Module={moduleName}, Proc={procedureName}, Occ={occurrenceIndex}");
+    }
+
+    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0)
+    {
+      if (isDebug)
+        Console.WriteLine($"[DEBUG] SKIPPED: typeName empty or lineNumber <= 0");
+      return;
+    }
+
+    // Rimuovi eventuali parentesi per tipi array (es. "MY_TYPE()" -> "MY_TYPE")
     var baseTypeName = typeName.Contains('(')
         ? typeName.Substring(0, typeName.IndexOf('('))
         : typeName;
 
     if (!typeIndex.TryGetValue(baseTypeName, out var referencedType))
+    {
+      if (isDebug)
+        Console.WriteLine($"[DEBUG] SKIPPED: Type not in typeIndex");
       return;
+    }
+
+    if (isDebug)
+    {
+      Console.WriteLine($"[DEBUG] ‚úÖ Adding Reference to {baseTypeName}");
+    }
 
     referencedType.Used = true;
-    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber);
+    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex);
   }
 
   // ---------------------------------------------------------
@@ -90,7 +130,7 @@ public static partial class VbParser
 
   /// <summary>
   /// Aggiunge References alla VbModule classe per ogni dichiarazione
-  /// "Dim/Private x As [New] ClassName" dove ClassName Ë un modulo classe.
+  /// "Dim/Private x As [New] ClassName" dove ClassName √® un modulo classe.
   /// Garantisce che le classi usate solo come tipo (senza chiamate risolte)
   /// compaiano comunque nelle References e nel grafo Mermaid.
   /// </summary>
@@ -106,24 +146,41 @@ public static partial class VbParser
     foreach (var mod in project.Modules)
     {
       foreach (var v in mod.GlobalVariables)
-        AddClassModuleReference(v.Type, v.LineNumber, mod.Name, string.Empty, classIndex);
+        AddClassModuleReference(v.Type, v.LineNumber, mod.Name, string.Empty, classIndex, -1);
 
       foreach (var proc in mod.Procedures)
       {
-        AddClassModuleReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, classIndex);
+        AddClassModuleReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, classIndex, -1);
 
-        foreach (var param in proc.Parameters)
-          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, proc.Name, classIndex);
+        // Per i parametri, calcola occurrenceIndex
+        for (int i = 0; i < proc.Parameters.Count; i++)
+        {
+          var param = proc.Parameters[i];
+          int occurrence = proc.Parameters.Take(i)
+              .Count(p => p.LineNumber == param.LineNumber && 
+                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+
+          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, proc.Name, classIndex, occurrence);
+        }
+
         foreach (var lv in proc.LocalVariables)
-          AddClassModuleReference(lv.Type, lv.LineNumber, mod.Name, proc.Name, classIndex);
+          AddClassModuleReference(lv.Type, lv.LineNumber, mod.Name, proc.Name, classIndex, -1);
       }
 
       foreach (var prop in mod.Properties)
       {
-        AddClassModuleReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, classIndex);
+        AddClassModuleReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, classIndex, -1);
 
-        foreach (var param in prop.Parameters)
-          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, prop.Name, classIndex);
+        // Per i parametri, calcola occurrenceIndex
+        for (int i = 0; i < prop.Parameters.Count; i++)
+        {
+          var param = prop.Parameters[i];
+          int occurrence = prop.Parameters.Take(i)
+              .Count(p => p.LineNumber == param.LineNumber && 
+                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+
+          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, prop.Name, classIndex, occurrence);
+        }
       }
     }
   }
@@ -133,12 +190,13 @@ public static partial class VbParser
       int lineNumber,
       string declaringModule,
       string procedureName,
-      Dictionary<string, VbModule> classIndex)
+      Dictionary<string, VbModule> classIndex,
+      int occurrenceIndex = -1)
   {
     if (string.IsNullOrEmpty(typeName) || lineNumber <= 0)
       return;
 
-    // Prendi solo il nome base ignorando eventuali namespace (es. "PDxI.clsPDxI" ? "clsPDxI")
+    // Prendi solo il nome base ignorando eventuali namespace (es. "PDxI.clsPDxI" -> "clsPDxI")
     var baseName = typeName.Contains('.') ? typeName.Split('.').Last() : typeName;
 
     if (!classIndex.TryGetValue(baseName, out var classModule))
@@ -149,7 +207,7 @@ public static partial class VbParser
       return;
 
     classModule.Used = true;
-    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber);
+    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, occurrenceIndex);
   }
 
   // ---------------------------------------------------------
