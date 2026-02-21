@@ -1,0 +1,407 @@
+using System.Text.RegularExpressions;
+using VB6MagicBox.Models;
+
+namespace VB6MagicBox.Parsing;
+
+public static partial class VbParser
+{
+  /// <summary>
+  /// Costruisce la lista di sostituzioni (Replaces) per ogni modulo basandosi su:
+  /// - References già risolte (LineNumbers)
+  /// - ConventionalName vs Name (per determinare cosa rinominare)
+  /// 
+  /// Questo metodo analizza TUTTI i simboli di TUTTI i moduli e per ogni riferimento
+  /// trova la posizione esatta del token nel codice sorgente, costruendo una LineReplace.
+  /// 
+  /// VANTAGGI:
+  /// - Fase 2 (Refactoring) diventa triviale: basta applicare le sostituzioni pre-calcolate
+  /// - Nessun re-parsing dei file
+  /// - Nessuna ambiguità su cosa sostituire
+  /// - Export in .linereplace.json per verifica manuale
+  /// </summary>
+  public static void BuildReplaces(VbProject project)
+  {
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine();
+    Console.WriteLine("===========================================");
+    Console.WriteLine("  2: Costruzione sostituzioni (Replaces)");
+    Console.WriteLine("===========================================");
+    Console.WriteLine();
+    Console.ForegroundColor = ConsoleColor.Gray;
+
+    int totalReplaces = 0;
+
+    // Cache delle righe dei file per evitare letture multiple
+    var fileCache = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+    foreach (var module in project.Modules)
+    {
+      if (File.Exists(module.FullPath))
+        fileCache[module.Name] = File.ReadAllLines(module.FullPath);
+    }
+
+    // STEP 1: Per ogni modulo, raccogli TUTTI i simboli che vanno rinominati
+    // (sia quelli definiti nel modulo che quelli referenziati da altri moduli)
+    var allSymbols = new List<(string oldName, string newName, string category, object source, string definingModule)>();
+
+    foreach (var module in project.Modules)
+    {
+      if (!module.IsConventional)
+        allSymbols.Add((module.Name, module.ConventionalName, "Module", module, module.Name));
+
+      foreach (var v in module.GlobalVariables.Where(v => !v.IsConventional))
+        allSymbols.Add((v.Name, v.ConventionalName, "GlobalVariable", v, module.Name));
+
+      foreach (var c in module.Constants.Where(c => !c.IsConventional))
+        allSymbols.Add((c.Name, c.ConventionalName, "Constant", c, module.Name));
+
+      foreach (var t in module.Types)
+      {
+        if (!t.IsConventional)
+          allSymbols.Add((t.Name, t.ConventionalName, "Type", t, module.Name));
+        foreach (var f in t.Fields.Where(f => !f.IsConventional))
+          allSymbols.Add((f.Name, f.ConventionalName, "Field", f, module.Name));
+      }
+
+      foreach (var e in module.Enums)
+      {
+        if (!e.IsConventional)
+          allSymbols.Add((e.Name, e.ConventionalName, "Enum", e, module.Name));
+        foreach (var v in e.Values.Where(v => !v.IsConventional))
+          allSymbols.Add((v.Name, v.ConventionalName, "EnumValue", v, module.Name));
+      }
+
+      foreach (var c in module.Controls.Where(c => !c.IsConventional))
+        allSymbols.Add((c.Name, c.ConventionalName, "Control", c, module.Name));
+
+      foreach (var p in module.Procedures)
+      {
+        if (!p.IsConventional)
+          allSymbols.Add((p.Name, p.ConventionalName, "Procedure", p, module.Name));
+        foreach (var param in p.Parameters.Where(param => !param.IsConventional))
+          allSymbols.Add((param.Name, param.ConventionalName, "Parameter", param, module.Name));
+        foreach (var lv in p.LocalVariables.Where(lv => !lv.IsConventional))
+          allSymbols.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name));
+      }
+
+      foreach (var prop in module.Properties)
+      {
+        if (!prop.IsConventional)
+          allSymbols.Add((prop.Name, prop.ConventionalName, "Property", prop, module.Name));
+        foreach (var param in prop.Parameters.Where(param => !param.IsConventional))
+          allSymbols.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name));
+      }
+    }
+
+    // STEP 2: Per ogni simbolo, elabora le sue References e costruisci i LineReplace
+    int symbolIndex = 0;
+    foreach (var (oldName, newName, category, source, definingModule) in allSymbols)
+    {
+      symbolIndex++;
+      if (oldName == newName)
+        continue;
+
+      Console.Write($"\r   Processando simboli: [{symbolIndex}/{allSymbols.Count}] {category}: {oldName}...".PadRight(Console.WindowWidth - 1));
+
+      // Trova il modulo che definisce il simbolo
+      var ownerModule = project.Modules.FirstOrDefault(m =>
+          string.Equals(m.Name, definingModule, StringComparison.OrdinalIgnoreCase));
+
+      if (ownerModule == null)
+        continue;
+
+      // DICHIARAZIONE: Aggiungi replace per la dichiarazione del simbolo (solo nel modulo che lo definisce)
+      AddDeclarationReplace(ownerModule, source, oldName, newName, category, fileCache);
+
+      // REFERENCES: Aggiungi replace per tutti i riferimenti
+      AddReferencesReplaces(project, source, oldName, newName, category, fileCache);
+
+      // ATTRIBUTI VB6: Gestione speciale per "Attribute VB_Name" e "Attribute VarName."
+      AddAttributeReplaces(ownerModule, source, oldName, newName, category, fileCache);
+    }
+
+    // STEP 3: Conta i replace totali
+    foreach (var module in project.Modules)
+    {
+      totalReplaces += module.Replaces.Count;
+
+      // Ordina i Replaces per applicazione sicura (da fine a inizio)
+      module.Replaces = module.Replaces
+          .OrderByDescending(r => r.LineNumber)
+          .ThenByDescending(r => r.StartChar)
+          .ToList();
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"   [OK] {totalReplaces} sostituzioni preparate per {project.Modules.Count} moduli");
+  }
+
+  /// <summary>
+  /// Aggiunge un Replace per la dichiarazione del simbolo
+  /// </summary>
+  private static void AddDeclarationReplace(
+      VbModule module, 
+      object source, 
+      string oldName, 
+      string newName, 
+      string category,
+      Dictionary<string, string[]> fileCache)
+  {
+    var lineNumberProp = source?.GetType().GetProperty("LineNumber");
+    if (lineNumberProp?.GetValue(source) is not int lineNum || lineNum <= 0)
+      return;
+
+    if (!fileCache.TryGetValue(module.Name, out var lines))
+      return;
+
+    if (lineNum > lines.Length)
+      return;
+
+    var line = lines[lineNum - 1]; // LineNumber è 1-based
+    var (codePart, _) = SplitCodeAndComment(line);
+
+    // Per le costanti, usa AddReplaceFromLine con skipStringLiterals
+    if (source is VbConstant)
+    {
+      module.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, newName, category + "_Declaration", -1, skipStringLiterals: true);
+      return;
+    }
+
+    // Per altri simboli, trova tutte le occorrenze del nome nella dichiarazione
+    var pattern = $@"\b{Regex.Escape(oldName)}\b";
+    var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+
+    foreach (Match match in matches)
+    {
+      module.Replaces.AddReplace(
+          lineNum,
+          match.Index,
+          match.Index + match.Length,
+          match.Value,
+          newName,
+          category + "_Declaration");
+    }
+  }
+
+  /// <summary>
+  /// Aggiunge Replaces per tutti i riferimenti del simbolo
+  /// </summary>
+  private static void AddReferencesReplaces(
+      VbProject project, 
+      object source, 
+      string oldName, 
+      string newName, 
+      string category,
+      Dictionary<string, string[]> fileCache)
+  {
+    var referencesProp = source?.GetType().GetProperty("References");
+    if (referencesProp?.GetValue(source) is not System.Collections.IEnumerable references)
+      return;
+
+    foreach (var reference in references)
+    {
+      var moduleProp = reference?.GetType().GetProperty("Module");
+      var refModuleName = moduleProp?.GetValue(reference) as string;
+
+      if (string.IsNullOrEmpty(refModuleName))
+        continue;
+
+      var refModule = project.Modules.FirstOrDefault(m =>
+          string.Equals(m.Name, refModuleName, StringComparison.OrdinalIgnoreCase));
+
+      if (refModule == null)
+        continue;
+
+      if (!fileCache.TryGetValue(refModule.Name, out var lines))
+        continue;
+
+      var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
+      var occurrenceIndexesProp = reference?.GetType().GetProperty("OccurrenceIndexes");
+
+      if (lineNumbersProp?.GetValue(reference) is not System.Collections.Generic.List<int> refLineNumbers)
+        continue;
+
+      var occurrenceIndexes = occurrenceIndexesProp?.GetValue(reference) as System.Collections.Generic.List<int>;
+
+      for (int idx = 0; idx < refLineNumbers.Count; idx++)
+      {
+        var lineNum = refLineNumbers[idx];
+        if (lineNum <= 0 || lineNum > lines.Length)
+          continue;
+
+        var line = lines[lineNum - 1];
+        var (codePart, _) = SplitCodeAndComment(line);
+
+        var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
+
+        // Caso speciale per proprietà: se siamo fuori dal modulo che le definisce,
+        // cerca solo le occorrenze con dot-prefix (.PropertyName)
+        var sourceModule = GetDefiningModule(project, source);
+        bool isPropertyInOtherModule = source is VbProperty && 
+            !string.Equals(sourceModule, refModuleName, StringComparison.OrdinalIgnoreCase);
+
+        if (isPropertyInOtherModule)
+        {
+          // Cerca solo .PropertyName
+          var dotPattern = $@"\.{Regex.Escape(oldName)}\b";
+          var dotMatches = Regex.Matches(codePart, dotPattern, RegexOptions.IgnoreCase);
+
+          foreach (Match match in dotMatches)
+          {
+            // Il match include il punto, ma vogliamo sostituire solo il nome dopo il punto
+            var nameStartIndex = match.Index + 1; // Salta il punto
+            refModule.Replaces.AddReplace(
+                lineNum,
+                nameStartIndex,
+                nameStartIndex + oldName.Length,
+                match.Value.Substring(1), // Rimuovi il punto dal vecchio valore
+                newName,
+                category + "_Reference");
+          }
+        }
+        else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
+        {
+          // Caso speciale controlli: Begin LibName.ControlType ControlName
+          // Sostituisci solo il nome dopo il secondo spazio
+          var pattern = $@"(?<=^.*Begin\s+\S+\s+){Regex.Escape(oldName)}\b";
+          var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+
+          foreach (Match match in matches)
+          {
+            refModule.Replaces.AddReplace(
+                lineNum,
+                match.Index,
+                match.Index + match.Length,
+                match.Value,
+                newName,
+                category + "_Reference");
+          }
+        }
+        else
+        {
+          // Caso standard: word boundary
+          // Per le costanti, skippa le stringhe literals
+          bool skipStrings = source is VbConstant;
+          refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, newName, category + "_Reference", occIndex, skipStrings);
+        }
+      }
+    }
+  }
+
+  /// <summary>
+  /// Aggiunge Replaces per attributi VB6 speciali (Attribute VB_Name, Attribute VarName.)
+  /// </summary>
+  private static void AddAttributeReplaces(
+      VbModule module, 
+      object source, 
+      string oldName, 
+      string newName, 
+      string category,
+      Dictionary<string, string[]> fileCache)
+  {
+    if (!fileCache.TryGetValue(module.Name, out var lines))
+      return;
+
+    // VB_Name per moduli/classi/form
+    if (source is VbModule && (module.IsClass || module.IsForm))
+    {
+      for (int i = 0; i < Math.Min(20, lines.Length); i++)
+      {
+        var line = lines[i];
+        var vbNameMatch = Regex.Match(line, @"Attribute\s+VB_Name\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+
+        if (vbNameMatch.Success && vbNameMatch.Groups[1].Value.Equals(oldName, StringComparison.OrdinalIgnoreCase))
+        {
+          // La sostituzione è dentro le virgolette
+          var nameGroup = vbNameMatch.Groups[1];
+          module.Replaces.AddReplace(
+              i + 1,
+              nameGroup.Index,
+              nameGroup.Index + nameGroup.Length,
+              nameGroup.Value,
+              newName,
+              category + "_AttributeVBName");
+        }
+      }
+    }
+
+    // Attribute VarName.VB_VarXXX (righe dopo dichiarazione variabili globali)
+    var lineNumberProp = source?.GetType().GetProperty("LineNumber");
+    if (lineNumberProp?.GetValue(source) is int declarationLineNum && declarationLineNum > 0 && declarationLineNum < lines.Length)
+    {
+      var nextLine = lines[declarationLineNum]; // declarationLineNum è 1-based, +1 per riga successiva, -1 per array
+      var trimmedNextLine = nextLine.TrimStart();
+
+      if (trimmedNextLine.StartsWith("Attribute ", StringComparison.OrdinalIgnoreCase))
+      {
+        var attributeMatch = Regex.Match(trimmedNextLine, @"^Attribute\s+(\w+)\.", RegexOptions.IgnoreCase);
+        if (attributeMatch.Success && attributeMatch.Groups[1].Value.Equals(oldName, StringComparison.OrdinalIgnoreCase))
+        {
+          var nameGroup = attributeMatch.Groups[1];
+          var absoluteIndex = nextLine.IndexOf(trimmedNextLine) + nameGroup.Index;
+
+          module.Replaces.AddReplace(
+              declarationLineNum + 1,
+              absoluteIndex,
+              absoluteIndex + nameGroup.Length,
+              nameGroup.Value,
+              newName,
+              category + "_AttributeVar");
+        }
+      }
+    }
+  }
+
+  /// <summary>
+  /// Helper: estrae il nome del modulo che definisce il simbolo
+  /// </summary>
+  private static string GetDefiningModule(VbProject project, object source)
+  {
+    if (source is VbModule mod)
+      return mod.Name;
+
+    // Per altri simboli, cerca nel progetto
+    foreach (var module in project.Modules)
+    {
+      if (module.GlobalVariables.Contains(source))
+        return module.Name;
+      if (module.Constants.Contains(source))
+        return module.Name;
+      if (module.Types.Any(t => t == source || t.Fields.Contains(source)))
+        return module.Name;
+      if (module.Enums.Any(e => e == source || e.Values.Contains(source)))
+        return module.Name;
+      if (module.Controls.Contains(source))
+        return module.Name;
+      if (module.Procedures.Any(p => p == source || p.Parameters.Contains(source) || p.LocalVariables.Contains(source)))
+        return module.Name;
+      if (module.Properties.Any(p => p == source || p.Parameters.Contains(source)))
+        return module.Name;
+    }
+
+    return string.Empty;
+  }
+
+  /// <summary>
+  /// Helper: separa codice da commento (gestisce stringhe correttamente)
+  /// </summary>
+  private static (string code, string comment) SplitCodeAndComment(string line)
+  {
+    bool inString = false;
+    for (int i = 0; i < line.Length; i++)
+    {
+      var ch = line[i];
+      if (ch == '"')
+      {
+        if (!inString)
+          inString = true;
+        else if (i + 1 < line.Length && line[i + 1] == '"')
+          i++; // escaped double quote
+        else
+          inString = false;
+      }
+      else if (!inString && ch == '\'')
+        return (line[..i].TrimEnd(), line[i..]);
+    }
+    return (line, string.Empty);
+  }
+}

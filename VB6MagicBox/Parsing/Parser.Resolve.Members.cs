@@ -6,6 +6,28 @@ namespace VB6MagicBox.Parsing;
 public static partial class VbParser
 {
     // ---------------------------------------------------------
+    // REGEX COMPILATE PER HOT-PATH (ResolveFieldAccesses, ResolveControlAccesses, etc.)
+    // ---------------------------------------------------------
+
+    private static readonly Regex ReWithDotReplacement = 
+        new(@"(?<!\w)\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex ReChainPattern = 
+        new(@"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex ReParenContent = 
+        new(@"\(([^)]*)\)", RegexOptions.Compiled);
+
+    private static readonly Regex ReTokens = 
+        new(@"\b[A-Za-z_]\w*\b", RegexOptions.Compiled);
+
+    private static readonly Regex ReControlAccess = 
+        new(@"(\w+)(?:\([^\)]*\))?\.(\w+)", RegexOptions.Compiled);
+
+    private static readonly Regex ReControlAccessCrossModule = 
+        new(@"(\w+)\.(\w+)(?:\([^\)]*\))?\.(\w+)", RegexOptions.Compiled);
+
+    // ---------------------------------------------------------
     // RISOLUZIONE ACCESSI AI CAMPI
     // ---------------------------------------------------------
 

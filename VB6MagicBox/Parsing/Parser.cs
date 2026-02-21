@@ -30,21 +30,25 @@ public static partial class VbParser
     Console.ForegroundColor= ConsoleColor.Gray;
 
     // 1) Parsing
-    Console.WriteLine("Step 1/4: Parsing del progetto VB6...");
+    Console.WriteLine("Step 1/5: Parsing del progetto VB6...");
     var project = ParseProjectFromVbp(vbpPath);
     Console.WriteLine($"  -> {project.Modules.Count} moduli trovati");
 
     // 2) Risoluzione semantica
-    Console.WriteLine("Step 2/4: Risoluzione di tipi e chiamate...");
+    Console.WriteLine("Step 2/5: Risoluzione di tipi e chiamate...");
     ResolveTypesAndCalls(project);
 
     // 3) Dipendenze + marcatura Used
-    Console.WriteLine("Step 3/4: Costruzione dipendenze e marcatura simboli utilizzati...");
+    Console.WriteLine("Step 3/5: Costruzione dipendenze e marcatura simboli utilizzati...");
     BuildDependenciesAndUsage(project);
 
-    // 4) Ordinamento
-    Console.WriteLine("Step 4/4: Applicazione convenzioni di naming e ordinamento...");
+    // 4) Ordinamento e naming
+    Console.WriteLine("Step 4/5: Applicazione convenzioni di naming e ordinamento...");
     SortProject(project);
+
+    // 5) Costruzione sostituzioni
+    Console.WriteLine("Step 5/5: Costruzione sostituzioni precise (Replaces)...");
+    BuildReplaces(project);
 
     return project;
   }

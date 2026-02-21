@@ -81,7 +81,7 @@ public class VbModule
   
   [JsonIgnore]
   public bool IsForm => Kind.Equals("frm", StringComparison.OrdinalIgnoreCase);
-  
+
   /// <summary>
   /// Trova la procedura che contiene il numero di riga specificato
   /// </summary>
@@ -92,4 +92,11 @@ public class VbModule
 
   [JsonIgnore]
   public List<string> ImplementsInterfaces { get; set; } = new();
+
+  /// <summary>
+  /// Lista di tutte le sostituzioni da applicare a questo modulo durante il refactoring.
+  /// Ordinata per LineNumber (desc) e StartChar (desc) per applicazione sicura da fine a inizio.
+  /// </summary>
+  [JsonIgnore]
+  public List<LineReplace> Replaces { get; set; } = new();
 }

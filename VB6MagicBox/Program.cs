@@ -32,8 +32,8 @@ public class Program
             Console.WriteLine();
             Console.WriteLine("Opzioni:");
             Console.WriteLine("1. Analizza progetto VB6");
-            Console.WriteLine("2. Aggiunta tipi mancanti");
-            Console.WriteLine("3. Applica refactoring automatico");
+            Console.WriteLine("2. Applica refactoring automatico");
+            Console.WriteLine("3. Aggiunta tipi mancanti");
             Console.WriteLine("4. Riordina le variabili di procedura");
             Console.WriteLine("5. Armonizza le spaziature");
             Console.Write("6. ");
@@ -54,11 +54,11 @@ public class Program
                     break;
 
                 case "2":
-                    RunTypeAnnotatorInteractive();
+                    RunRefactoringInteractive();
                     break;
 
                 case "3":
-                    RunRefactoringInteractive();
+                    RunTypeAnnotatorInteractive();
                     break;
 
                 case "4":
@@ -219,26 +219,26 @@ public class Program
 
         try
         {
-            // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
-            var project = VbParser.ParseAndResolve(vbpPath);
+          // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
+          var project = VbParser.ParseAndResolve(vbpPath);
 
-            // Export file di analisi (symbols.json, rename.json, rename.csv, dependencies.md)
-            ExportProjectFiles(project, vbpPath);
+          // 2) Export file di analisi (symbols.json, rename.json, rename.csv, linereplace.json, dependencies.md)
+          ExportProjectFiles(project, vbpPath);
 
-            // 2) Aggiunta tipi mancanti: usa i nomi originali dal modello.
-            //    Deve precedere il rename: dopo il rename i nomi nel sorgente non
-            //    corrisponderebbero più a quelli del modello (es. parametri rinominati).
-            TypeAnnotator.AddMissingTypes(project);
+          // 3) Refactoring: rinomina i simboli secondo le convenzioni
+          //    DEVE precedere TypeAnnotator perché dopo il rename i nomi nel sorgente
+          //    corrispondono ai ConventionalName del modello
+          Refactoring.ApplyRenames(project);
 
-            // 3) Refactoring: rinomina i simboli secondo le convenzioni
-            Refactoring.ApplyRenames(project);
+          // 4) Aggiunta tipi mancanti: usa i nomi convenzionali dopo il rename
+          TypeAnnotator.AddMissingTypes(project);
 
-            // 4) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
-            //    Deve seguire il rename perché opera sui file già rinominati su disco.
-            CodeFormatter.ReorderLocalVariables(project);
+          // 5) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
+          //    Deve seguire tutto il resto perché opera sui file già rinominati e tipizzati
+          CodeFormatter.ReorderLocalVariables(project);
 
-            Console.WriteLine();
-            Console.WriteLine("[OK] Bacchetta magica applicata!");
+          Console.WriteLine();
+          Console.WriteLine("[OK] Bacchetta magica applicata!");
         }
         catch (Exception ex)
         {
@@ -250,30 +250,33 @@ public class Program
 
     /// <summary>
     /// Scrive tutti i file di output del progetto analizzato:
-    /// symbols.json, rename.json, rename.csv, dependencies.md (Mermaid).
-    /// Presuppone che ParseAndResolve (che include SortProject) sia già stato chiamato.
+    /// symbols.json, rename.json, rename.csv, linereplace.json, dependencies.md (Mermaid).
+    /// Presuppone che ParseAndResolve (che include SortProject e BuildReplaces) sia già stato chiamato.
     /// </summary>
     private static void ExportProjectFiles(VbProject project, string vbpPath)
     {
-        var vbpDir = Path.GetDirectoryName(vbpPath)!;
-        var vbpName = Path.GetFileNameWithoutExtension(vbpPath);
+      var vbpDir = Path.GetDirectoryName(vbpPath)!;
+      var vbpName = Path.GetFileNameWithoutExtension(vbpPath);
 
-        var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
-        var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
-        var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
-        var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
+      var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
+      var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
+      var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
+      var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
+      var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
 
-        Console.WriteLine();
-        Console.WriteLine(">> Esportazione file di output...");
+      Console.WriteLine();
+      Console.WriteLine(">> Esportazione file di output...");
 
-        VbParser.ExportJson(project, jsonOut);
-        VbParser.ExportRenameJson(project, renameJson);
-        VbParser.ExportRenameCsv(project, renameCsv);
-        VbParser.ExportMermaid(project, mermaidOut);
+      VbParser.ExportJson(project, jsonOut);
+      VbParser.ExportRenameJson(project, renameJson);
+      VbParser.ExportRenameCsv(project, renameCsv);
+      VbParser.ExportLineReplaceJson(project, lineReplaceJson);
+      VbParser.ExportMermaid(project, mermaidOut);
 
-        Console.WriteLine($"   JSON completo: {jsonOut}");
-        Console.WriteLine($"   JSON rename:   {renameJson}");
-        Console.WriteLine($"   CSV rename:    {renameCsv}");
-        Console.WriteLine($"   Mermaid:       {mermaidOut}");
+      Console.WriteLine($"   JSON completo:     {jsonOut}");
+      Console.WriteLine($"   JSON rename:       {renameJson}");
+      Console.WriteLine($"   CSV rename:        {renameCsv}");
+      Console.WriteLine($"   JSON linereplace:  {lineReplaceJson}");
+      Console.WriteLine($"   Mermaid:           {mermaidOut}");
     }
 }

@@ -53,11 +53,11 @@ public static partial class VbParser
 
     private static readonly Regex ReFunction =
         new(@"^(Public|Private|Friend)?\s*(Static)?\s*Function\s+(\w+)\s*\((.*)\)\s*(As\s+([\w\.\(\)]+))?",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReSub =
         new(@"^(Public|Private|Friend)?\s*(Static)?\s*Sub\s+(\w+)\s*\((.*)\)",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReDeclareFunction =
         new(@"^(Public|Private|Friend)?\s*Declare\s+Function\s+(\w+)\s+Lib\s+""([^""]+)""(?:\s+Alias\s+""[^""]+"")?\s*\((.*)\)\s*(As\s+([\w\.\(\)]+))?",
@@ -65,71 +65,71 @@ public static partial class VbParser
 
     private static readonly Regex ReDeclareSub =
         new(@"^(Public|Private|Friend)?\s*Declare\s+Sub\s+(\w+)\s+Lib\s+""([^""]+)""(?:\s+Alias\s+""[^""]+"")?\s*\((.*)\)",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReConstant =
         new(@"^(Public|Private|Friend|Global)?\s*Const\s+(\w+)\s*(?:As\s+([\w\.\(\)]+))?\s*=\s*(.+)",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReProperty =
         new(@"^(Public|Private|Friend)?\s*(Static)?\s*Property\s+(Get|Let|Set)\s+(\w+)\s*\((.*)\)\s*(As\s+([\w\.\(\)]+))?",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReEvent =
         new(@"^(Public|Private|Friend)?\s*Event\s+(\w+)\s*\((.*?)\)",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReGlobalVar =
         new(@"^(Public|Private|Global|Friend|Dim)\s+(WithEvents\s+)?(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReLocalVar =
         new(@"^\s*(Dim|Static)\s+(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReMemberVar =
         new(@"^(Public|Private|Friend|Dim)\s+(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Fallback: variabile globale/membro senza "As Tipo" — usato da TypeAnnotator
     // Gruppi: 1=keyword, 2=WithEvents?, 3=nome, 4=suffisso tipo ($%&!#@), 5=dimensioni array
     private static readonly Regex ReGlobalVarNoType = new(
         @"^(Public|Private|Global|Friend|Dim)\s+(WithEvents\s+)?(\w+)([$%&!#@]?)(\([^)]*\))?\s*$",
-        RegexOptions.IgnoreCase);
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Fallback: variabile locale senza "As Tipo" — usato da TypeAnnotator
     // Gruppi: 1=keyword (Dim/Static), 2=nome, 3=suffisso tipo, 4=dimensioni array
     private static readonly Regex ReLocalVarNoType = new(
         @"^\s*(Dim|Static)\s+(\w+)([$%&!#@]?)(\([^)]*\))?\s*$",
-        RegexOptions.IgnoreCase);
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReTypeStart =
-        new(@"^(Public|Private|Friend)?\s*Type\s+(\w+)", RegexOptions.IgnoreCase);
+        new(@"^(Public|Private|Friend)?\s*Type\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReEnumStart =
-        new(@"^(Public|Private|Friend)?\s*Enum\s+(\w+)", RegexOptions.IgnoreCase);
+        new(@"^(Public|Private|Friend)?\s*Enum\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReImplements =
-        new(@"^\s*Implements\s+(\w+)", RegexOptions.IgnoreCase);
+        new(@"^\s*Implements\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReField =
-        new(@"^\s*(\w+)(\([^)]*\))?\s+As\s+([\w\.\(\)]+)", RegexOptions.IgnoreCase);
+        new(@"^\s*(\w+)(\([^)]*\))?\s+As\s+([\w\.\(\)]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReCall =
         new(@"(?:(\w+)\s*\.\s*)?(\w+)\s*\(",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReBareCall =
-        new(@"^\s*(\w+)\s*$", RegexOptions.IgnoreCase);
+        new(@"^\s*(\w+)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReCallWithoutParens =
-        new(@"^\s*(\w+)\s+", RegexOptions.IgnoreCase);
+        new(@"^\s*(\w+)\s+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReFieldAccess =
-        new(@"([A-Za-z_]\w*(?:\([^)]*\))?)\s*\.\s*([A-Za-z_]\w+)", RegexOptions.IgnoreCase);
+        new(@"([A-Za-z_]\w*(?:\([^)]*\))?)\s*\.\s*([A-Za-z_]\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReFormControlBegin =
-        new(@"^Begin\s+(\S+)\s+(\w+)", RegexOptions.IgnoreCase);
+        new(@"^Begin\s+(\S+)\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly HashSet<string> VbKeywords = new(StringComparer.OrdinalIgnoreCase)
       {

@@ -485,9 +485,50 @@ public static partial class VbParser
   {
     if (string.IsNullOrEmpty(value))
       return "";
-    
+
     // Escape delle virgolette doppie nel CSV (raddoppiarle)
     return value.Replace("\"", "\"\"");
+  }
+
+  // ---------------------------------------------------------
+  // ESPORTAZIONE LINE REPLACE JSON
+  // ---------------------------------------------------------
+
+  /// <summary>
+  /// Esporta il file .linereplace.json contenente tutte le sostituzioni
+  /// precise (riga + posizione carattere) da applicare per il refactoring.
+  /// Utile per verifica manuale e debugging.
+  /// </summary>
+  public static void ExportLineReplaceJson(VbProject project, string outputPath)
+  {
+    var replaceData = new
+    {
+      ProjectFile = project.ProjectFile,
+      TotalReplaces = project.Modules.Sum(m => m.Replaces.Count),
+      Modules = project.Modules
+          .Where(m => m.Replaces.Count > 0)
+          .Select(m => new
+          {
+              ModuleName = m.Name,
+              FilePath = m.Path,
+              ReplaceCount = m.Replaces.Count,
+              Replaces = m.Replaces
+                  .OrderBy(r => r.LineNumber)
+                  .ThenBy(r => r.StartChar)
+                  .ToList()
+          })
+          .ToList()
+    };
+
+    var options = new JsonSerializerOptions
+    {
+      WriteIndented = true,
+      DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+      Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    var json = JsonSerializer.Serialize(replaceData, options);
+    File.WriteAllText(outputPath, json);
   }
 
   // ---------------------------------------------------------

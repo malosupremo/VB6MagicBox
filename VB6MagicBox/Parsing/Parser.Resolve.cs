@@ -6,6 +6,22 @@ namespace VB6MagicBox.Parsing;
 public static partial class VbParser
 {
     // ---------------------------------------------------------
+    // REGEX COMPILATE PER HOT-PATH (usate nei loop di risoluzione)
+    // ---------------------------------------------------------
+
+    private static readonly Regex ReSetNew = 
+        new(@"Set\s+(\w+)\s*=\s*New\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex ReSetAlias = 
+        new(@"Set\s+(\w+)\s*=\s+(\w+(?:\.\w+)?)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex ReWordBoundary = 
+        new(@"\b([A-Za-z_]\w*)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex ReObjectMethod = 
+        new(@"(\w+)\.(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // ---------------------------------------------------------
     // RISOLUZIONE TIPI, CHIAMATE, CAMPI
     // ---------------------------------------------------------
 
@@ -67,7 +83,7 @@ public static partial class VbParser
                 if (idxc >= 0)
                     noCommentLine = noCommentLine.Substring(0, idxc);
 
-                foreach (Match wm in Regex.Matches(noCommentLine, @"\b([A-Za-z_]\w*)\b"))
+                foreach (Match wm in ReWordBoundary.Matches(noCommentLine))
                 {
                     var token = wm.Groups[1].Value;
 
@@ -80,8 +96,7 @@ public static partial class VbParser
                     if (mod.Types.Any(t => string.Equals(t.Name, token, StringComparison.OrdinalIgnoreCase)))
                         continue;
 
-                    // Le proprietà NON vengono considerate come chiamate nude a livello di modulo
-                    // Solo le procedure normali possono essere chiamate così
+                    // Controlla se è una procedura pubblica in altri moduli
                     if (procIndex.TryGetValue(token, out var targets) && targets.Count > 0)
                     {
                         foreach (var t in targets)
@@ -89,6 +104,21 @@ public static partial class VbParser
                             // mark only procedures defined in other modules (usage from this module)
                             if (!string.Equals(t.Module, mod.Name, StringComparison.OrdinalIgnoreCase) && t.Proc != null)
                                 t.Proc.Used = true;
+                        }
+                    }
+
+                    // Controlla se è una proprietà pubblica in altri moduli (bare usage)
+                    if (propIndex.TryGetValue(token, out var propTargets) && propTargets.Count > 0)
+                    {
+                        foreach (var pt in propTargets)
+                        {
+                            // mark only properties defined in other modules
+                            if (!string.Equals(pt.Module, mod.Name, StringComparison.OrdinalIgnoreCase) && pt.Prop != null)
+                            {
+                                pt.Prop.Used = true;
+                                // Non aggiungiamo References qui perché non conosciamo la procedura chiamante
+                                // Le references bare saranno aggiunte dopo nel contesto delle procedure
+                            }
                         }
                     }
                 }
@@ -118,7 +148,7 @@ public static partial class VbParser
                     noComment = noComment.Substring(0, idx);
 
                 // Pattern: Set varName = New ClassName
-                var matchSetNew = Regex.Match(noComment, @"Set\s+(\w+)\s*=\s*New\s+(\w+)", RegexOptions.IgnoreCase);
+                var matchSetNew = ReSetNew.Match(noComment);
                 if (matchSetNew.Success)
                 {
                     var varName = matchSetNew.Groups[1].Value;
@@ -127,7 +157,7 @@ public static partial class VbParser
                 }
 
                 // Pattern: Set varName = otherVar (type aliasing) - include object.property access
-                var matchSetAlias = Regex.Match(noComment, @"Set\s+(\w+)\s*=\s+(\w+(?:\.\w+)?)\b", RegexOptions.IgnoreCase);
+                var matchSetAlias = ReSetAlias.Match(noComment);
                 if (matchSetAlias.Success)
                 {
                     var varName = matchSetAlias.Groups[1].Value;
@@ -247,7 +277,7 @@ public static partial class VbParser
                         break;
 
                     // Pattern: Set varName = New ClassName
-                    var matchSetNew = Regex.Match(noCommentSetLine, @"Set\s+(\w+)\s*=\s*New\s+(\w+)", RegexOptions.IgnoreCase);
+                    var matchSetNew = ReSetNew.Match(noCommentSetLine);
                     if (matchSetNew.Success)
                     {
                         var varName = matchSetNew.Groups[1].Value;
@@ -256,7 +286,7 @@ public static partial class VbParser
                     }
 
                     // Pattern: Set varName = otherVar (type aliasing) - include object.property access
-                    var matchSetAlias = Regex.Match(noCommentSetLine, @"Set\s+(\w+)\s*=\s+(\w+(?:\.\w+)?)\b", RegexOptions.IgnoreCase);
+                    var matchSetAlias = ReSetAlias.Match(noCommentSetLine);
                     if (matchSetAlias.Success)
                     {
                         var varName = matchSetAlias.Groups[1].Value;
@@ -545,38 +575,76 @@ public static partial class VbParser
                             if (tokenMatch.Index > 0 && noCommentLine[tokenMatch.Index - 1] == '.')
                                 continue;
 
-                            if (!procIndex.TryGetValue(tokenName, out var targets) || targets.Count == 0)
-                                continue;
-
-                            if (proc.Calls.Any(c => string.Equals(c.Raw, tokenName, StringComparison.OrdinalIgnoreCase)))
-                                continue;
-
-                            (string Module, VbProcedure TargetProc) selected;
-                            if (env.TryGetValue(tokenName, out var resolvedType))
+                            // Prima controlla nelle procedure pubbliche
+                            if (procIndex.TryGetValue(tokenName, out var targets) && targets.Count > 0)
                             {
-                                selected = targets.FirstOrDefault(t =>
-                                    Path.GetFileNameWithoutExtension(t.Module)
-                                        .Equals(resolvedType, StringComparison.OrdinalIgnoreCase));
-                                if (selected.TargetProc == null)
-                                    selected = targets[0];
-                            }
-                            else
-                            {
-                                selected = targets[0];
-                            }
+                                if (proc.Calls.Any(c => string.Equals(c.Raw, tokenName, StringComparison.OrdinalIgnoreCase)))
+                                    continue;
 
-                            if (selected.TargetProc != null)
-                            {
-                                selected.TargetProc.Used = true;
-                                proc.Calls.Add(new VbCall
+                                (string Module, VbProcedure TargetProc) selected;
+                                if (env.TryGetValue(tokenName, out var resolvedType))
                                 {
-                                    Raw = tokenName,
-                                    MethodName = tokenName,
-                                    ResolvedModule = selected.Module,
-                                    ResolvedProcedure = selected.TargetProc.Name,
-                                    ResolvedKind = selected.TargetProc.Kind,
-                                    LineNumber = li + 1
-                                });
+                                    selected = targets.FirstOrDefault(t =>
+                                        Path.GetFileNameWithoutExtension(t.Module)
+                                            .Equals(resolvedType, StringComparison.OrdinalIgnoreCase));
+                                    if (selected.TargetProc == null)
+                                        selected = targets[0];
+                                }
+                                else
+                                {
+                                    selected = targets[0];
+                                }
+
+                                if (selected.TargetProc != null)
+                                {
+                                    selected.TargetProc.Used = true;
+                                    proc.Calls.Add(new VbCall
+                                    {
+                                        Raw = tokenName,
+                                        MethodName = tokenName,
+                                        ResolvedModule = selected.Module,
+                                        ResolvedProcedure = selected.TargetProc.Name,
+                                        ResolvedKind = selected.TargetProc.Kind,
+                                        LineNumber = li + 1
+                                    });
+                                }
+                                continue;
+                            }
+
+                            // Poi controlla nelle proprietà pubbliche (bare usage cross-module)
+                            // Es: If ExecSts = DEPOSIT_STS Then
+                            if (propIndex.TryGetValue(tokenName, out var propTargets) && propTargets.Count > 0)
+                            {
+                                if (proc.Calls.Any(c => string.Equals(c.Raw, tokenName, StringComparison.OrdinalIgnoreCase)))
+                                    continue;
+
+                                // Cerca proprietà Get in altri moduli (public properties usabili bare)
+                                var propTarget = propTargets.FirstOrDefault(pt => 
+                                    pt.Prop.Kind.Equals("Get", StringComparison.OrdinalIgnoreCase) &&
+                                    !string.Equals(pt.Module, mod.Name, StringComparison.OrdinalIgnoreCase));
+
+                                // Se non trovata in altri moduli, prova nel modulo corrente
+                                if (propTarget.Prop == null)
+                                {
+                                    propTarget = propTargets.FirstOrDefault(pt => 
+                                        pt.Prop.Kind.Equals("Get", StringComparison.OrdinalIgnoreCase));
+                                }
+
+                                if (propTarget.Prop != null)
+                                {
+                                    propTarget.Prop.Used = true;
+                                    propTarget.Prop.References.AddLineNumber(mod.Name, proc.Name, li + 1);
+
+                                    proc.Calls.Add(new VbCall
+                                    {
+                                        Raw = tokenName,
+                                        MethodName = tokenName,
+                                        ResolvedModule = propTarget.Module,
+                                        ResolvedProcedure = propTarget.Prop.Name,
+                                        ResolvedKind = $"Property{propTarget.Prop.Kind}",
+                                        LineNumber = li + 1
+                                    });
+                                }
                             }
                         }
                     }
@@ -657,7 +725,7 @@ public static partial class VbParser
                     // PASS 1.5b: Generico - cerca object.method dove object è in env (è una variabile nota)
                     // Pattern: qualsiasi IDENTIFIER.IDENTIFIER OVUNQUE nella riga
                     var trimmedLineForMethods = noCommentLine.Trim();
-                    foreach (Match genericMethodMatch in Regex.Matches(trimmedLineForMethods, @"(\w+)\.(\w+)", RegexOptions.IgnoreCase))
+                    foreach (Match genericMethodMatch in ReObjectMethod.Matches(trimmedLineForMethods))
                     {
                         var objName = genericMethodMatch.Groups[1].Value;
                         var methodName = genericMethodMatch.Groups[2].Value;
