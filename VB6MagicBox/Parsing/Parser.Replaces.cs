@@ -39,8 +39,9 @@ public static partial class VbParser
         fileCache[module.Name] = File.ReadAllLines(module.FullPath);
     }
 
-    // STEP 1: Per ogni modulo, raccogli TUTTI i simboli che vanno rinominati
-    // (sia quelli definiti nel modulo che quelli referenziati da altri moduli)
+    // STEP 1: Per ogni modulo, raccogli TUTTI i simboli
+    // Dobbiamo processare ANCHE simboli già convenzionali se hanno References
+    // (es. bare property cross-module dove il nome è già corretto ma serve tracciare la posizione)
     var allSymbols = new List<(string oldName, string newName, string category, object source, string definingModule)>();
 
     foreach (var module in project.Modules)
@@ -48,47 +49,71 @@ public static partial class VbParser
       if (!module.IsConventional)
         allSymbols.Add((module.Name, module.ConventionalName, "Module", module, module.Name));
 
-      foreach (var v in module.GlobalVariables.Where(v => !v.IsConventional))
-        allSymbols.Add((v.Name, v.ConventionalName, "GlobalVariable", v, module.Name));
+      foreach (var v in module.GlobalVariables)
+      {
+        if (!v.IsConventional || v.References.Count > 0)
+          allSymbols.Add((v.Name, v.ConventionalName, "GlobalVariable", v, module.Name));
+      }
 
-      foreach (var c in module.Constants.Where(c => !c.IsConventional))
-        allSymbols.Add((c.Name, c.ConventionalName, "Constant", c, module.Name));
+      foreach (var c in module.Constants)
+      {
+        if (!c.IsConventional || c.References.Count > 0)
+          allSymbols.Add((c.Name, c.ConventionalName, "Constant", c, module.Name));
+      }
 
       foreach (var t in module.Types)
       {
-        if (!t.IsConventional)
+        if (!t.IsConventional || t.References.Count > 0)
           allSymbols.Add((t.Name, t.ConventionalName, "Type", t, module.Name));
-        foreach (var f in t.Fields.Where(f => !f.IsConventional))
-          allSymbols.Add((f.Name, f.ConventionalName, "Field", f, module.Name));
+        foreach (var f in t.Fields)
+        {
+          if (!f.IsConventional || f.References.Count > 0)
+            allSymbols.Add((f.Name, f.ConventionalName, "Field", f, module.Name));
+        }
       }
 
       foreach (var e in module.Enums)
       {
-        if (!e.IsConventional)
+        if (!e.IsConventional || e.References.Count > 0)
           allSymbols.Add((e.Name, e.ConventionalName, "Enum", e, module.Name));
-        foreach (var v in e.Values.Where(v => !v.IsConventional))
-          allSymbols.Add((v.Name, v.ConventionalName, "EnumValue", v, module.Name));
+        foreach (var v in e.Values)
+        {
+          if (!v.IsConventional || v.References.Count > 0)
+            allSymbols.Add((v.Name, v.ConventionalName, "EnumValue", v, module.Name));
+        }
       }
 
-      foreach (var c in module.Controls.Where(c => !c.IsConventional))
-        allSymbols.Add((c.Name, c.ConventionalName, "Control", c, module.Name));
+      foreach (var c in module.Controls)
+      {
+        if (!c.IsConventional || c.References.Count > 0)
+          allSymbols.Add((c.Name, c.ConventionalName, "Control", c, module.Name));
+      }
 
       foreach (var p in module.Procedures)
       {
-        if (!p.IsConventional)
+        if (!p.IsConventional || p.References.Count > 0)
           allSymbols.Add((p.Name, p.ConventionalName, "Procedure", p, module.Name));
-        foreach (var param in p.Parameters.Where(param => !param.IsConventional))
-          allSymbols.Add((param.Name, param.ConventionalName, "Parameter", param, module.Name));
-        foreach (var lv in p.LocalVariables.Where(lv => !lv.IsConventional))
-          allSymbols.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name));
+        foreach (var param in p.Parameters)
+        {
+          if (!param.IsConventional || param.References.Count > 0)
+            allSymbols.Add((param.Name, param.ConventionalName, "Parameter", param, module.Name));
+        }
+        foreach (var lv in p.LocalVariables)
+        {
+          if (!lv.IsConventional || lv.References.Count > 0)
+            allSymbols.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name));
+        }
       }
 
       foreach (var prop in module.Properties)
       {
-        if (!prop.IsConventional)
+        if (!prop.IsConventional || prop.References.Count > 0)
           allSymbols.Add((prop.Name, prop.ConventionalName, "Property", prop, module.Name));
-        foreach (var param in prop.Parameters.Where(param => !param.IsConventional))
-          allSymbols.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name));
+        foreach (var param in prop.Parameters)
+        {
+          if (!param.IsConventional || param.References.Count > 0)
+            allSymbols.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name));
+        }
       }
     }
 
@@ -234,28 +259,38 @@ public static partial class VbParser
         var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
 
         // Caso speciale per proprietà: se siamo fuori dal modulo che le definisce,
-        // cerca solo le occorrenze con dot-prefix (.PropertyName)
+        // cerca sia dot-prefix (.PropertyName) che bare usage (PropertyName)
         var sourceModule = GetDefiningModule(project, source);
         bool isPropertyInOtherModule = source is VbProperty && 
             !string.Equals(sourceModule, refModuleName, StringComparison.OrdinalIgnoreCase);
 
         if (isPropertyInOtherModule)
         {
-          // Cerca solo .PropertyName
+          // Cerca PRIMA .PropertyName (dot-prefix)
           var dotPattern = $@"\.{Regex.Escape(oldName)}\b";
           var dotMatches = Regex.Matches(codePart, dotPattern, RegexOptions.IgnoreCase);
 
-          foreach (Match match in dotMatches)
+          if (dotMatches.Count > 0)
           {
-            // Il match include il punto, ma vogliamo sostituire solo il nome dopo il punto
-            var nameStartIndex = match.Index + 1; // Salta il punto
-            refModule.Replaces.AddReplace(
-                lineNum,
-                nameStartIndex,
-                nameStartIndex + oldName.Length,
-                match.Value.Substring(1), // Rimuovi il punto dal vecchio valore
-                newName,
-                category + "_Reference");
+            foreach (Match match in dotMatches)
+            {
+              // Il match include il punto, ma vogliamo sostituire solo il nome dopo il punto
+              var nameStartIndex = match.Index + 1; // Salta il punto
+              refModule.Replaces.AddReplace(
+                  lineNum,
+                  nameStartIndex,
+                  nameStartIndex + oldName.Length,
+                  match.Value.Substring(1), // Rimuovi il punto dal vecchio valore
+                  newName,
+                  category + "_Reference");
+            }
+          }
+          else
+          {
+            // Se non trova dot-prefix, cerca bare usage (es. If ExecSts = ...)
+            // Questo gestisce le public properties usate bare cross-module
+            bool skipStrings = false; // Le properties non sono costanti, ok nelle stringhe
+            refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, newName, category + "_Reference", occIndex, skipStrings);
           }
         }
         else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
