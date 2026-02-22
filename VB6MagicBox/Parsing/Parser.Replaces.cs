@@ -42,87 +42,105 @@ public static partial class VbParser
     // STEP 1: Per ogni modulo, raccogli TUTTI i simboli
     // Dobbiamo processare ANCHE simboli già convenzionali se hanno References
     // (es. bare property cross-module dove il nome è già corretto ma serve tracciare la posizione)
-    var allSymbols = new List<(string oldName, string newName, string category, object source, string definingModule)>();
+    var enumValueOwners = new Dictionary<VbEnumValue, VbEnumDef>();
+    var enumValueConflicts = new HashSet<VbEnumValue>();
+
+    var enumValueGroups = project.Modules
+        .SelectMany(m => m.Enums.SelectMany(e => e.Values.Select(v => new { Enum = e, Value = v })))
+        .GroupBy(x => x.Value.ConventionalName, StringComparer.OrdinalIgnoreCase)
+        .Where(g => g.Select(x => x.Enum.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+        .ToList();
+
+    foreach (var group in enumValueGroups)
+    {
+      foreach (var item in group)
+      {
+        enumValueOwners[item.Value] = item.Enum;
+        enumValueConflicts.Add(item.Value);
+      }
+    }
+
+    var allSymbols = new List<(string oldName, string newName, string category, object source, string definingModule, VbEnumDef enumOwner, bool qualifyEnumValueRefs)>();
 
     foreach (var module in project.Modules)
     {
       if (!module.IsConventional)
-        allSymbols.Add((module.Name, module.ConventionalName, "Module", module, module.Name));
+        allSymbols.Add((module.Name, module.ConventionalName, "Module", module, module.Name, null, false));
 
       foreach (var v in module.GlobalVariables)
       {
         if (!v.IsConventional || v.References.Count > 0)
-          allSymbols.Add((v.Name, v.ConventionalName, "GlobalVariable", v, module.Name));
+          allSymbols.Add((v.Name, v.ConventionalName, "GlobalVariable", v, module.Name, null, false));
       }
 
       foreach (var c in module.Constants)
       {
         if (!c.IsConventional || c.References.Count > 0)
-          allSymbols.Add((c.Name, c.ConventionalName, "Constant", c, module.Name));
+          allSymbols.Add((c.Name, c.ConventionalName, "Constant", c, module.Name, null, false));
       }
 
       foreach (var t in module.Types)
       {
         if (!t.IsConventional || t.References.Count > 0)
-          allSymbols.Add((t.Name, t.ConventionalName, "Type", t, module.Name));
+          allSymbols.Add((t.Name, t.ConventionalName, "Type", t, module.Name, null, false));
         foreach (var f in t.Fields)
         {
           if (!f.IsConventional || f.References.Count > 0)
-            allSymbols.Add((f.Name, f.ConventionalName, "Field", f, module.Name));
+            allSymbols.Add((f.Name, f.ConventionalName, "Field", f, module.Name, null, false));
         }
       }
 
       foreach (var e in module.Enums)
       {
         if (!e.IsConventional || e.References.Count > 0)
-          allSymbols.Add((e.Name, e.ConventionalName, "Enum", e, module.Name));
+          allSymbols.Add((e.Name, e.ConventionalName, "Enum", e, module.Name, null, false));
         foreach (var v in e.Values)
         {
           if (!v.IsConventional || v.References.Count > 0)
-            allSymbols.Add((v.Name, v.ConventionalName, "EnumValue", v, module.Name));
+            allSymbols.Add((v.Name, v.ConventionalName, "EnumValue", v, module.Name, e, enumValueConflicts.Contains(v)));
         }
       }
 
       foreach (var c in module.Controls)
       {
         if (!c.IsConventional || c.References.Count > 0)
-          allSymbols.Add((c.Name, c.ConventionalName, "Control", c, module.Name));
+          allSymbols.Add((c.Name, c.ConventionalName, "Control", c, module.Name, null, false));
       }
 
       foreach (var p in module.Procedures)
       {
         if (!p.IsConventional || p.References.Count > 0)
-          allSymbols.Add((p.Name, p.ConventionalName, "Procedure", p, module.Name));
+          allSymbols.Add((p.Name, p.ConventionalName, "Procedure", p, module.Name, null, false));
         foreach (var param in p.Parameters)
         {
           if (!param.IsConventional || param.References.Count > 0)
-            allSymbols.Add((param.Name, param.ConventionalName, "Parameter", param, module.Name));
+            allSymbols.Add((param.Name, param.ConventionalName, "Parameter", param, module.Name, null, false));
         }
         foreach (var lv in p.LocalVariables)
         {
           if (!lv.IsConventional || lv.References.Count > 0)
-            allSymbols.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name));
+            allSymbols.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name, null, false));
         }
       }
 
       foreach (var prop in module.Properties)
       {
         if (!prop.IsConventional || prop.References.Count > 0)
-          allSymbols.Add((prop.Name, prop.ConventionalName, "Property", prop, module.Name));
+          allSymbols.Add((prop.Name, prop.ConventionalName, "Property", prop, module.Name, null, false));
         foreach (var param in prop.Parameters)
         {
           if (!param.IsConventional || param.References.Count > 0)
-            allSymbols.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name));
+            allSymbols.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name, null, false));
         }
       }
     }
 
     // STEP 2: Per ogni simbolo, elabora le sue References e costruisci i LineReplace
     int symbolIndex = 0;
-    foreach (var (oldName, newName, category, source, definingModule) in allSymbols)
+    foreach (var (oldName, newName, category, source, definingModule, enumOwner, qualifyEnumValueRefs) in allSymbols)
     {
       symbolIndex++;
-      if (oldName == newName)
+      if (oldName == newName && !qualifyEnumValueRefs)
         continue;
 
       bool isDebugSymbol = oldName.Equals("Dsp_h", StringComparison.OrdinalIgnoreCase)
@@ -138,13 +156,19 @@ public static partial class VbParser
         continue;
 
       // DICHIARAZIONE: Aggiungi replace per la dichiarazione del simbolo (solo nel modulo che lo definisce)
-      AddDeclarationReplace(ownerModule, source, oldName, newName, category, fileCache);
+      if (oldName != newName)
+        AddDeclarationReplace(ownerModule, source, oldName, newName, category, fileCache);
+
+      var referenceNewName = newName;
+      if (qualifyEnumValueRefs && enumOwner != null)
+        referenceNewName = $"{enumOwner.ConventionalName}.{newName}";
 
       // REFERENCES: Aggiungi replace per tutti i riferimenti
-      AddReferencesReplaces(project, source, oldName, newName, category, fileCache, isDebugSymbol);
+      AddReferencesReplaces(project, source, oldName, newName, category, fileCache, isDebugSymbol, referenceNewName);
 
       // ATTRIBUTI VB6: Gestione speciale per "Attribute VB_Name" e "Attribute VarName."
-      AddAttributeReplaces(ownerModule, source, oldName, newName, category, fileCache);
+      if (oldName != newName)
+        AddAttributeReplaces(ownerModule, source, oldName, newName, category, fileCache);
     }
 
     // STEP 3: Conta i replace totali
@@ -220,7 +244,8 @@ public static partial class VbParser
       string newName, 
       string category,
       Dictionary<string, string[]> fileCache,
-      bool isDebugSymbol = false)
+      bool isDebugSymbol = false,
+      string referenceNewNameOverride = null)
   {
     var referencesProp = source?.GetType().GetProperty("References");
     if (referencesProp?.GetValue(source) is not System.Collections.IEnumerable references)
@@ -268,6 +293,14 @@ public static partial class VbParser
 
         int replacesBefore = isDebugSymbol && lineNum == 3146 ? refModule.Replaces.Count : 0;
 
+        var referenceNewName = string.IsNullOrEmpty(referenceNewNameOverride) ? newName : referenceNewNameOverride;
+
+        if (category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
+        {
+          AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex);
+          continue;
+        }
+
         if (isPropertyInOtherModule)
         {
           var dotPattern = $@"\.{Regex.Escape(oldName)}\b";
@@ -283,14 +316,14 @@ public static partial class VbParser
                   nameStartIndex,
                   nameStartIndex + oldName.Length,
                   match.Value.Substring(1),
-                  newName,
+                  referenceNewName,
                   category + "_Reference");
             }
           }
           else
           {
             bool skipStrings = false;
-            refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, newName, category + "_Reference", occIndex, skipStrings);
+            refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStrings);
           }
         }
         else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
@@ -305,14 +338,14 @@ public static partial class VbParser
                 match.Index,
                 match.Index + match.Length,
                 match.Value,
-                newName,
+                referenceNewName,
                 category + "_Reference");
           }
         }
         else
         {
           bool skipStrings = source is VbConstant;
-          refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, newName, category + "_Reference", occIndex, skipStrings);
+          refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStrings);
         }
 
         if (isDebugSymbol && lineNum == 3146)
@@ -324,6 +357,65 @@ public static partial class VbParser
         }
       }
     }
+  }
+
+  private static void AddEnumValueReferenceReplaces(
+      VbModule refModule,
+      string codePart,
+      int lineNum,
+      string oldName,
+      string newName,
+      string qualifiedName,
+      string category,
+      int occIndex)
+  {
+    var pattern = $@"\b{Regex.Escape(oldName)}\b";
+    var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+
+    if (matches.Count == 0)
+      return;
+
+    IEnumerable<Match> targetMatches = matches.Cast<Match>();
+    if (occIndex > 0 && occIndex <= matches.Count)
+      targetMatches = new[] { matches[occIndex - 1] };
+
+    foreach (var match in targetMatches)
+    {
+      var replacement = IsQualifiedEnumReference(codePart, match.Index) ? newName : qualifiedName;
+      if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
+        continue;
+
+      refModule.Replaces.AddReplace(
+          lineNum,
+          match.Index,
+          match.Index + match.Length,
+          match.Value,
+          replacement,
+          category + "_Reference");
+    }
+  }
+
+  private static bool IsQualifiedEnumReference(string line, int tokenIndex)
+  {
+    var index = tokenIndex - 1;
+    while (index >= 0 && char.IsWhiteSpace(line[index]))
+      index--;
+
+    if (index < 0 || line[index] != '.')
+      return false;
+
+    index--;
+    while (index >= 0 && char.IsWhiteSpace(line[index]))
+      index--;
+
+    if (index < 0)
+      return false;
+
+    var end = index;
+    while (index >= 0 && (char.IsLetterOrDigit(line[index]) || line[index] == '_'))
+      index--;
+
+    return end > index;
   }
 
   /// <summary>
