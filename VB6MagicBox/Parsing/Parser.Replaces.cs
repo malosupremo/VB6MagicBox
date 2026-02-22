@@ -218,6 +218,34 @@ public static partial class VbParser
       return;
     }
 
+    // Controlli (anche array): sostituisci il nome in tutte le righe Begin
+    if (source is VbControl control && control.LineNumbers.Count > 0)
+    {
+      foreach (var controlLine in control.LineNumbers)
+      {
+        if (controlLine <= 0 || controlLine > lines.Length)
+          continue;
+
+        var controlLineText = lines[controlLine - 1];
+        var (controlCodePart, _) = SplitCodeAndComment(controlLineText);
+        var controlPattern = $@"(?<=^.*Begin\s+\S+\s+){Regex.Escape(oldName)}\b";
+        var controlMatches = Regex.Matches(controlCodePart, controlPattern, RegexOptions.IgnoreCase);
+
+        foreach (Match match in controlMatches)
+        {
+          module.Replaces.AddReplace(
+              controlLine,
+              match.Index,
+              match.Index + match.Length,
+              match.Value,
+              newName,
+              category + "_Declaration");
+        }
+      }
+
+      return;
+    }
+
     // Per altri simboli, trova tutte le occorrenze del nome nella dichiarazione
     var pattern = $@"\b{Regex.Escape(oldName)}\b";
     var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);

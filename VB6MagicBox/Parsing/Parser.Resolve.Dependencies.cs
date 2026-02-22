@@ -202,7 +202,11 @@ public static partial class VbParser
                 // CONTROLLO SHADOW: Se la procedura ha una costante locale con lo stesso nome,
                 // quella locale fa "shadow" della globale, quindi NON aggiungere reference
                 var hasLocalWithSameName = procAtLine.Constants.Any(lc =>
-                    lc.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase));
+                    lc.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase)) ||
+                  procAtLine.LocalVariables.Any(lv =>
+                    lv.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase)) ||
+                  procAtLine.Parameters.Any(p =>
+                    p.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase));
 
                 if (hasLocalWithSameName)
                 {

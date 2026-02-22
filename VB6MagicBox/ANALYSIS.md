@@ -102,6 +102,12 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Inline calls after `Then`**: procedure references are recorded even if a call is already present in `Calls`, ensuring inline statements are renamed.
 - **Screaming snake to PascalCase**: enum value naming preserves only known acronyms, so `RIC_RUN_CMD_CALLER` -> `RicRunCmdCaller`.
 - **String-aware comment stripping**: comment removal ignores apostrophes inside string literals, preventing truncation of lines with text (e.g., `"E' ..."`).
+- **Base variable in chains**: base identifiers used in member chains are marked as references, ensuring parameters are renamed even in `obj.Member...` expressions.
+- **String-literal safe replaces**: reference renames skip string literals, with a special allowance for `Attribute ...` lines to keep VB attributes in sync.
+- **Function-chain unwrap**: member chains inside function calls (e.g., `CStr(...)`) are unwrapped for resolution; array access (`var(i).Member`) is excluded from unwrap.
+- **Chain splitting outside parentheses**: dot-chain parsing ignores dots inside parentheses, enabling nested calls like `Evap_Info(...)` without breaking earlier cases.
+- **Control arrays renaming**: controls use all `LineNumbers` for `Begin` lines so every element in a control array is renamed consistently.
+- **Global constant shadowing**: global constant references are skipped when a local variable/parameter shadows the constant name.
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**
