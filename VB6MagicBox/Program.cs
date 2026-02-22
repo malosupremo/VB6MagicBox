@@ -66,9 +66,7 @@ public class Program
                     break;
 
                 case "5":
-                    Console.WriteLine();
-                    Console.WriteLine("[!] Armonizzazione spaziature non in armonia.");
-                    Console.WriteLine("    Coming soon!");
+                    RunSpacingInteractive();
                     break;
 
                 case "6":
@@ -85,6 +83,31 @@ public class Program
                     Console.WriteLine("[X] Opzione non valida. Riprova.");
                     break;
             }
+        }
+    }
+
+    private static void RunSpacingInteractive()
+    {
+        Console.WriteLine();
+        Console.Write("Percorso del file .vbp: ");
+        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+
+        if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
+        {
+            Console.WriteLine("[X] File .vbp non trovato!");
+            return;
+        }
+
+        try
+        {
+            var project = VbParser.ParseAndResolve(vbpPath);
+            CodeFormatter.HarmonizeSpacing(project);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[X] Errore durante l'armonizzazione spaziature:");
+            Console.WriteLine(ex.ToString());
         }
     }
 
@@ -236,6 +259,9 @@ public class Program
           // 5) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
           //    Deve seguire tutto il resto perché opera sui file già rinominati e tipizzati
           CodeFormatter.ReorderLocalVariables(project);
+
+          // 6) Armonizzazione spaziature
+          CodeFormatter.HarmonizeSpacing(project);
 
           Console.WriteLine();
           Console.WriteLine("[OK] Bacchetta magica applicata!");

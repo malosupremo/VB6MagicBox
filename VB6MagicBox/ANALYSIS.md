@@ -108,6 +108,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Chain splitting outside parentheses**: dot-chain parsing ignores dots inside parentheses, enabling nested calls like `Evap_Info(...)` without breaking earlier cases.
 - **Control arrays renaming**: controls use all `LineNumbers` for `Begin` lines so every element in a control array is renamed consistently.
 - **Global constant shadowing**: global constant references are skipped when a local variable/parameter shadows the constant name.
+- **Local declaration ordering**: procedure headers keep `Attribute` lines attached; local declarations are grouped as comments → constants → static → Dim, without extra blank lines or alphabetic sorting.
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**
