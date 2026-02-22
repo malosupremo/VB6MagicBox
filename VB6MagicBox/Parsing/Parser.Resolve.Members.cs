@@ -10,7 +10,7 @@ public static partial class VbParser
     // ---------------------------------------------------------
 
     private static readonly Regex ReWithDotReplacement = 
-        new(@"(?<!\w)\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"(?<![\w)])\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReChainPattern = 
         new(@"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -99,7 +99,7 @@ public static partial class VbParser
             {
                 var withPrefix = withStack.Peek();
                 noComment = Regex.Replace(noComment,
-                    @"(?<!\w)\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
+                    @"(?<![\w)])\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
                     m => withPrefix + "." + m.Groups[1].Value,
                     RegexOptions.IgnoreCase);
             }
@@ -173,8 +173,8 @@ public static partial class VbParser
                 if (string.IsNullOrEmpty(typeName))
                     continue;
 
-                // Verifica se il tipo base è nel progetto (interno) o esterno
-                // Se è esterno, NON tracciare References per nessun membro della catena
+                // Verifica se il tipo base ï¿½ nel progetto (interno) o esterno
+                // Se ï¿½ esterno, NON tracciare References per nessun membro della catena
                 var initialTypeName = typeName;
                 if (initialTypeName.Contains('('))
                     initialTypeName = initialTypeName.Substring(0, initialTypeName.IndexOf('('));
@@ -183,8 +183,8 @@ public static partial class VbParser
 
                 bool isInternalType = typeIndex.ContainsKey(initialTypeName) || classIndex.ContainsKey(initialTypeName);
 
-                // Se il tipo è esterno (non nel progetto), interrompi la catena
-                // Es: gobjFM489.ActualState.Program.Frequency_Long dove gobjFM489 è tipo esterno
+                // Se il tipo ï¿½ esterno (non nel progetto), interrompi la catena
+                // Es: gobjFM489.ActualState.Program.Frequency_Long dove gobjFM489 ï¿½ tipo esterno
                 if (!isInternalType)
                     continue;
 
@@ -198,6 +198,36 @@ public static partial class VbParser
                     if (string.IsNullOrEmpty(fieldName))
                         break;
 
+                    // Se typeName ï¿½ null (tipo di ritorno sconosciuto dal passo precedente,
+                    // es. una Function di classe il cui ReturnType non ï¿½ risolto),
+                    // cerca il campo corrente in tutti i tipi interni noti.
+                    if (string.IsNullOrEmpty(typeName))
+                    {
+                        var chainFallbackFound = false;
+                        foreach (var (anyTypeName, anyTypeDef) in typeIndex)
+                        {
+                            var anyField = anyTypeDef.Fields.FirstOrDefault(f =>
+                                !string.IsNullOrEmpty(f.Name) &&
+                                string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+                            if (anyField != null)
+                            {
+                                var tp = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
+                                    t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                                var oi = GetOccurrenceIndex(noComment, fieldName, tp.Item2, i + 1);
+                                if (i + 1 == 3146)
+                                    Console.WriteLine($"[DBG] chain-fallback '{fieldName}'@{i+1} ? {anyTypeName}, occIdx={oi}");
+                                anyField.Used = true;
+                                anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, oi);
+                                typeName = anyField.Type;
+                                chainFallbackFound = true;
+                                break;
+                            }
+                        }
+                        if (!chainFallbackFound || string.IsNullOrEmpty(typeName))
+                            break;
+                        continue;
+                    }
+
                     var baseTypeName = typeName;
                     if (baseTypeName.Contains('('))
                         baseTypeName = baseTypeName.Substring(0, baseTypeName.IndexOf('('));
@@ -206,21 +236,63 @@ public static partial class VbParser
 
                     if (classIndex.TryGetValue(baseTypeName, out var classModule))
                     {
+                        // Cerca prima nelle proprietï¿½ della classe
                         var classProp = classModule.Properties.FirstOrDefault(p =>
                             p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                         if (classProp != null)
                         {
-                          classProp.Used = true;
-                          classProp.References.AddLineNumber(mod.Name, proc.Name, i + 1);
-                          typeName = classProp.ReturnType;
-                          if (string.IsNullOrEmpty(typeName))
-                            break;
-                          continue;
+                            classProp.Used = true;
+                            classProp.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                            typeName = classProp.ReturnType;
+                            if (string.IsNullOrEmpty(typeName))
+                                break;
+                            continue;
                         }
+
+                        // Cerca anche tra le funzioni/procedure (es. Item(i) ï¿½ una Function che ritorna un tipo)
+                        var classFunc = classModule.Procedures.FirstOrDefault(p =>
+                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                        if (classFunc != null)
+                        {
+                            typeName = classFunc.ReturnType;
+                            if (string.IsNullOrEmpty(typeName))
+                                typeName = null; // ReturnType sconosciuto: la prossima iterazione userï¿½ il fallback
+                            continue;
+                        }
+
+                        // Membro non trovato nella classe: tipo sconosciuto per i segmenti successivi
+                        typeName = null;
+                        continue;
                     }
 
                     if (!typeIndex.TryGetValue(baseTypeName, out var typeDef))
+                    {
+                        // Tipo base non ï¿½ nï¿½ classe nï¿½ UDT noto: cerca il campo in tutti i tipi interni
+                        var fieldFoundInAnyType = false;
+                        foreach (var (anyTypeName, anyTypeDef) in typeIndex)
+                        {
+                            var anyField = anyTypeDef.Fields.FirstOrDefault(f =>
+                                !string.IsNullOrEmpty(f.Name) &&
+                                string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+
+                            if (anyField != null)
+                            {
+                                var fallbackTokenPos = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
+                                    t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                                var fallbackOccIdx = GetOccurrenceIndex(noComment, fieldName, fallbackTokenPos.Item2, i + 1);
+                                if (i + 1 == 3146)
+                                    Console.WriteLine($"[DBG] type-fallback '{fieldName}'@{i+1} ? {anyTypeName}, occIdx={fallbackOccIdx}");
+                                anyField.Used = true;
+                                anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, fallbackOccIdx);
+                                fieldFoundInAnyType = true;
+                                break;
+                            }
+                        }
+                        if (!fieldFoundInAnyType)
+                            break;
+                        typeName = null;
                         break;
+                    }
 
                     var field = typeDef.Fields.FirstOrDefault(f =>
                         !string.IsNullOrEmpty(f.Name) &&
@@ -231,7 +303,10 @@ public static partial class VbParser
 
                     var tokenPosition = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                         t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
-                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2);
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2, i + 1);
+
+                    if (i + 1 == 3146)
+                        Console.WriteLine($"[DBG] normal '{fieldName}'@{i+1} type={baseTypeName}, occIdx={occurrenceIndex}");
 
                     field.Used = true;
                     field.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex);
@@ -302,7 +377,7 @@ public static partial class VbParser
             {
                 var withPrefix = withStack.Peek();
                 noComment = Regex.Replace(noComment,
-                    @"(?<!\w)\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
+                    @"(?<![\w)])\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
                     m => withPrefix + "." + m.Groups[1].Value,
                     RegexOptions.IgnoreCase);
             }
@@ -340,8 +415,8 @@ public static partial class VbParser
                 if (!env.TryGetValue(baseVarName, out var typeName) || string.IsNullOrEmpty(typeName))
                     continue;
 
-                // Verifica se il tipo base è nel progetto (interno) o esterno
-                // Se è esterno, NON tracciare References per nessun membro della catena
+                // Verifica se il tipo base ï¿½ nel progetto (interno) o esterno
+                // Se ï¿½ esterno, NON tracciare References per nessun membro della catena
                 var initialTypeName = typeName;
                 if (initialTypeName.Contains('('))
                     initialTypeName = initialTypeName.Substring(0, initialTypeName.IndexOf('('));
@@ -350,7 +425,7 @@ public static partial class VbParser
 
                 bool isInternalType = typeIndex.ContainsKey(initialTypeName) || classIndex.ContainsKey(initialTypeName);
 
-                // Se il tipo è esterno (non nel progetto), interrompi la catena
+                // Se il tipo ï¿½ esterno (non nel progetto), interrompi la catena
                 if (!isInternalType)
                     continue;
 
@@ -364,6 +439,33 @@ public static partial class VbParser
                     if (string.IsNullOrEmpty(fieldName))
                         break;
 
+                    // Se typeName ï¿½ null (tipo di ritorno sconosciuto dal passo precedente),
+                    // cerca il campo corrente in tutti i tipi interni noti.
+                    if (string.IsNullOrEmpty(typeName))
+                    {
+                        var chainFallbackFound = false;
+                        foreach (var (anyTypeName, anyTypeDef) in typeIndex)
+                        {
+                            var anyField = anyTypeDef.Fields.FirstOrDefault(f =>
+                                !string.IsNullOrEmpty(f.Name) &&
+                                string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+                            if (anyField != null)
+                            {
+                                var tp = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
+                                    t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                                var oi = GetOccurrenceIndex(noComment, fieldName, tp.Item2, i + 1);
+                                anyField.Used = true;
+                                anyField.References.AddLineNumber(mod.Name, prop.Name, i + 1, oi);
+                                typeName = anyField.Type;
+                                chainFallbackFound = true;
+                                break;
+                            }
+                        }
+                        if (!chainFallbackFound || string.IsNullOrEmpty(typeName))
+                            break;
+                        continue;
+                    }
+
                     var baseTypeName = typeName;
                     if (baseTypeName.Contains('('))
                         baseTypeName = baseTypeName.Substring(0, baseTypeName.IndexOf('('));
@@ -372,21 +474,59 @@ public static partial class VbParser
 
                     if (classIndex.TryGetValue(baseTypeName, out var classModule))
                     {
+                        // Cerca prima nelle proprietï¿½ della classe
                         var classProp = classModule.Properties.FirstOrDefault(p =>
                             p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                         if (classProp != null)
                         {
-                          classProp.Used = true;
-                          classProp.References.AddLineNumber(mod.Name, prop.Name, i + 1);
-                          typeName = classProp.ReturnType;
-                          if (string.IsNullOrEmpty(typeName))
-                            break;
-                          continue;
+                            classProp.Used = true;
+                            classProp.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                            typeName = classProp.ReturnType;
+                            if (string.IsNullOrEmpty(typeName))
+                                break;
+                            continue;
                         }
+
+                        // Cerca anche tra le funzioni/procedure (es. Item(i) ï¿½ una Function che ritorna un tipo)
+                        var classFunc = classModule.Procedures.FirstOrDefault(p =>
+                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                        if (classFunc != null)
+                        {
+                            typeName = classFunc.ReturnType;
+                            if (string.IsNullOrEmpty(typeName))
+                                typeName = null;
+                            continue;
+                        }
+
+                        // Membro non trovato nella classe: tipo sconosciuto per i segmenti successivi
+                        typeName = null;
+                        continue;
                     }
 
                     if (!typeIndex.TryGetValue(baseTypeName, out var typeDef))
+                    {
+                        var fieldFoundInAnyType = false;
+                        foreach (var (anyTypeName, anyTypeDef) in typeIndex)
+                        {
+                            var anyField = anyTypeDef.Fields.FirstOrDefault(f =>
+                                !string.IsNullOrEmpty(f.Name) &&
+                                string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+                            if (anyField != null)
+                            {
+                                var fallbackTokenPos = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
+                                    t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                                var fallbackOccIdx = GetOccurrenceIndex(noComment, fieldName, fallbackTokenPos.Item2, i + 1);
+                                anyField.Used = true;
+                                anyField.References.AddLineNumber(mod.Name, prop.Name, i + 1, fallbackOccIdx);
+                                fieldFoundInAnyType = true;
+                                break;
+                            }
+                        }
+                        if (!fieldFoundInAnyType)
+                            break;
+                        typeName = null;
                         break;
+                    }
 
                     var field = typeDef.Fields.FirstOrDefault(f =>
                         !string.IsNullOrEmpty(f.Name) &&
@@ -397,7 +537,7 @@ public static partial class VbParser
 
                     var tokenPosition = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                         t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
-                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2);
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2, i + 1);
 
                     field.Used = true;
                     field.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex);
@@ -459,7 +599,7 @@ public static partial class VbParser
             {
                 var controlName = m.Groups[1].Value;
 
-                // Verifica se è un controllo del form corrente
+                // Verifica se ï¿½ un controllo del form corrente
                 if (controlIndex.TryGetValue(controlName, out var control))
                 {
                     MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
@@ -554,14 +694,14 @@ public static partial class VbParser
             {
                 var tokenName = m.Groups[1].Value;
 
-                // Controlla se è un parametro
+                // Controlla se ï¿½ un parametro
                 if (parameterIndex.TryGetValue(tokenName, out var parameter))
                 {
                     parameter.Used = true;
                     parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
                 }
 
-                // Controlla se è una variabile locale
+                // Controlla se ï¿½ una variabile locale
                 if (localVariableIndex.TryGetValue(tokenName, out var localVar))
                 {
                     // Esclude la riga di dichiarazione della variabile (usa direttamente LineNumber)
@@ -572,7 +712,7 @@ public static partial class VbParser
                     localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
                 }
 
-                // Controlla se è una variabile globale del modulo (e non è shadowed)
+                // Controlla se ï¿½ una variabile globale del modulo (e non ï¿½ shadowed)
                 if (!parameterIndex.ContainsKey(tokenName) && !localVariableIndex.ContainsKey(tokenName))
                 {
                   if (globalVariableIndex.TryGetValue(tokenName, out var globalVar))
@@ -1002,17 +1142,36 @@ public static partial class VbParser
         }
     }
 
-  private static int GetOccurrenceIndex(string line, string token, int tokenIndex)
+  private static int GetOccurrenceIndex(string line, string token, int tokenIndex, int currentLineNumber = 0)
   {
+    bool isDebug = token.Equals("Dsp_h", StringComparison.OrdinalIgnoreCase) && currentLineNumber == 3146;
+
     if (tokenIndex < 0)
       return -1;
 
     var matches = Regex.Matches(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+
+    if (isDebug)
+    {
+      Console.WriteLine($"[DEBUG GetOccurrenceIndex] Line {currentLineNumber}, Token={token}, TokenIndex={tokenIndex}");
+      Console.WriteLine($"[DEBUG]   Line: {line}");
+      Console.WriteLine($"[DEBUG]   Total matches: {matches.Count}");
+      for (int j = 0; j < matches.Count; j++)
+        Console.WriteLine($"[DEBUG]     Match {j+1} at index {matches[j].Index}: '{matches[j].Value}'");
+    }
+
     for (int i = 0; i < matches.Count; i++)
     {
       if (matches[i].Index == tokenIndex)
+      {
+        if (isDebug)
+          Console.WriteLine($"[DEBUG]   ? Returning occurrence {i+1}");
         return i + 1; // 1-based occurrence index
+      }
     }
+
+    if (isDebug)
+      Console.WriteLine($"[DEBUG]   ? Token not found at specified index, returning -1");
 
     return -1;
   }

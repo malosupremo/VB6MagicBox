@@ -171,6 +171,8 @@ public static partial class VbParser
         if (!DEBUG_CALLS)
             return;
 
+        if (originalLineNumber != 3146) return;
+
         if (procName.Contains(DEBUG_METHOD, StringComparison.OrdinalIgnoreCase) || callName.Contains(DEBUG_METHOD, StringComparison.OrdinalIgnoreCase))
         {
             Console.WriteLine($"[DEBUG] Proc: {procName} | Line: {originalLineNumber} | Call: {callName} | Regex: {regexName} | {reason}");

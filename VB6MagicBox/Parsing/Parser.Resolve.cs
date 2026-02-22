@@ -807,17 +807,6 @@ public static partial class VbParser
                             }
                         }
                     }
-
-                    // Print debug info at end of procedure
-                    if (debugInfo != null && debugInfo.Count > 0)
-                    {
-                        // Aggiungi lista di classi disponibili nel classIndex
-                        if (proc.Name.Equals("CallObjectTimer", StringComparison.OrdinalIgnoreCase))
-                        {
-                            debugInfo.Add($"\nAvailable classes in classIndex: {string.Join(", ", classIndex.Keys.OrderBy(k => k))}");
-                        }
-                        Console.WriteLine(string.Join("\n", debugInfo));
-                    }
                 }
             }
 
