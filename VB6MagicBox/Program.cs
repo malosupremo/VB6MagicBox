@@ -262,7 +262,7 @@ public class Program
 
             // 6) Armonizzazione spaziature
             //TODO: per ora no, va provata meglio su casi reali prima di includerla nella bacchetta magica (rischia di introdurre regressioni)
-            //CodeFormatter.HarmonizeSpacing(project);
+            CodeFormatter.HarmonizeSpacing(project);
 
             Console.WriteLine();
           Console.WriteLine("[OK] Bacchetta magica applicata!");

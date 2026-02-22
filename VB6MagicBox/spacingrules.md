@@ -2,7 +2,7 @@
 
 ## Priority (high -> low)
 1. **SR10** Header form section is immutable (skip until first `Attribute` or `Option`).
-2. **SR11** Add exactly one blank line before `Option Explicit` / `Option Base` (after header).
+2. **SR11** No blank line after initial `Attribute` block at file start; `Option` follows immediately.
 3. **SR4/SR5** Add one blank line after `End Sub/Function/Property/Type/Enum`, except between `Property Get/Let/Set` of the same property (no blank).
 4. **SR7/SR8** Comment attachment rules (before/inside blocks).
 5. **SR14** Initial procedure groups separated by one blank: comments → const → static → dim.
@@ -18,14 +18,14 @@
 - **SR4** Ensure one blank line after `End Sub/Function/Property/Type/Enum`.
 - **SR5** Exception: `Property Get/Let/Set` with the same name remain attached (no blank between).
 - **SR6** No blank line immediately inside a block (first/last line inside a block).
-- **SR7** Comments before a block: blank line, then comments, then the block.
+- **SR7** Comments before a block: blank line before the comment block only; comments stay contiguous with no blank lines between them.
 - **SR8** Comments at block start: block start, comments, then a blank line.
 - **SR9** Nested blocks remain attached (no blank between `Then` and `If`, etc.).
 - **SR10** Form header (`VERSION/Begin...`) is untouched until the first `Attribute` or `Option`.
 - **SR11** Insert one blank line before `Option Explicit` / `Option Base` (after header).
 - **SR12** No blank line between consecutive `Const` declarations.
 - **SR13** No blank lines between enum values.
-- **SR14** Procedure top groups are separated by one blank line: header comments → const → static → dim.
+- **SR14** Procedure top groups are separated by one blank line: header comments → const → static → dim, but no blank at procedure start.
 - **SR15** `Select Case`: blank line before each `Case` except the first.
 - **SR16** Labels (`Name:`) must have a blank line before and no blank immediately after.
-- **SR17** Single-line `If` gets a blank line before/after, unless adjacent to `If`/`End If` boundaries.
+- **SR17** Single-line `If` always gets a blank line after it; it gets a blank line before it unless preceded by a comment.

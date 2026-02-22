@@ -109,6 +109,8 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Control arrays renaming**: controls use all `LineNumbers` for `Begin` lines so every element in a control array is renamed consistently.
 - **Global constant shadowing**: global constant references are skipped when a local variable/parameter shadows the constant name.
 - **Local declaration ordering**: procedure headers keep `Attribute` lines attached; local declarations are grouped as comments → constants → static → Dim, without extra blank lines or alphabetic sorting.
+- **Spacing rules tweaks**: no blank after initial file `Attribute` block; pre-procedure comment blocks stay contiguous with a single blank line before them; no blank at the start of a procedure even if the first statement is a comment for a following block.
+- **Single-line If spacing**: single-line `If` statements always add a blank line after; they add a blank line before unless preceded by a comment.
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**

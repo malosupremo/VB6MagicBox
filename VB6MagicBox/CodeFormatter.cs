@@ -74,7 +74,9 @@ public static class CodeFormatter
 
       var originalContent = File.ReadAllText(filePath, enc);
       var lineSeparator = originalContent.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-      var lines = originalContent.Split('\n').ToList();
+      var lines = originalContent.Contains("\r\n", StringComparison.Ordinal)
+        ? originalContent.Split(new[] { "\r\n" }, StringSplitOptions.None).ToList()
+        : originalContent.Split('\n').Select(l => l.EndsWith('\r') ? l[..^1] : l).ToList();
       bool anyChanged = false;
       int procsChanged = 0;
 
@@ -157,7 +159,9 @@ public static class CodeFormatter
 
       var originalContent = File.ReadAllText(filePath, enc);
       var lineSeparator = originalContent.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-      var lines = originalContent.Split('\n').ToList();
+      var lines = originalContent.Contains("\r\n", StringComparison.Ordinal)
+        ? originalContent.Split(new[] { "\r\n" }, StringSplitOptions.None).ToList()
+        : originalContent.Split('\n').Select(l => l.EndsWith('\r') ? l[..^1] : l).ToList();
       var newLines = ApplySpacingRules(lines, mod);
 
       if (newLines == null) continue;
@@ -383,6 +387,10 @@ public static class CodeFormatter
         if (!string.IsNullOrEmpty(prevNonBlank) && IsBlockStart(prevNonBlank))
           continue;
 
+        if (!string.IsNullOrEmpty(prevNonBlank) && IsBlockStart(prevNonBlank) &&
+            !string.IsNullOrEmpty(nextNonBlank) && IsCommentLine(nextNonBlank))
+          continue;
+
         if (!string.IsNullOrEmpty(nextNonBlank) && IsBlockEnd(nextNonBlank))
           continue;
 
@@ -406,7 +414,8 @@ public static class CodeFormatter
 
       lastWasLabel = false;
 
-      if (IsOptionLine(trimmed) && result.Count > 0 && !string.IsNullOrWhiteSpace(result.Last()))
+      if (IsOptionLine(trimmed) && result.Count > 0 && !string.IsNullOrWhiteSpace(result.Last()) &&
+          !(mod.IsForm && IsAttributeLine(result.LastOrDefault() ?? string.Empty)))
         result.Add(string.Empty);
 
       if (IsProcedureStart(trimmed, out var procPropertyName))
@@ -449,7 +458,10 @@ public static class CodeFormatter
         lastWasLabel = true;
       }
 
-      if (IsCommentLine(trimmed) && !string.IsNullOrEmpty(NextNonBlank(lines, i + 1)) && IsBlockStart(NextNonBlank(lines, i + 1)))
+      if (IsCommentLine(trimmed) &&
+          !string.IsNullOrEmpty(NextNonBlank(lines, i + 1)) &&
+          IsBlockStart(NextNonBlank(lines, i + 1)) &&
+          (string.IsNullOrWhiteSpace(PrevNonBlank(result)) || !IsCommentLine(PrevNonBlank(result))))
       {
         if (result.Count > 0 && !string.IsNullOrWhiteSpace(result.Last()))
           result.Add(string.Empty);
@@ -465,7 +477,8 @@ public static class CodeFormatter
         }
         else
         {
-          if (currentGroup != null && currentGroup != group && result.Count > 0 && !string.IsNullOrWhiteSpace(result.Last()))
+          if (currentGroup != null && currentGroup != group && result.Count > 0 &&
+              !string.IsNullOrWhiteSpace(result.Last()) && !IsProcedureStart(PrevNonBlank(result), out _))
             result.Add(string.Empty);
           currentGroup = group;
         }
@@ -477,14 +490,15 @@ public static class CodeFormatter
         var nextNonBlank = NextNonBlank(lines, i + 1);
         if (!string.IsNullOrEmpty(prevNonBlank) &&
             !IsIfBoundary(prevNonBlank) &&
-            !string.IsNullOrWhiteSpace(result.LastOrDefault()))
+            !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
+            !IsCommentLine(prevNonBlank))
         {
           result.Add(string.Empty);
         }
 
         result.Add(normalized);
 
-        if (!string.IsNullOrEmpty(nextNonBlank) && !IsIfBoundary(nextNonBlank))
+        if (!string.IsNullOrEmpty(nextNonBlank))
           result.Add(string.Empty);
         continue;
       }
@@ -608,7 +622,7 @@ public static class CodeFormatter
 
   private static bool IsBlockStart(string line)
   {
-    var trimmed = line.TrimStart();
+    var trimmed = StripInlineComment(line).TrimStart();
     return Regex.IsMatch(trimmed, @"^(Public|Private|Friend)?\s*(Sub|Function|Property|Type|Enum)\b", RegexOptions.IgnoreCase) ||
            trimmed.StartsWith("If ", StringComparison.OrdinalIgnoreCase) ||
            trimmed.StartsWith("For ", StringComparison.OrdinalIgnoreCase) ||
@@ -619,7 +633,7 @@ public static class CodeFormatter
 
   private static bool IsBlockEnd(string line)
   {
-    var trimmed = line.TrimStart();
+    var trimmed = StripInlineComment(line).TrimStart();
     return trimmed.StartsWith("End Sub", StringComparison.OrdinalIgnoreCase) ||
            trimmed.StartsWith("End Function", StringComparison.OrdinalIgnoreCase) ||
            trimmed.StartsWith("End Property", StringComparison.OrdinalIgnoreCase) ||
@@ -654,7 +668,7 @@ public static class CodeFormatter
 
   private static bool IsSingleLineIf(string line)
   {
-    var trimmed = line.TrimStart();
+    var trimmed = StripInlineComment(line).TrimStart();
     if (!trimmed.StartsWith("If ", StringComparison.OrdinalIgnoreCase))
       return false;
 
@@ -666,10 +680,36 @@ public static class CodeFormatter
 
   private static bool IsIfBoundary(string line)
   {
-    var trimmed = line.TrimStart();
+    var trimmed = StripInlineComment(line).TrimStart();
     return trimmed.StartsWith("If ", StringComparison.OrdinalIgnoreCase) ||
            trimmed.StartsWith("Else", StringComparison.OrdinalIgnoreCase) ||
            trimmed.StartsWith("End If", StringComparison.OrdinalIgnoreCase);
+  }
+
+  private static string StripInlineComment(string line)
+  {
+    if (string.IsNullOrEmpty(line))
+      return line;
+
+    bool inString = false;
+    for (int i = 0; i < line.Length; i++)
+    {
+      if (line[i] == '"')
+      {
+        if (!inString)
+          inString = true;
+        else if (i + 1 < line.Length && line[i + 1] == '"')
+          i++;
+        else
+          inString = false;
+      }
+      else if (!inString && line[i] == '\'')
+      {
+        return line.Substring(0, i);
+      }
+    }
+
+    return line;
   }
 
   private static HeaderGroupKind? GetHeaderGroupKind(string line)
