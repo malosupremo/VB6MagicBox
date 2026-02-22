@@ -440,15 +440,20 @@ public static class LineReplaceListExtensions
       return stringRanges.Any(range => pos >= range.start && pos < range.end);
     }
 
-    // Se occurrenceIndex è specificato (1-based), usa solo quella
-    if (occurrenceIndex > 0 && occurrenceIndex <= matches.Count)
-    {
-      var match = matches[occurrenceIndex - 1];
+    var effectiveMatches = skipStringLiterals
+        ? matches.Cast<Match>().Where(m => !IsInsideString(m.Index)).ToList()
+        : matches.Cast<Match>().ToList();
 
-      // Salta se è dentro una stringa
-      if (skipStringLiterals && IsInsideString(match.Index))
+    if (effectiveMatches.Count == 0)
+      return;
+
+    // Se occurrenceIndex è specificato (1-based), usa solo quella
+    if (occurrenceIndex > 0)
+    {
+      if (occurrenceIndex > effectiveMatches.Count)
         return;
 
+      var match = effectiveMatches[occurrenceIndex - 1];
       replaces.AddReplace(
           lineNumber,
           match.Index,
@@ -457,17 +462,13 @@ public static class LineReplaceListExtensions
           newName,
           category);
     }
-    else if (matches.Count > 0)
+    else
     {
       // Se occurrenceIndex NON è specificato (-1), aggiungi TUTTE le occorrenze
       // Questo gestisce variabili/simboli usati più volte sulla stessa riga
       // Es: If m_Queue(i).X = ... And m_Queue(j).Y = ...
-      foreach (Match match in matches)
+      foreach (var match in effectiveMatches)
       {
-        // Salta se è dentro una stringa
-        if (skipStringLiterals && IsInsideString(match.Index))
-          continue;
-
         replaces.AddReplace(
             lineNumber,
             match.Index,

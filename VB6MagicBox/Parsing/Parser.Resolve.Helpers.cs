@@ -63,4 +63,38 @@ public static partial class VbParser
 
     return line;
   }
+
+  private static string MaskStringLiterals(string line)
+  {
+    if (string.IsNullOrEmpty(line))
+      return line;
+
+    var chars = line.ToCharArray();
+    bool inString = false;
+    for (int i = 0; i < chars.Length; i++)
+    {
+      if (chars[i] == '"')
+      {
+        if (!inString)
+        {
+          inString = true;
+        }
+        else if (i + 1 < chars.Length && chars[i + 1] == '"')
+        {
+          chars[i + 1] = ' ';
+          i++;
+        }
+        else
+        {
+          inString = false;
+        }
+      }
+      else if (inString)
+      {
+        chars[i] = ' ';
+      }
+    }
+
+    return new string(chars);
+  }
 }

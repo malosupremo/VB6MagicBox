@@ -294,10 +294,14 @@ public static partial class VbParser
         int replacesBefore = isDebugSymbol && lineNum == 3146 ? refModule.Replaces.Count : 0;
 
         var referenceNewName = string.IsNullOrEmpty(referenceNewNameOverride) ? newName : referenceNewNameOverride;
+        var stringRanges = GetStringLiteralRanges(codePart);
+        var trimmedCodePart = codePart.TrimStart();
+        var allowStringReplace = trimmedCodePart.StartsWith("Attribute VB_Name", StringComparison.OrdinalIgnoreCase) ||
+                                 trimmedCodePart.StartsWith("Attribute ", StringComparison.OrdinalIgnoreCase);
 
         if (category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
         {
-          AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex);
+          AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex, stringRanges);
           continue;
         }
 
@@ -310,6 +314,9 @@ public static partial class VbParser
           {
             foreach (Match match in dotMatches)
             {
+              if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
+                continue;
+
               var nameStartIndex = match.Index + 1;
               refModule.Replaces.AddReplace(
                   lineNum,
@@ -322,8 +329,7 @@ public static partial class VbParser
           }
           else
           {
-            bool skipStrings = false;
-            refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStrings);
+            refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
           }
         }
         else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
@@ -333,6 +339,9 @@ public static partial class VbParser
 
           foreach (Match match in matches)
           {
+            if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
+              continue;
+
             refModule.Replaces.AddReplace(
                 lineNum,
                 match.Index,
@@ -344,8 +353,7 @@ public static partial class VbParser
         }
         else
         {
-          bool skipStrings = source is VbConstant;
-          refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStrings);
+          refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
         }
 
         if (isDebugSymbol && lineNum == 3146)
@@ -367,7 +375,8 @@ public static partial class VbParser
       string newName,
       string qualifiedName,
       string category,
-      int occIndex)
+      int occIndex,
+      List<(int start, int end)> stringRanges)
   {
     var pattern = $@"\b{Regex.Escape(oldName)}\b";
     var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
@@ -381,6 +390,9 @@ public static partial class VbParser
 
     foreach (var match in targetMatches)
     {
+      if (IsInsideStringLiteral(stringRanges, match.Index))
+        continue;
+
       var replacement = IsQualifiedEnumReference(codePart, match.Index) ? newName : qualifiedName;
       if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
         continue;
@@ -416,6 +428,45 @@ public static partial class VbParser
       index--;
 
     return end > index;
+  }
+
+  private static List<(int start, int end)> GetStringLiteralRanges(string line)
+  {
+    var ranges = new List<(int start, int end)>();
+    if (string.IsNullOrEmpty(line))
+      return ranges;
+
+    bool inString = false;
+    int stringStart = -1;
+
+    for (int i = 0; i < line.Length; i++)
+    {
+      if (line[i] == '"')
+      {
+        if (!inString)
+        {
+          inString = true;
+          stringStart = i;
+        }
+        else if (i + 1 < line.Length && line[i + 1] == '"')
+        {
+          i++;
+        }
+        else
+        {
+          inString = false;
+          if (stringStart >= 0)
+            ranges.Add((stringStart, i + 1));
+        }
+      }
+    }
+
+    return ranges;
+  }
+
+  private static bool IsInsideStringLiteral(List<(int start, int end)> ranges, int index)
+  {
+    return ranges.Any(r => index >= r.start && index < r.end);
   }
 
   /// <summary>

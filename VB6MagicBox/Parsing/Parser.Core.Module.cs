@@ -815,32 +815,41 @@ public static partial class VbParser
           var isType = mod.Types.Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
           var isSelfRef = name.Equals(currentProc.Name, StringComparison.OrdinalIgnoreCase);
 
-          if (isKeyword)
-            DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: VB Keyword", "ReBareCall");
-          else if (isParam)
-            DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Parameter", "ReBareCall");
-          else if (isLocalVar)
-            DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Local Variable", "ReBareCall");
-          else if (isGlobalVar)
-            DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Global Variable", "ReBareCall");
-          else if (isType)
-            DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Type", "ReBareCall");
-          else if (isSelfRef)
-            DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Self-reference (return value assignment)", "ReBareCall");
-          else if (!currentProc.Calls.Any(c => c.MethodName.Equals(name, StringComparison.OrdinalIgnoreCase) && c.LineNumber == originalLineNumber))
-          {
-            DebugLog(currentProc.Name, originalLineNumber, name, "ADDED", "ReBareCall");
-            currentProc.Calls.Add(new VbCall
-            {
-              Raw = name,
-              MethodName = name,
-              LineNumber = originalLineNumber
-            });
-          }
-          else
-          {
-            DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Duplicate", "ReBareCall");
-          }
+                    if (isKeyword)
+                        DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: VB Keyword", "ReBareCall");
+                    else if (isParam)
+                        DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Parameter", "ReBareCall");
+                    else if (isLocalVar)
+                        DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Local Variable", "ReBareCall");
+                    else if (isGlobalVar)
+                        DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Global Variable", "ReBareCall");
+                    else if (isType)
+                        DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Type", "ReBareCall");
+                    else if (isSelfRef)
+                    {
+                        //MAO, una funzione può richiamare se stessa ricorsivamente anche senza parentesi, ad esempio un avanzamento immediato di tick
+                        DebugLog(currentProc.Name, originalLineNumber, name, "ADDED: Self-reference (return value assignment)", "ReBareCall");
+                        currentProc.Calls.Add(new VbCall
+                        {
+                            Raw = name,
+                            MethodName = name,
+                            LineNumber = originalLineNumber
+                        });
+                    }
+                    else if (!currentProc.Calls.Any(c => c.MethodName.Equals(name, StringComparison.OrdinalIgnoreCase) && c.LineNumber == originalLineNumber))
+                    {
+                        DebugLog(currentProc.Name, originalLineNumber, name, "ADDED", "ReBareCall");
+                        currentProc.Calls.Add(new VbCall
+                        {
+                            Raw = name,
+                            MethodName = name,
+                            LineNumber = originalLineNumber
+                        });
+                    }
+                    else
+                    {
+                        DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Duplicate", "ReBareCall");
+                    }
         }
 
         // chiamate senza parentesi

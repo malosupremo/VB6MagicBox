@@ -88,8 +88,8 @@ public static partial class VbParser
       Dictionary<string, VbTypeDef> typeIndex,
       int occurrenceIndex = -1)
   {
-    // Debug per PLC_POLL_WHAT_CMD_T
-    bool isDebug = typeName?.Equals("PLC_POLL_WHAT_CMD_T", StringComparison.OrdinalIgnoreCase) == true && lineNumber == 3146;
+        // Debug per PLC_POLL_WHAT_CMD_T
+        bool isDebug = false;
 
     if (isDebug)
     {

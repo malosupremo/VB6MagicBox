@@ -95,6 +95,14 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - `ReFieldAccess` and nested chain regex must allow array indexing.
 - Constants: use `skipStringLiterals=true` when building replaces to avoid altering constant values in quotes.
 
+## Recent Fixes (2024)
+- **External object members**: member-access tokens (e.g., `obj.Prop`) are excluded from parameter/local reference scans so external member names are not renamed.
+- **Enum value collisions**: when multiple enum values converge to the same `ConventionalName`, references are qualified as `EnumName.Value` to avoid ambiguity.
+- **Enum qualification guard**: if the value is already qualified (`EnumName.Value`), only the value is renamed, preventing `Enum.Enum.Value` or wrong enum prefixes.
+- **Inline calls after `Then`**: procedure references are recorded even if a call is already present in `Calls`, ensuring inline statements are renamed.
+- **Screaming snake to PascalCase**: enum value naming preserves only known acronyms, so `RIC_RUN_CMD_CALLER` -> `RicRunCmdCaller`.
+- **String-aware comment stripping**: comment removal ignores apostrophes inside string literals, preventing truncation of lines with text (e.g., `"E' ..."`).
+
 ## Performance Considerations
 **Why is VB6 IDE faster?**
 1. **Incremental parsing** - VB6 keeps parsed project in memory, doesn't reparse on every load

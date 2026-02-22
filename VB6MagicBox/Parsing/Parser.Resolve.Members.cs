@@ -74,6 +74,8 @@ public static partial class VbParser
             if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
             {
                 var withExpr = trimmedNoComment.Substring(5).Trim();
+                if (withExpr.StartsWith(".") && withStack.Count > 0)
+                    withExpr = withStack.Peek() + withExpr;
                 if (!string.IsNullOrEmpty(withExpr))
                     withStack.Push(withExpr);
                 continue;
@@ -101,13 +103,20 @@ public static partial class VbParser
                     RegexOptions.IgnoreCase);
             }
 
+            var scanLine = MaskStringLiterals(noComment);
+            if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
+            {
+                Console.WriteLine($"[DBG MACRO:2916] raw='{raw}'");
+                Console.WriteLine($"[DBG MACRO:2916] noComment='{noComment}'");
+                Console.WriteLine($"[DBG MACRO:2916] scanLine='{scanLine}'");
+            }
             var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
             var chainMatches = new List<(string Text, int Index)>();
 
-            foreach (Match m in Regex.Matches(noComment, chainPattern, RegexOptions.IgnoreCase))
+            foreach (Match m in Regex.Matches(scanLine, chainPattern, RegexOptions.IgnoreCase))
                 chainMatches.Add((m.Value, m.Index));
 
-            foreach (Match inner in Regex.Matches(noComment, @"\(([^)]*)\)"))
+            foreach (Match inner in Regex.Matches(scanLine, @"\(([^)]*)\)"))
             {
                 var innerText = inner.Groups[1].Value;
                 var innerStart = inner.Groups[1].Index;
@@ -115,21 +124,67 @@ public static partial class VbParser
                     chainMatches.Add((m.Value, innerStart + m.Index));
             }
 
+            if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
+            {
+                Console.WriteLine($"[DBG MACRO:2916] chainMatches={chainMatches.Count}");
+                foreach (var (chainText, chainIndex) in chainMatches)
+                    Console.WriteLine($"[DBG MACRO:2916] chain '{chainText}' @ {chainIndex}");
+            }
+
             foreach (var (chainText, chainIndex) in chainMatches)
             {
-                var parts = chainText
+                if (TryUnwrapFunctionChain(chainText, chainIndex, out var unwrappedChain, out var unwrappedIndex))
+                {
+                    if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
+                        Console.WriteLine($"[DBG MACRO:2916] unwrap '{chainText}' -> '{unwrappedChain}' @ {unwrappedIndex}");
+                }
+
+                var effectiveChain = unwrappedChain ?? chainText;
+                var effectiveIndex = unwrappedChain != null ? unwrappedIndex : chainIndex;
+
+                var parts = effectiveChain
                     .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
                 if (parts.Length < 2)
                     continue;
 
-                var tokenMatches = Regex.Matches(chainText, @"\b[A-Za-z_]\w*\b");
-                var tokenPositions = tokenMatches.Select(m => (m.Value, chainIndex + m.Index)).ToList();
+                var tokenMatches = Regex.Matches(effectiveChain, @"\b[A-Za-z_]\w*\b");
+                var tokenPositions = tokenMatches.Select(m => (m.Value, effectiveIndex + m.Index)).ToList();
 
                 var baseVarName = parts[0];
                 var parenIndex = baseVarName.IndexOf('(');
                 if (parenIndex >= 0)
                     baseVarName = baseVarName.Substring(0, parenIndex);
+
+                var baseTokenPosition = tokenPositions.FirstOrDefault();
+                if (!string.IsNullOrEmpty(baseVarName))
+                {
+                    var baseOccIdx = GetOccurrenceIndex(scanLine, baseVarName, baseTokenPosition.Item2, i + 1);
+
+                    var paramRef = proc.Parameters.FirstOrDefault(p =>
+                        p.Name.Equals(baseVarName, StringComparison.OrdinalIgnoreCase));
+                    if (paramRef != null)
+                    {
+                        paramRef.Used = true;
+                        paramRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseOccIdx);
+                    }
+
+                    var localRef = proc.LocalVariables.FirstOrDefault(v =>
+                        v.Name.Equals(baseVarName, StringComparison.OrdinalIgnoreCase));
+                    if (localRef != null && localRef.LineNumber != i + 1)
+                    {
+                        localRef.Used = true;
+                        localRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseOccIdx);
+                    }
+
+                    var globalRef = mod.GlobalVariables.FirstOrDefault(v =>
+                        v.Name.Equals(baseVarName, StringComparison.OrdinalIgnoreCase));
+                    if (globalRef != null)
+                    {
+                        globalRef.Used = true;
+                        globalRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseOccIdx);
+                    }
+                }
 
                 string typeName = null;
                 var startPartIndex = 1;
@@ -166,6 +221,9 @@ public static partial class VbParser
                         }
                     }
                 }
+
+                if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
+                    Console.WriteLine($"[DBG MACRO:2916] base='{baseVarName}', type='{typeName ?? ""}', startPartIndex={startPartIndex}");
 
                 if (string.IsNullOrEmpty(typeName))
                     continue;
@@ -210,9 +268,8 @@ public static partial class VbParser
                             {
                                 var tp = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                                     t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
-                                var oi = GetOccurrenceIndex(noComment, fieldName, tp.Item2, i + 1);
-                                if (i + 1 == 3146)
-                                    Console.WriteLine($"[DBG] chain-fallback '{fieldName}'@{i+1} ? {anyTypeName}, occIdx={oi}");
+                                var oi = GetOccurrenceIndex(scanLine, fieldName, tp.Item2, i + 1);
+                                
                                 anyField.Used = true;
                                 anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, oi);
                                 typeName = anyField.Type;
@@ -277,8 +334,7 @@ public static partial class VbParser
                                 var fallbackTokenPos = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                                     t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                                 var fallbackOccIdx = GetOccurrenceIndex(noComment, fieldName, fallbackTokenPos.Item2, i + 1);
-                                if (i + 1 == 3146)
-                                    Console.WriteLine($"[DBG] type-fallback '{fieldName}'@{i+1} ? {anyTypeName}, occIdx={fallbackOccIdx}");
+                                
                                 anyField.Used = true;
                                 anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, fallbackOccIdx);
                                 fieldFoundInAnyType = true;
@@ -300,10 +356,9 @@ public static partial class VbParser
 
                     var tokenPosition = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                         t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
-                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2, i + 1);
+                    var occurrenceIndex = GetOccurrenceIndex(scanLine, fieldName, tokenPosition.Item2, i + 1);
 
-                    if (i + 1 == 3146)
-                        Console.WriteLine($"[DBG] normal '{fieldName}'@{i+1} type={baseTypeName}, occIdx={occurrenceIndex}");
+                    
 
                     field.Used = true;
                     field.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex);
@@ -349,6 +404,8 @@ public static partial class VbParser
             if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
             {
                 var withExpr = trimmedNoComment.Substring(5).Trim();
+                if (withExpr.StartsWith(".") && withStack.Count > 0)
+                    withExpr = withStack.Peek() + withExpr;
                 if (!string.IsNullOrEmpty(withExpr))
                     withStack.Push(withExpr);
                 continue;
@@ -376,13 +433,14 @@ public static partial class VbParser
                     RegexOptions.IgnoreCase);
             }
 
+            var scanLine = MaskStringLiterals(noComment);
             var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
             var chainMatches = new List<(string Text, int Index)>();
 
-            foreach (Match m in Regex.Matches(noComment, chainPattern, RegexOptions.IgnoreCase))
+            foreach (Match m in Regex.Matches(scanLine, chainPattern, RegexOptions.IgnoreCase))
                 chainMatches.Add((m.Value, m.Index));
 
-            foreach (Match inner in Regex.Matches(noComment, @"\(([^)]*)\)"))
+            foreach (Match inner in Regex.Matches(scanLine, @"\(([^)]*)\)"))
             {
                 var innerText = inner.Groups[1].Value;
                 var innerStart = inner.Groups[1].Index;
@@ -392,19 +450,50 @@ public static partial class VbParser
 
             foreach (var (chainText, chainIndex) in chainMatches)
             {
-                var parts = chainText
+                if (TryUnwrapFunctionChain(chainText, chainIndex, out var unwrappedChain, out var unwrappedIndex))
+                {
+                    if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
+                        Console.WriteLine($"[DBG MACRO:2916] unwrap '{chainText}' -> '{unwrappedChain}' @ {unwrappedIndex}");
+                }
+
+                var effectiveChain = unwrappedChain ?? chainText;
+                var effectiveIndex = unwrappedChain != null ? unwrappedIndex : chainIndex;
+
+                var parts = effectiveChain
                     .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
                 if (parts.Length < 2)
                     continue;
 
-                var tokenMatches = Regex.Matches(chainText, @"\b[A-Za-z_]\w*\b");
-                var tokenPositions = tokenMatches.Select(m => (m.Value, chainIndex + m.Index)).ToList();
+                var tokenMatches = Regex.Matches(effectiveChain, @"\b[A-Za-z_]\w*\b");
+                var tokenPositions = tokenMatches.Select(m => (m.Value, effectiveIndex + m.Index)).ToList();
 
                 var baseVarName = parts[0];
                 var parenIndex = baseVarName.IndexOf('(');
                 if (parenIndex >= 0)
                     baseVarName = baseVarName.Substring(0, parenIndex);
+
+                var baseTokenPosition = tokenPositions.FirstOrDefault();
+                if (!string.IsNullOrEmpty(baseVarName))
+                {
+                    var baseOccIdx = GetOccurrenceIndex(scanLine, baseVarName, baseTokenPosition.Item2, i + 1);
+
+                    var paramRef = prop.Parameters.FirstOrDefault(p =>
+                        p.Name.Equals(baseVarName, StringComparison.OrdinalIgnoreCase));
+                    if (paramRef != null)
+                    {
+                        paramRef.Used = true;
+                        paramRef.References.AddLineNumber(mod.Name, prop.Name, i + 1, baseOccIdx);
+                    }
+
+                    var globalRef = mod.GlobalVariables.FirstOrDefault(v =>
+                        v.Name.Equals(baseVarName, StringComparison.OrdinalIgnoreCase));
+                    if (globalRef != null)
+                    {
+                        globalRef.Used = true;
+                        globalRef.References.AddLineNumber(mod.Name, prop.Name, i + 1, baseOccIdx);
+                    }
+                }
 
                 if (!env.TryGetValue(baseVarName, out var typeName) || string.IsNullOrEmpty(typeName))
                     continue;
@@ -447,7 +536,7 @@ public static partial class VbParser
                             {
                                 var tp = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                                     t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
-                                var oi = GetOccurrenceIndex(noComment, fieldName, tp.Item2, i + 1);
+                                var oi = GetOccurrenceIndex(scanLine, fieldName, tp.Item2, i + 1);
                                 anyField.Used = true;
                                 anyField.References.AddLineNumber(mod.Name, prop.Name, i + 1, oi);
                                 typeName = anyField.Type;
@@ -531,7 +620,7 @@ public static partial class VbParser
 
                     var tokenPosition = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                         t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
-                    var occurrenceIndex = GetOccurrenceIndex(noComment, fieldName, tokenPosition.Item2, i + 1);
+                    var occurrenceIndex = GetOccurrenceIndex(scanLine, fieldName, tokenPosition.Item2, i + 1);
 
                     field.Used = true;
                     field.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex);
@@ -1143,7 +1232,7 @@ public static partial class VbParser
 
   private static int GetOccurrenceIndex(string line, string token, int tokenIndex, int currentLineNumber = 0)
   {
-    bool isDebug = token.Equals("Dsp_h", StringComparison.OrdinalIgnoreCase) && currentLineNumber == 3146;
+        bool isDebug = false;
 
     if (tokenIndex < 0)
       return -1;
@@ -1173,5 +1262,26 @@ public static partial class VbParser
       Console.WriteLine($"[DEBUG]   ? Token not found at specified index, returning -1");
 
     return -1;
+  }
+
+  private static bool TryUnwrapFunctionChain(string chainText, int chainIndex, out string unwrappedChain, out int unwrappedIndex)
+  {
+    unwrappedChain = null;
+    unwrappedIndex = chainIndex;
+
+    if (string.IsNullOrEmpty(chainText))
+      return false;
+
+    var parenIndex = chainText.IndexOf('(');
+    if (parenIndex <= 0)
+      return false;
+
+    var prefix = chainText.Substring(0, parenIndex).Trim();
+    if (prefix.Contains('.'))
+      return false;
+
+    unwrappedChain = chainText.Substring(parenIndex + 1).TrimStart();
+    unwrappedIndex = chainIndex + parenIndex + 1;
+    return !string.IsNullOrEmpty(unwrappedChain);
   }
 }
