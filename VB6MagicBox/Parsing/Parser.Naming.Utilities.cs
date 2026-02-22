@@ -208,9 +208,11 @@ public static partial class VbParser
       {
         if (part.Length > 0)
         {
-          if (part.All(char.IsLetter) && part.ToUpperInvariant() == part && part.Length <= 3)
+          if (part.All(char.IsLetter) && part.ToUpperInvariant() == part &&
+              KnownAcronyms.Any(acr => acr.Equals(part, StringComparison.OrdinalIgnoreCase)))
           {
-            result.Append(part);
+            var acronym = KnownAcronyms.First(acr => acr.Equals(part, StringComparison.OrdinalIgnoreCase));
+            result.Append(acronym);
             continue;
           }
 
