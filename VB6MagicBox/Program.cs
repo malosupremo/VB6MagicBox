@@ -260,10 +260,11 @@ public class Program
           //    Deve seguire tutto il resto perché opera sui file già rinominati e tipizzati
           CodeFormatter.ReorderLocalVariables(project);
 
-          // 6) Armonizzazione spaziature
-          CodeFormatter.HarmonizeSpacing(project);
+            // 6) Armonizzazione spaziature
+            //TODO: per ora no, va provata meglio su casi reali prima di includerla nella bacchetta magica (rischia di introdurre regressioni)
+            //CodeFormatter.HarmonizeSpacing(project);
 
-          Console.WriteLine();
+            Console.WriteLine();
           Console.WriteLine("[OK] Bacchetta magica applicata!");
         }
         catch (Exception ex)
