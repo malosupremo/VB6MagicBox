@@ -875,11 +875,11 @@ public static partial class VbParser
             DebugLog(currentProc.Name, originalLineNumber, methodName, "SKIPPED: Global Variable", "ReCallWithoutParens");
             continue;
           }
-          if (isSelfRef)
-          {
-            DebugLog(currentProc.Name, originalLineNumber, methodName, "SKIPPED: Self-reference (recursion)", "ReCallWithoutParens");
-            continue;
-          }
+          //if (isSelfRef)
+          //{
+          //  DebugLog(currentProc.Name, originalLineNumber, methodName, "SKIPPED: Self-reference (recursion)", "ReCallWithoutParens");
+          //  continue;
+          //}
 
           var newCall = new VbCall
           {

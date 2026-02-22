@@ -766,6 +766,9 @@ public static partial class VbParser
 
             foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
             {
+                if (IsMemberAccessToken(noComment, m.Index))
+                    continue;
+
                 var tokenName = m.Groups[1].Value;
 
                 if (parameterIndex.TryGetValue(tokenName, out var parameter))
@@ -809,7 +812,8 @@ public static partial class VbParser
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
-            if (Regex.IsMatch(noComment, $@"\b{Regex.Escape(prop.Name)}\b", RegexOptions.IgnoreCase))
+            var matches = Regex.Matches(noComment, $@"\b{Regex.Escape(prop.Name)}\b", RegexOptions.IgnoreCase);
+            if (matches.Count > 0 && matches.Cast<Match>().Any(m => !IsMemberAccessToken(noComment, m.Index)))
             {
                 prop.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber);
             }
@@ -849,11 +853,24 @@ public static partial class VbParser
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
-            if (Regex.IsMatch(noComment, $@"\b{Regex.Escape(proc.Name)}\b", RegexOptions.IgnoreCase))
+            var matches = Regex.Matches(noComment, $@"\b{Regex.Escape(proc.Name)}\b", RegexOptions.IgnoreCase);
+            if (matches.Count > 0 && matches.Cast<Match>().Any(m => !IsMemberAccessToken(noComment, m.Index)))
             {
                 proc.References.AddLineNumber(mod.Name, proc.Name, i + 1);
             }
         }
+    }
+
+    private static bool IsMemberAccessToken(string line, int tokenIndex)
+    {
+        if (tokenIndex <= 0)
+            return false;
+
+        var index = tokenIndex - 1;
+        while (index >= 0 && char.IsWhiteSpace(line[index]))
+            index--;
+
+        return index >= 0 && line[index] == '.';
     }
 
     // ---------------------------------------------------------
