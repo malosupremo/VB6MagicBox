@@ -126,8 +126,7 @@ public static partial class VbParser
                 var effectiveChain = unwrappedChain ?? chainText;
                 var effectiveIndex = unwrappedChain != null ? unwrappedIndex : chainIndex;
 
-                var parts = effectiveChain
-                    .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var parts = SplitChainParts(effectiveChain);
 
                 if (parts.Length < 2)
                     continue;
@@ -437,8 +436,7 @@ public static partial class VbParser
                 var effectiveChain = unwrappedChain ?? chainText;
                 var effectiveIndex = unwrappedChain != null ? unwrappedIndex : chainIndex;
 
-                var parts = effectiveChain
-                    .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var parts = SplitChainParts(effectiveChain);
 
                 if (parts.Length < 2)
                     continue;
@@ -1287,5 +1285,39 @@ public static partial class VbParser
   {
     return string.Equals(name, token, StringComparison.OrdinalIgnoreCase) ||
            string.Equals(conventionalName, token, StringComparison.OrdinalIgnoreCase);
+  }
+
+  private static string[] SplitChainParts(string chainText)
+  {
+    if (string.IsNullOrEmpty(chainText))
+      return Array.Empty<string>();
+
+    var parts = new List<string>();
+    int depth = 0;
+    int start = 0;
+
+    for (int i = 0; i < chainText.Length; i++)
+    {
+      if (chainText[i] == '(')
+        depth++;
+      else if (chainText[i] == ')')
+        depth = Math.Max(0, depth - 1);
+      else if (chainText[i] == '.' && depth == 0)
+      {
+        var part = chainText.Substring(start, i - start).Trim();
+        if (part.Length > 0)
+          parts.Add(part);
+        start = i + 1;
+      }
+    }
+
+    if (start <= chainText.Length)
+    {
+      var tail = chainText.Substring(start).Trim();
+      if (tail.Length > 0)
+        parts.Add(tail);
+    }
+
+    return parts.ToArray();
   }
 }
