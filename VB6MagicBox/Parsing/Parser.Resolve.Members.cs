@@ -67,11 +67,8 @@ public static partial class VbParser
         {
             var raw = fileLines[i].Trim();
 
-            // Rimuovi commenti
-            var noComment = raw;
-            var idx = noComment.IndexOf("'");
-            if (idx >= 0)
-                noComment = noComment.Substring(0, idx).Trim();
+            // Rimuovi commenti (ignorando apostrofi dentro stringhe)
+            var noComment = StripInlineComment(raw).Trim();
 
             var trimmedNoComment = noComment.TrimStart();
             if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
@@ -345,11 +342,8 @@ public static partial class VbParser
         {
             var raw = fileLines[i].Trim();
 
-            // Rimuovi commenti
-            var noComment = raw;
-            var idx = noComment.IndexOf("'");
-            if (idx >= 0)
-                noComment = noComment.Substring(0, idx).Trim();
+            // Rimuovi commenti (ignorando apostrofi dentro stringhe)
+            var noComment = StripInlineComment(raw).Trim();
 
             var trimmedNoComment = noComment.TrimStart();
             if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
@@ -680,11 +674,8 @@ public static partial class VbParser
             if (i > proc.LineNumber - 1 && IsProcedureEndLine(raw, proc.Kind))
                 break;
 
-            // Rimuovi commenti
-            var noComment = raw;
-            var idx = noComment.IndexOf("'", StringComparison.Ordinal);
-            if (idx >= 0)
-                noComment = noComment.Substring(0, idx).Trim();
+            // Rimuovi commenti (ignorando apostrofi dentro stringhe)
+            var noComment = StripInlineComment(raw).Trim();
 
             // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
@@ -755,11 +746,8 @@ public static partial class VbParser
             var raw = fileLines[i].Trim();
             int currentLineNumber = i + 1;
 
-            // Rimuovi commenti
-            var noComment = raw;
-            var idx = noComment.IndexOf("'", StringComparison.Ordinal);
-            if (idx >= 0)
-                noComment = noComment.Substring(0, idx).Trim();
+            // Rimuovi commenti (ignorando apostrofi dentro stringhe)
+            var noComment = StripInlineComment(raw).Trim();
 
             // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
@@ -805,10 +793,7 @@ public static partial class VbParser
             var raw = fileLines[i].Trim();
             int currentLineNumber = i + 1;
 
-            var noComment = raw;
-            var idx = noComment.IndexOf("'", StringComparison.Ordinal);
-            if (idx >= 0)
-                noComment = noComment.Substring(0, idx).Trim();
+            var noComment = StripInlineComment(raw).Trim();
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
@@ -846,10 +831,7 @@ public static partial class VbParser
         for (int i = startIndex + 1; i < endIndex; i++)
         {
             var raw = fileLines[i].Trim();
-            var noComment = raw;
-            var idx = noComment.IndexOf("'", StringComparison.Ordinal);
-            if (idx >= 0)
-                noComment = noComment.Substring(0, idx).Trim();
+            var noComment = StripInlineComment(raw).Trim();
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 

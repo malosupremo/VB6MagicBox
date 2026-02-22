@@ -36,4 +36,31 @@ public static partial class VbParser
     control.Used = true;
     control.References.AddLineNumber(moduleName, procedureName, lineNumber);
   }
+
+  private static string StripInlineComment(string line)
+  {
+    if (string.IsNullOrEmpty(line))
+      return line;
+
+    bool inString = false;
+    for (int i = 0; i < line.Length; i++)
+    {
+      var ch = line[i];
+      if (ch == '"')
+      {
+        if (!inString)
+          inString = true;
+        else if (i + 1 < line.Length && line[i + 1] == '"')
+          i++;
+        else
+          inString = false;
+      }
+      else if (!inString && ch == '\'')
+      {
+        return line.Substring(0, i);
+      }
+    }
+
+    return line;
+  }
 }
