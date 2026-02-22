@@ -104,12 +104,6 @@ public static partial class VbParser
             }
 
             var scanLine = MaskStringLiterals(noComment);
-            if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
-            {
-                Console.WriteLine($"[DBG MACRO:2916] raw='{raw}'");
-                Console.WriteLine($"[DBG MACRO:2916] noComment='{noComment}'");
-                Console.WriteLine($"[DBG MACRO:2916] scanLine='{scanLine}'");
-            }
             var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
             var chainMatches = new List<(string Text, int Index)>();
 
@@ -124,20 +118,10 @@ public static partial class VbParser
                     chainMatches.Add((m.Value, innerStart + m.Index));
             }
 
-            if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
-            {
-                Console.WriteLine($"[DBG MACRO:2916] chainMatches={chainMatches.Count}");
-                foreach (var (chainText, chainIndex) in chainMatches)
-                    Console.WriteLine($"[DBG MACRO:2916] chain '{chainText}' @ {chainIndex}");
-            }
-
             foreach (var (chainText, chainIndex) in chainMatches)
             {
                 if (TryUnwrapFunctionChain(chainText, chainIndex, out var unwrappedChain, out var unwrappedIndex))
-                {
-                    if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
-                        Console.WriteLine($"[DBG MACRO:2916] unwrap '{chainText}' -> '{unwrappedChain}' @ {unwrappedIndex}");
-                }
+                { }
 
                 var effectiveChain = unwrappedChain ?? chainText;
                 var effectiveIndex = unwrappedChain != null ? unwrappedIndex : chainIndex;
@@ -222,9 +206,6 @@ public static partial class VbParser
                     }
                 }
 
-                if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
-                    Console.WriteLine($"[DBG MACRO:2916] base='{baseVarName}', type='{typeName ?? ""}', startPartIndex={startPartIndex}");
-
                 if (string.IsNullOrEmpty(typeName))
                     continue;
 
@@ -292,7 +273,7 @@ public static partial class VbParser
                     {
                         // Cerca prima nelle propriet� della classe
                         var classProp = classModule.Properties.FirstOrDefault(p =>
-                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                            MatchesName(p.Name, p.ConventionalName, fieldName));
                         if (classProp != null)
                         {
                             classProp.Used = true;
@@ -305,7 +286,7 @@ public static partial class VbParser
 
                         // Cerca anche tra le funzioni/procedure (es. Item(i) � una Function che ritorna un tipo)
                         var classFunc = classModule.Procedures.FirstOrDefault(p =>
-                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                            MatchesName(p.Name, p.ConventionalName, fieldName));
                         if (classFunc != null)
                         {
                             typeName = classFunc.ReturnType;
@@ -327,7 +308,7 @@ public static partial class VbParser
                         {
                             var anyField = anyTypeDef.Fields.FirstOrDefault(f =>
                                 !string.IsNullOrEmpty(f.Name) &&
-                                string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+                                MatchesName(f.Name, f.ConventionalName, fieldName));
 
                             if (anyField != null)
                             {
@@ -349,7 +330,7 @@ public static partial class VbParser
 
                     var field = typeDef.Fields.FirstOrDefault(f =>
                         !string.IsNullOrEmpty(f.Name) &&
-                        string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+                        MatchesName(f.Name, f.ConventionalName, fieldName));
 
                     if (field == null)
                         break;
@@ -451,10 +432,7 @@ public static partial class VbParser
             foreach (var (chainText, chainIndex) in chainMatches)
             {
                 if (TryUnwrapFunctionChain(chainText, chainIndex, out var unwrappedChain, out var unwrappedIndex))
-                {
-                    if (mod.Name.Equals("MACRO", StringComparison.OrdinalIgnoreCase) && i + 1 == 2916)
-                        Console.WriteLine($"[DBG MACRO:2916] unwrap '{chainText}' -> '{unwrappedChain}' @ {unwrappedIndex}");
-                }
+                { }
 
                 var effectiveChain = unwrappedChain ?? chainText;
                 var effectiveIndex = unwrappedChain != null ? unwrappedIndex : chainIndex;
@@ -559,7 +537,7 @@ public static partial class VbParser
                     {
                         // Cerca prima nelle propriet� della classe
                         var classProp = classModule.Properties.FirstOrDefault(p =>
-                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                            MatchesName(p.Name, p.ConventionalName, fieldName));
                         if (classProp != null)
                         {
                             classProp.Used = true;
@@ -572,7 +550,7 @@ public static partial class VbParser
 
                         // Cerca anche tra le funzioni/procedure (es. Item(i) � una Function che ritorna un tipo)
                         var classFunc = classModule.Procedures.FirstOrDefault(p =>
-                            p.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                            MatchesName(p.Name, p.ConventionalName, fieldName));
                         if (classFunc != null)
                         {
                             typeName = classFunc.ReturnType;
@@ -593,7 +571,7 @@ public static partial class VbParser
                         {
                             var anyField = anyTypeDef.Fields.FirstOrDefault(f =>
                                 !string.IsNullOrEmpty(f.Name) &&
-                                string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+                                MatchesName(f.Name, f.ConventionalName, fieldName));
                             if (anyField != null)
                             {
                                 var fallbackTokenPos = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
@@ -613,7 +591,7 @@ public static partial class VbParser
 
                     var field = typeDef.Fields.FirstOrDefault(f =>
                         !string.IsNullOrEmpty(f.Name) &&
-                        string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+                        MatchesName(f.Name, f.ConventionalName, fieldName));
 
                     if (field == null)
                         break;
@@ -1276,6 +1254,26 @@ public static partial class VbParser
     if (parenIndex <= 0)
       return false;
 
+    int depth = 0;
+    int closeIndex = -1;
+    for (int i = parenIndex; i < chainText.Length; i++)
+    {
+      if (chainText[i] == '(')
+        depth++;
+      else if (chainText[i] == ')')
+      {
+        depth--;
+        if (depth == 0)
+        {
+          closeIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (closeIndex >= 0 && closeIndex + 1 < chainText.Length && chainText[closeIndex + 1] == '.')
+      return false;
+
     var prefix = chainText.Substring(0, parenIndex).Trim();
     if (prefix.Contains('.'))
       return false;
@@ -1283,5 +1281,11 @@ public static partial class VbParser
     unwrappedChain = chainText.Substring(parenIndex + 1).TrimStart();
     unwrappedIndex = chainIndex + parenIndex + 1;
     return !string.IsNullOrEmpty(unwrappedChain);
+  }
+
+  private static bool MatchesName(string name, string conventionalName, string token)
+  {
+    return string.Equals(name, token, StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(conventionalName, token, StringComparison.OrdinalIgnoreCase);
   }
 }

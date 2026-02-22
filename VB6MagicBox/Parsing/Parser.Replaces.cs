@@ -356,13 +356,13 @@ public static partial class VbParser
           refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
         }
 
-        if (isDebugSymbol && lineNum == 3146)
-        {
-          var added = refModule.Replaces.Count - replacesBefore;
-          var lastReplace = added > 0 ? refModule.Replaces.Last() : null;
-          Console.WriteLine($"\n[DBG] '{oldName}'@{refModuleName}:{lineNum} occIdx={occIndex} → {added} replace(s)" +
-              (lastReplace != null ? $" char {lastReplace.StartChar}-{lastReplace.EndChar} '{lastReplace.OldText}'→'{lastReplace.NewText}'" : " NONE"));
-        }
+        //if (isDebugSymbol && lineNum == 3146)
+        //{
+        //  var added = refModule.Replaces.Count - replacesBefore;
+        //  var lastReplace = added > 0 ? refModule.Replaces.Last() : null;
+        //  Console.WriteLine($"\n[DBG] '{oldName}'@{refModuleName}:{lineNum} occIdx={occIndex} → {added} replace(s)" +
+        //      (lastReplace != null ? $" char {lastReplace.StartChar}-{lastReplace.EndChar} '{lastReplace.OldText}'→'{lastReplace.NewText}'" : " NONE"));
+        //}
       }
     }
   }
