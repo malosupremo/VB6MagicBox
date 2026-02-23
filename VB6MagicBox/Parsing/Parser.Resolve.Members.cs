@@ -856,8 +856,7 @@ public static partial class VbParser
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
-            var matches = Regex.Matches(noComment, $@"\b{Regex.Escape(prop.Name)}\b", RegexOptions.IgnoreCase);
-            if (matches.Count > 0 && matches.Cast<Match>().Any(m => !IsMemberAccessToken(noComment, m.Index)))
+            if (ContainsStandaloneToken(noComment, prop.Name))
             {
                 prop.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber);
             }
@@ -894,13 +893,57 @@ public static partial class VbParser
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
-            var matches = Regex.Matches(noComment, $@"\b{Regex.Escape(proc.Name)}\b", RegexOptions.IgnoreCase);
-            if (matches.Count > 0 && matches.Cast<Match>().Any(m => !IsMemberAccessToken(noComment, m.Index)))
+            if (ContainsStandaloneToken(noComment, proc.Name))
             {
                 proc.References.AddLineNumber(mod.Name, proc.Name, i + 1);
             }
         }
     }
+
+    private static bool ContainsStandaloneToken(string line, string token)
+    {
+        if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(token))
+            return false;
+
+        int index = 0;
+        while ((index = line.IndexOf(token, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            if (IsWordBoundary(line, index, token.Length) && !IsMemberAccessToken(line, index))
+                return true;
+
+            index += token.Length;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsToken(string line, string token)
+    {
+        if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(token))
+            return false;
+
+        int index = 0;
+        while ((index = line.IndexOf(token, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            if (IsWordBoundary(line, index, token.Length))
+                return true;
+
+            index += token.Length;
+        }
+
+        return false;
+    }
+
+    private static bool IsWordBoundary(string line, int index, int length)
+    {
+        bool startOk = index == 0 || !IsIdentifierChar(line[index - 1]);
+        int endIndex = index + length;
+        bool endOk = endIndex >= line.Length || !IsIdentifierChar(line[endIndex]);
+        return startOk && endOk;
+    }
+
+    private static bool IsIdentifierChar(char value)
+        => char.IsLetterOrDigit(value) || value == '_';
 
     private static bool IsMemberAccessToken(string line, int tokenIndex)
     {
@@ -912,6 +955,31 @@ public static partial class VbParser
             index--;
 
         return index >= 0 && line[index] == '.';
+    }
+
+    private static bool TryGetRaiseEventName(string line, out string eventName)
+    {
+        eventName = null;
+        if (string.IsNullOrWhiteSpace(line))
+            return false;
+
+        var keywordIndex = line.IndexOf("RaiseEvent", StringComparison.OrdinalIgnoreCase);
+        if (keywordIndex < 0)
+            return false;
+
+        int index = keywordIndex + "RaiseEvent".Length;
+        while (index < line.Length && char.IsWhiteSpace(line[index]))
+            index++;
+
+        if (index >= line.Length || !IsIdentifierChar(line[index]))
+            return false;
+
+        int start = index;
+        while (index < line.Length && IsIdentifierChar(line[index]))
+            index++;
+
+        eventName = line.Substring(start, index - start);
+        return !string.IsNullOrEmpty(eventName);
     }
 
     // ---------------------------------------------------------
@@ -954,10 +1022,8 @@ public static partial class VbParser
                         break;
 
                     // Rimuovi commenti
-                    var noComment = line;
-                    var idx = noComment.IndexOf("'");
-                    if (idx >= 0)
-                        noComment = noComment.Substring(0, idx);
+                    var noComment = StripInlineComment(line);
+                    noComment = MaskStringLiterals(noComment);
 
                     // Cerca ogni valore enum nel codice
                     foreach (var kvp in allEnumValues)
@@ -966,7 +1032,7 @@ public static partial class VbParser
                         var enumValues = kvp.Value;
 
                         // Usa word boundary per evitare match parziali
-                        if (Regex.IsMatch(noComment, $@"\b{Regex.Escape(enumValueName)}\b", RegexOptions.IgnoreCase))
+                        if (ContainsToken(noComment, enumValueName))
                         {
                             // Marca tutti i valori enum con questo nome (potrebbero esserci duplicati in enum diversi)
                             foreach (var enumValue in enumValues)
@@ -1013,17 +1079,12 @@ public static partial class VbParser
                         break;
 
                     // Rimuovi commenti
-                    var noComment = line;
-                    var idx = noComment.IndexOf("'");
-                    if (idx >= 0)
-                        noComment = noComment.Substring(0, idx);
+                    var noComment = StripInlineComment(line);
+                    noComment = MaskStringLiterals(noComment);
 
                     // Pattern: RaiseEvent EventName o RaiseEvent EventName(params)
-                    var raiseEventMatch = Regex.Match(noComment, @"RaiseEvent\s+(\w+)", RegexOptions.IgnoreCase);
-                    if (raiseEventMatch.Success)
+                    if (TryGetRaiseEventName(noComment, out var eventName))
                     {
-                        var eventName = raiseEventMatch.Groups[1].Value;
-
                         // Cerca l'evento nel modulo corrente (gli eventi sono sempre locali al modulo/classe)
                         if (eventsByModule.TryGetValue(mod.Name, out var events))
                         {
