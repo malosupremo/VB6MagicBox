@@ -300,6 +300,7 @@ public static class TypeAnnotator
         memberRanges);
 
       processed = ApplyCallRemoval(processed);
+      processed = ApplyForStepCleanup(processed);
 
       if (!string.Equals(clean, processed, StringComparison.Ordinal))
       {
@@ -415,6 +416,23 @@ public static class TypeAnnotator
     var updatedCall = string.IsNullOrEmpty(args) ? target : $"{target} {args}";
     var updatedLine = indent + updatedCall;
     return string.IsNullOrEmpty(comment) ? updatedLine : updatedLine + " " + comment;
+  }
+
+  private static string ApplyForStepCleanup(string line)
+  {
+    if (string.IsNullOrWhiteSpace(line))
+      return line;
+
+    var (code, comment) = SplitCodeAndComment(line);
+    var trimmed = code.TrimStart();
+    if (!trimmed.StartsWith("For ", StringComparison.OrdinalIgnoreCase))
+      return line;
+
+    var updatedCode = Regex.Replace(code, @"\s+Step\s+1\s*$", "", RegexOptions.IgnoreCase);
+    if (string.Equals(code, updatedCode, StringComparison.Ordinal))
+      return line;
+
+    return string.IsNullOrEmpty(comment) ? updatedCode : updatedCode + " " + comment;
   }
 
   private static bool StartsWithVisibility(string trimmed)
