@@ -387,12 +387,16 @@ public static class CodeFormatter
         if (!string.IsNullOrEmpty(prevNonBlank) && IsBlockStart(prevNonBlank))
           continue;
 
+        if (!string.IsNullOrEmpty(prevNonBlank) && IsAttributeLine(prevNonBlank))
+          continue;
+
         if (!string.IsNullOrEmpty(prevNonBlank) && IsBlockStart(prevNonBlank) &&
             !string.IsNullOrEmpty(nextNonBlank) && IsCommentLine(nextNonBlank))
           continue;
 
         if (!string.IsNullOrEmpty(nextNonBlank) && IsBlockEnd(nextNonBlank))
           continue;
+
 
         if (!string.IsNullOrEmpty(prevNonBlank) &&
             (IsDimOrStatic(prevNonBlank) || IsConst(prevNonBlank)) &&
@@ -414,9 +418,12 @@ public static class CodeFormatter
 
       lastWasLabel = false;
 
-      if (IsOptionLine(trimmed) && result.Count > 0 && !string.IsNullOrWhiteSpace(result.Last()) &&
-          !(mod.IsForm && IsAttributeLine(result.LastOrDefault() ?? string.Empty)))
-        result.Add(string.Empty);
+      if (IsOptionLine(trimmed) && result.Count > 0 && !string.IsNullOrWhiteSpace(result.Last()))
+      {
+        var lastNonBlank = LastNonBlank(result);
+        if (string.IsNullOrEmpty(lastNonBlank) || !IsAttributeLine(lastNonBlank))
+          result.Add(string.Empty);
+      }
 
       if (IsProcedureStart(trimmed, out var procPropertyName))
       {
@@ -458,28 +465,30 @@ public static class CodeFormatter
         lastWasLabel = true;
       }
 
-      if (IsCommentLine(trimmed) &&
-          !string.IsNullOrEmpty(NextNonBlank(lines, i + 1)) &&
-          IsBlockStart(NextNonBlank(lines, i + 1)) &&
-          (string.IsNullOrWhiteSpace(PrevNonBlank(result)) || !IsCommentLine(PrevNonBlank(result))))
-      {
-        if (result.Count > 0 && !string.IsNullOrWhiteSpace(result.Last()))
-          result.Add(string.Empty);
-      }
-
       if (inProcedure && inProcHeaderGroup && !IsAttributeLine(trimmed))
       {
         var group = GetHeaderGroupKind(trimmed);
         if (group == null)
         {
+          var prevNonBlank = PrevNonBlank(result);
+          if (!string.IsNullOrEmpty(prevNonBlank) && !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
+              (IsConst(prevNonBlank) || IsDimOrStatic(prevNonBlank)) &&
+              !IsClosingComment(trimmed) && !IsCommentLine(trimmed))
+          {
+            result.Add(string.Empty);
+          }
+
           inProcHeaderGroup = false;
           currentGroup = null;
         }
         else
         {
-          if (currentGroup != null && currentGroup != group && result.Count > 0 &&
-              !string.IsNullOrWhiteSpace(result.Last()) && !IsProcedureStart(PrevNonBlank(result), out _))
+          if (currentGroup != null && currentGroup != group && group != HeaderGroupKind.Comments && result.Count > 0 &&
+              !string.IsNullOrWhiteSpace(result.Last()) && !IsProcedureStart(PrevNonBlank(result), out _) &&
+              !IsCommentLine(PrevNonBlank(result)))
+          {
             result.Add(string.Empty);
+          }
           currentGroup = group;
         }
       }
@@ -523,10 +532,17 @@ public static class CodeFormatter
         {
           currentPropertyName = null;
         }
+        else if (IsEndIf(trimmed))
+        {
+          var nextNonBlank = NextNonBlank(lines, i + 1);
+          if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank) &&
+              !IsClosingComment(nextNonBlank))
+            result.Add(string.Empty);
+        }
         else if (RequiresBlankAfterEnd(trimmed))
         {
           var nextNonBlank = NextNonBlank(lines, i + 1);
-          if (!string.IsNullOrEmpty(nextNonBlank))
+          if (!string.IsNullOrEmpty(nextNonBlank) && !IsClosingComment(nextNonBlank))
             result.Add(string.Empty);
         }
       }
@@ -597,6 +613,8 @@ public static class CodeFormatter
 
   private static bool IsCommentLine(string line) => line.TrimStart().StartsWith("'");
 
+  private static bool IsClosingComment(string line) => IsCommentLine(line) && line.Contains('>');
+
   private static bool IsAttributeLine(string line) => line.TrimStart().StartsWith("Attribute ", StringComparison.OrdinalIgnoreCase);
 
   private static bool IsOptionLine(string line) => line.TrimStart().StartsWith("Option ", StringComparison.OrdinalIgnoreCase);
@@ -644,6 +662,11 @@ public static class CodeFormatter
            trimmed.StartsWith("Loop", StringComparison.OrdinalIgnoreCase) ||
            trimmed.StartsWith("End Select", StringComparison.OrdinalIgnoreCase) ||
            trimmed.StartsWith("End With", StringComparison.OrdinalIgnoreCase);
+  }
+
+  private static bool IsEndIf(string line)
+  {
+    return line.TrimStart().StartsWith("End If", StringComparison.OrdinalIgnoreCase);
   }
 
   private static bool RequiresBlankAfterEnd(string line)
