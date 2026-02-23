@@ -32,6 +32,9 @@ public class VbModule
   public string Path { get; set; }
 
   [JsonPropertyOrder(5)]
+  public bool IsSharedExternal { get; set; }
+
+  [JsonPropertyOrder(6)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(6)]

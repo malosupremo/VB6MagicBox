@@ -30,7 +30,15 @@ public static partial class VbParser
     }
   }
 
-  public static void BuildDependenciesAndUsage(VbProject project)
+  private static string[] GetFileLines(Dictionary<string, string[]> fileCache, VbModule mod)
+  {
+    if (fileCache != null && fileCache.TryGetValue(mod.FullPath, out var lines))
+      return lines;
+
+    return ReadAllLinesShared(mod.FullPath);
+  }
+
+  public static void BuildDependenciesAndUsage(VbProject project, Dictionary<string, string[]> fileCache)
   {
     var procByModuleAndName = new Dictionary<(string Module, string Name), VbProcedure>();
 
@@ -119,7 +127,7 @@ public static partial class VbParser
 
         foreach (var searchMod in modulesToSearch)
         {
-          var searchLines = ReadAllLinesShared(searchMod.FullPath);
+          var searchLines = GetFileLines(fileCache, searchMod);
           int lineNum = 0;
 
           foreach (var line in searchLines)
@@ -186,7 +194,7 @@ public static partial class VbParser
 
         foreach (var searchMod in modulesToSearch)
         {
-          var searchLines = ReadAllLinesShared(searchMod.FullPath);
+          var searchLines = GetFileLines(fileCache, searchMod);
           int lineNum = 0;
 
           foreach (var line in searchLines)
@@ -229,6 +237,10 @@ public static partial class VbParser
 
                   c.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
                 }
+                else
+                {
+                  c.References.AddLineNumber(searchMod.Name, string.Empty, lineNum);
+                }
               }
             }
           }
@@ -252,7 +264,7 @@ public static partial class VbParser
 
         foreach (var searchMod in modulesToSearch)
         {
-          var searchLines = ReadAllLinesShared(searchMod.FullPath);
+          var searchLines = GetFileLines(fileCache, searchMod);
           int lineNum = 0;
 
           foreach (var line in searchLines)

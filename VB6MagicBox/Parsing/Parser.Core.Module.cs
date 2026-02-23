@@ -13,7 +13,7 @@ public static partial class VbParser
       new(@"^Attribute\s+VB_Name\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
 
   private static readonly Regex ReFormBegin =
-      new(@"^Begin\s+VB\.Form\s+(\w+)", RegexOptions.IgnoreCase);
+      new(@"^Begin\s+VB\.Form\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
   // -------------------------
   // PARSING MODULO
@@ -279,11 +279,13 @@ public static partial class VbParser
           IsStatic = isStatic,
           Scope = "Module",
           Parameters = ParseParameters(mf2.Groups[4].Value, originalLineNumber),
-          ReturnType = mf2.Groups[6].Value,
+          ReturnType = NormalizeTypeName(mf2.Groups[6].Value),
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
         FixParameterLineNumbersForMultilineSignature(currentProc, originalLines, originalLineNumber);
+        FixParameterTypeLineNumbersForMultilineSignature(currentProc, originalLines, originalLineNumber);
+        FixReturnTypeLineNumberForMultilineSignature(currentProc, originalLines, originalLineNumber);
         mod.Procedures.Add(currentProc);
 
         // Traccia event handler per controlli (es. Command1_Click)
@@ -392,11 +394,13 @@ public static partial class VbParser
           Name = mp.Groups[4].Value,
           Scope = "Module",
           Parameters = ParseParameters(mp.Groups[5].Value, originalLineNumber),
-          ReturnType = mp.Groups[7].Value,
+          ReturnType = NormalizeTypeName(mp.Groups[7].Value),
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
         FixParameterLineNumbersForMultilineSignature(currentProperty, originalLines, originalLineNumber);
+        FixParameterTypeLineNumbersForMultilineSignature(currentProperty, originalLines, originalLineNumber);
+        FixReturnTypeLineNumberForMultilineSignature(currentProperty, originalLines, originalLineNumber);
         mod.Properties.Add(currentProperty);
 
         // Imposta currentProc SOLO per tracciare la fine della Property (NON aggiungere a mod.Procedures)
@@ -409,7 +413,7 @@ public static partial class VbParser
           IsStatic = isStatic,
           Scope = "Module",
           Parameters = ParseParameters(mp.Groups[5].Value, originalLineNumber),
-          ReturnType = mp.Groups[7].Value,
+          ReturnType = NormalizeTypeName(mp.Groups[7].Value),
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
@@ -483,11 +487,12 @@ public static partial class VbParser
           IsStatic = false,
           Scope = "Module",
           Parameters = ParseParameters(mdf.Groups[4].Value, originalLineNumber),
-          ReturnType = mdf.Groups[6].Value,
+          ReturnType = NormalizeTypeName(mdf.Groups[6].Value),
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber,
           EndLine = originalLineNumber
         };
+        FixReturnTypeLineNumberForMultilineSignature(declareProc, originalLines, originalLineNumber);
 
         // AGGIUNGE REFERENCES AUTOMATICHE per i parametri su righe multiple
         AddParameterReferencesForMultilineDeclaration(declareProc, mod.Name, originalLines, originalLineNumber, lineMapping, lineIndex);
@@ -517,6 +522,7 @@ public static partial class VbParser
 
         // AGGIUNGE REFERENCES AUTOMATICHE per i parametri su righe multiple
         AddParameterReferencesForMultilineDeclaration(declareProc, mod.Name, originalLines, originalLineNumber, lineMapping, lineIndex);
+        FixParameterTypeLineNumbersForMultilineSignature(declareProc, originalLines, originalLineNumber);
 
         mod.Procedures.Add(declareProc);
         continue;

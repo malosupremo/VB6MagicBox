@@ -18,13 +18,13 @@ namespace VB6MagicBox;
 public static class CodeFormatter
 {
   private static readonly Regex ReDimOrStatic = new(
-    @"^(Dim|Static)\s+\w", RegexOptions.IgnoreCase);
+    @"^(Dim|Static)\s+\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
   private static readonly Regex ReVarName = new(
-    @"^(?:Dim|Static)\s+(\w+)", RegexOptions.IgnoreCase);
+    @"^(?:Dim|Static)\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
   private static readonly Regex ReConstLocal = new(
-    @"^(?:Private\s+|Public\s+)?Const\s+\w", RegexOptions.IgnoreCase);
+    @"^(?:Private\s+|Public\s+)?Const\s+\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
   // -------------------------
   // API PUBBLICA
@@ -65,6 +65,9 @@ public static class CodeFormatter
 
     foreach (var mod in project.Modules)
     {
+      if (mod.IsSharedExternal)
+        continue;
+
       var filePath = mod.FullPath;
       if (!File.Exists(filePath)) continue;
 
@@ -154,6 +157,9 @@ public static class CodeFormatter
 
     foreach (var mod in project.Modules)
     {
+      if (mod.IsSharedExternal)
+        continue;
+
       var filePath = mod.FullPath;
       if (!File.Exists(filePath)) continue;
 

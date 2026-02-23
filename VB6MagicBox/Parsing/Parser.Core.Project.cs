@@ -15,13 +15,20 @@ public static partial class VbParser
 
     var files = ParseVbpFile(vbpPath);
 
+    int fileIndex = 0;
+    int totalFiles = files.Count;
+
     foreach (var f in files)
     {
+      fileIndex++;
+      Console.Write($"\r   Parsing moduli: [{fileIndex}/{totalFiles}] {Path.GetFileName(f.Path)}...".PadRight(Console.WindowWidth - 1));
+
       var fullPath = Path.Combine(baseDir, f.Path);
       if (!File.Exists(fullPath))
         continue;
 
       var mod = ParseModule(fullPath, f.Kind);
+      mod.IsSharedExternal = IsSharedExternalPath(f.Path);
       // set FullPath and relative Path
       mod.FullPath = fullPath;
       // Compute relative path with leading separator, relative to baseDir
@@ -51,7 +58,26 @@ public static partial class VbParser
       project.Modules.Add(mod);
     }
 
+    if (totalFiles > 0)
+      Console.WriteLine();
+
     return project;
+  }
+
+  private static Dictionary<string, string[]> BuildFileCache(VbProject project)
+  {
+    var cache = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var mod in project.Modules)
+    {
+      if (string.IsNullOrWhiteSpace(mod.FullPath) || !File.Exists(mod.FullPath))
+        continue;
+
+      if (!cache.ContainsKey(mod.FullPath))
+        cache[mod.FullPath] = ReadAllLinesShared(mod.FullPath);
+    }
+
+    return cache;
   }
 
   // -------------------------
@@ -62,6 +88,15 @@ public static partial class VbParser
   {
     public string Kind { get; set; }
     public string Path { get; set; }
+  }
+
+  private static bool IsSharedExternalPath(string path)
+  {
+    if (string.IsNullOrWhiteSpace(path))
+      return false;
+
+    var normalized = path.Replace('/', '\\');
+    return normalized.Contains("..\\..\\", StringComparison.Ordinal);
   }
 
   private static List<VbpEntry> ParseVbpFile(string vbpPath)

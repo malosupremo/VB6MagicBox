@@ -36,6 +36,9 @@ public class VbProcedure
   public int LineNumber { get; set; }
 
   [JsonIgnore]
+  public int ReturnTypeLineNumber { get; set; }
+
+  [JsonIgnore]
   public int StartLine { get; set; }
 
   [JsonIgnore]
@@ -90,6 +93,10 @@ public class VbParameter
 
   [JsonIgnore]
   public int LineNumber { get; set; }
+
+  [JsonIgnore]
+  public int TypeLineNumber { get; set; }
+
 }
 
 public class VbEvent
@@ -150,6 +157,9 @@ public class VbProperty
 
   [JsonIgnore]
   public int LineNumber { get; set; }
+
+  [JsonIgnore]
+  public int ReturnTypeLineNumber { get; set; }
 
   [JsonIgnore]
   public int StartLine { get; set; }

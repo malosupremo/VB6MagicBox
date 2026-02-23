@@ -107,6 +107,9 @@ public static class TypeAnnotator
 
     foreach (var mod in project.Modules)
     {
+      if (mod.IsSharedExternal)
+        continue;
+
       var fixes = CollectFixes(mod, missingTypes);
       if (fixes.Count == 0) continue;
 

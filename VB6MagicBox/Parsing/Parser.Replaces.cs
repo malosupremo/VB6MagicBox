@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -19,7 +21,7 @@ public static partial class VbParser
   /// - Nessuna ambiguità su cosa sostituire
   /// - Export in .linereplace.json per verifica manuale
   /// </summary>
-  public static void BuildReplaces(VbProject project)
+  public static void BuildReplaces(VbProject project, Dictionary<string, string[]> fileCache)
   {
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine();
@@ -32,11 +34,14 @@ public static partial class VbParser
     int totalReplaces = 0;
 
     // Cache delle righe dei file per evitare letture multiple
-    var fileCache = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+    fileCache ??= new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
     foreach (var module in project.Modules)
     {
+      if (fileCache.ContainsKey(module.FullPath))
+        continue;
+
       if (File.Exists(module.FullPath))
-        fileCache[module.Name] = File.ReadAllLines(module.FullPath);
+        fileCache[module.FullPath] = File.ReadAllLines(module.FullPath);
     }
 
     // STEP 1: Per ogni modulo, raccogli TUTTI i simboli
@@ -64,6 +69,9 @@ public static partial class VbParser
 
     foreach (var module in project.Modules)
     {
+      if (module.IsSharedExternal)
+        continue;
+
       if (!module.IsConventional)
         allSymbols.Add((module.Name, module.ConventionalName, "Module", module, module.Name, null, false));
 
@@ -137,23 +145,30 @@ public static partial class VbParser
 
     // STEP 2: Per ogni simbolo, elabora le sue References e costruisci i LineReplace
     int symbolIndex = 0;
-    foreach (var (oldName, newName, category, source, definingModule, enumOwner, qualifyEnumValueRefs) in allSymbols)
+    var consoleLock = new object();
+    var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
+
+    Parallel.ForEach(allSymbols, parallelOptions, item =>
     {
-      symbolIndex++;
-      if (oldName == newName && !qualifyEnumValueRefs)
-        continue;
+      var (oldName, newName, category, source, definingModule, enumOwner, qualifyEnumValueRefs) = item;
+      var currentIndex = Interlocked.Increment(ref symbolIndex);
+      if (oldName == newName && !qualifyEnumValueRefs && !string.Equals(category, "Type", StringComparison.OrdinalIgnoreCase))
+        return;
 
       bool isDebugSymbol = oldName.Equals("Dsp_h", StringComparison.OrdinalIgnoreCase)
                         || oldName.Equals("Msg_h", StringComparison.OrdinalIgnoreCase);
 
-      Console.Write($"\r   Processando simboli: [{symbolIndex}/{allSymbols.Count}] {category}: {oldName}...".PadRight(Console.WindowWidth - 1));
+      lock (consoleLock)
+      {
+        Console.Write($"\r   Processando simboli: [{currentIndex}/{allSymbols.Count}] {category}: {oldName}...".PadRight(Console.WindowWidth - 1));
+      }
 
       // Trova il modulo che definisce il simbolo
       var ownerModule = project.Modules.FirstOrDefault(m =>
           string.Equals(m.Name, definingModule, StringComparison.OrdinalIgnoreCase));
 
       if (ownerModule == null)
-        continue;
+        return;
 
       // DICHIARAZIONE: Aggiungi replace per la dichiarazione del simbolo (solo nel modulo che lo definisce)
       if (oldName != newName)
@@ -169,7 +184,7 @@ public static partial class VbParser
       // ATTRIBUTI VB6: Gestione speciale per "Attribute VB_Name" e "Attribute VarName."
       if (oldName != newName)
         AddAttributeReplaces(ownerModule, source, oldName, newName, category, fileCache);
-    }
+    });
 
     // STEP 3: Conta i replace totali
     foreach (var module in project.Modules)
@@ -202,7 +217,7 @@ public static partial class VbParser
     if (lineNumberProp?.GetValue(source) is not int lineNum || lineNum <= 0)
       return;
 
-    if (!fileCache.TryGetValue(module.Name, out var lines))
+    if (!fileCache.TryGetValue(module.FullPath, out var lines))
       return;
 
     if (lineNum > lines.Length)
@@ -293,7 +308,10 @@ public static partial class VbParser
       if (refModule == null)
         continue;
 
-      if (!fileCache.TryGetValue(refModule.Name, out var lines))
+      if (refModule.IsSharedExternal)
+        continue;
+
+      if (!fileCache.TryGetValue(refModule.FullPath, out var lines))
         continue;
 
       var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
@@ -381,7 +399,19 @@ public static partial class VbParser
         }
         else
         {
-          refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
+          var effectiveOldName = oldName;
+          if (string.Equals(category, "Type", StringComparison.OrdinalIgnoreCase))
+          {
+            var alternateOldName = GetTypeAlternateName(oldName);
+            if (!string.IsNullOrEmpty(alternateOldName) &&
+                !Regex.IsMatch(codePart, $@"\b{Regex.Escape(oldName)}\b", RegexOptions.IgnoreCase) &&
+                Regex.IsMatch(codePart, $@"\b{Regex.Escape(alternateOldName)}\b", RegexOptions.IgnoreCase))
+            {
+              effectiveOldName = alternateOldName;
+            }
+          }
+
+          refModule.Replaces.AddReplaceFromLine(codePart, lineNum, effectiveOldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
         }
 
         //if (isDebugSymbol && lineNum == 3146)
@@ -613,5 +643,16 @@ public static partial class VbParser
         return (line[..i].TrimEnd(), line[i..]);
     }
     return (line, string.Empty);
+  }
+
+  private static string GetTypeAlternateName(string typeName)
+  {
+    if (string.IsNullOrWhiteSpace(typeName))
+      return string.Empty;
+
+    if (typeName.EndsWith("_T", StringComparison.OrdinalIgnoreCase))
+      return typeName.Substring(0, typeName.Length - 2);
+
+    return typeName + "_T";
   }
 }

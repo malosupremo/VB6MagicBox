@@ -61,6 +61,12 @@ public static class Refactoring
 
     foreach (var module in project.Modules)
     {
+      if (module.IsSharedExternal)
+      {
+        Console.WriteLine($">> {module.Name}: modulo condiviso, salto refactoring");
+        continue;
+      }
+
       if (module.Replaces.Count == 0)
       {
         Console.WriteLine($">> {module.Name}: nessuna sostituzione");

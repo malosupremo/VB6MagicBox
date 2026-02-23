@@ -60,6 +60,10 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
   - Controls in `Begin` lines: only control name (skip library/type)
   - Attributes: `Attribute VB_Name = "..."` and `Attribute VarName.VB_VarHelpID`
   - Constants: `skipStringLiterals=true` to avoid replacing inside string values
+- **Progress logging**: the console line
+  `Processando simboli: [i/N] <Category>: <Name>...` shows the current symbol being analyzed
+  while building replacements (e.g., `GlobalVariable: inUplStatus`). It iterates all symbols
+  that can produce renames or have references so their exact replace positions are recorded.
 - **File cache**: reads each file once, reuses for all symbols
 - Output: `VbModule.Replaces[]` ordered by line (desc) + char (desc) for safe application
 

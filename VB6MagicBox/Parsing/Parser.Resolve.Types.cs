@@ -39,18 +39,22 @@ public static partial class VbParser
       // 3. Parametri e variabili locali delle procedure
       foreach (var proc in mod.Procedures)
       {
-        AddTypeReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, typeIndex, -1);
+        var procReturnLine = proc.ReturnTypeLineNumber > 0 ? proc.ReturnTypeLineNumber : proc.LineNumber;
+        AddTypeReference(proc.ReturnType, procReturnLine, mod.Name, proc.Name, typeIndex, -1);
 
         // Per i parametri, calcola occurrenceIndex per gestire più parametri dello stesso tipo sulla stessa riga
         for (int i = 0; i < proc.Parameters.Count; i++)
         {
           var param = proc.Parameters[i];
-          // Conta quante volte questo tipo appare nei parametri precedenti sulla stessa riga
-          int occurrence = proc.Parameters.Take(i)
-              .Count(p => p.LineNumber == param.LineNumber && 
-                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+          var paramLine = param.TypeLineNumber > 0 ? param.TypeLineNumber : param.LineNumber;
+          var isMultilineType = param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber;
+          int occurrence = isMultilineType
+            ? -1
+            : proc.Parameters.Take(i)
+                .Count(p => (p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber) == paramLine &&
+                            p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
 
-          AddTypeReference(param.Type, param.LineNumber, mod.Name, proc.Name, typeIndex, occurrence);
+          AddTypeReference(param.Type, paramLine, mod.Name, proc.Name, typeIndex, occurrence);
         }
 
         foreach (var localVar in proc.LocalVariables)
@@ -60,17 +64,22 @@ public static partial class VbParser
       // 4. Parametri delle proprietà
       foreach (var prop in mod.Properties)
       {
-        AddTypeReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, typeIndex, -1);
+        var propReturnLine = prop.ReturnTypeLineNumber > 0 ? prop.ReturnTypeLineNumber : prop.LineNumber;
+        AddTypeReference(prop.ReturnType, propReturnLine, mod.Name, prop.Name, typeIndex, -1);
 
         // Per i parametri, calcola occurrenceIndex
         for (int i = 0; i < prop.Parameters.Count; i++)
         {
           var param = prop.Parameters[i];
-          int occurrence = prop.Parameters.Take(i)
-              .Count(p => p.LineNumber == param.LineNumber && 
-                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+          var paramLine = param.TypeLineNumber > 0 ? param.TypeLineNumber : param.LineNumber;
+          var isMultilineType = param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber;
+          int occurrence = isMultilineType
+            ? -1
+            : prop.Parameters.Take(i)
+                .Count(p => (p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber) == paramLine &&
+                            p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
 
-          AddTypeReference(param.Type, param.LineNumber, mod.Name, prop.Name, typeIndex, occurrence);
+          AddTypeReference(param.Type, paramLine, mod.Name, prop.Name, typeIndex, occurrence);
         }
       }
     }
@@ -110,9 +119,25 @@ public static partial class VbParser
 
     if (!typeIndex.TryGetValue(baseTypeName, out var referencedType))
     {
-      if (isDebug)
-        Console.WriteLine($"[DEBUG] SKIPPED: Type not in typeIndex");
-      return;
+      if (!baseTypeName.EndsWith("_T", StringComparison.OrdinalIgnoreCase))
+      {
+        var suffixedName = baseTypeName + "_T";
+        if (typeIndex.TryGetValue(suffixedName, out referencedType))
+          baseTypeName = suffixedName;
+      }
+      else
+      {
+        var unsuffixedName = baseTypeName.Substring(0, baseTypeName.Length - 2);
+        if (typeIndex.TryGetValue(unsuffixedName, out referencedType))
+          baseTypeName = unsuffixedName;
+      }
+
+      if (referencedType == null)
+      {
+        if (isDebug)
+          Console.WriteLine($"[DEBUG] SKIPPED: Type not in typeIndex");
+        return;
+      }
     }
 
     if (isDebug)

@@ -296,45 +296,48 @@ public static class VbReferenceListExtensions
       int lineNumber,
       int occurrenceIndex = -1)
   {
-    var normalizedProcedure = procedure ?? string.Empty;
-
-    var existing = references.FirstOrDefault(r =>
-        string.Equals(r.Module, module, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(r.Procedure ?? string.Empty, normalizedProcedure, StringComparison.OrdinalIgnoreCase));
-
-    if (existing != null)
+    lock (references)
     {
-      if (lineNumber > 0)
+      var normalizedProcedure = procedure ?? string.Empty;
+
+      var existing = references.FirstOrDefault(r =>
+          string.Equals(r.Module, module, StringComparison.OrdinalIgnoreCase) &&
+          string.Equals(r.Procedure ?? string.Empty, normalizedProcedure, StringComparison.OrdinalIgnoreCase));
+
+      if (existing != null)
       {
-        // Controlla se questa combinazione lineNumber+occurrenceIndex esiste già
-        bool alreadyExists = false;
-        for (int i = 0; i < existing.LineNumbers.Count; i++)
+        if (lineNumber > 0)
         {
-          if (existing.LineNumbers[i] == lineNumber &&
-              i < existing.OccurrenceIndexes.Count &&
-              existing.OccurrenceIndexes[i] == occurrenceIndex)
+          // Controlla se questa combinazione lineNumber+occurrenceIndex esiste già
+          bool alreadyExists = false;
+          for (int i = 0; i < existing.LineNumbers.Count; i++)
           {
-            alreadyExists = true;
-            break;
+            if (existing.LineNumbers[i] == lineNumber &&
+                i < existing.OccurrenceIndexes.Count &&
+                existing.OccurrenceIndexes[i] == occurrenceIndex)
+            {
+              alreadyExists = true;
+              break;
+            }
+          }
+
+          if (!alreadyExists)
+          {
+            existing.LineNumbers.Add(lineNumber);
+            existing.OccurrenceIndexes.Add(occurrenceIndex);
           }
         }
-
-        if (!alreadyExists)
-        {
-          existing.LineNumbers.Add(lineNumber);
-          existing.OccurrenceIndexes.Add(occurrenceIndex);
-        }
       }
-    }
-    else
-    {
-      var newRef = new VbReference { Module = module, Procedure = normalizedProcedure };
-      if (lineNumber > 0)
+      else
       {
-        newRef.LineNumbers.Add(lineNumber);
-        newRef.OccurrenceIndexes.Add(occurrenceIndex);
+        var newRef = new VbReference { Module = module, Procedure = normalizedProcedure };
+        if (lineNumber > 0)
+        {
+          newRef.LineNumbers.Add(lineNumber);
+          newRef.OccurrenceIndexes.Add(occurrenceIndex);
+        }
+        references.Add(newRef);
       }
-      references.Add(newRef);
     }
   }
 }
@@ -357,23 +360,26 @@ public static class LineReplaceListExtensions
       string newText,
       string category)
   {
-    // Verifica che la sostituzione non sia già presente (stesso lineNumber + startChar)
-    var existing = replaces.FirstOrDefault(r => 
-        r.LineNumber == lineNumber && 
-        r.StartChar == startChar);
-
-    if (existing != null)
-      return; // Già tracciato
-
-    replaces.Add(new LineReplace
+    lock (replaces)
     {
-      LineNumber = lineNumber,
-      StartChar = startChar,
-      EndChar = endChar,
-      OldText = oldText,
-      NewText = newText,
-      Category = category
-    });
+      // Verifica che la sostituzione non sia già presente (stesso lineNumber + startChar)
+      var existing = replaces.FirstOrDefault(r =>
+          r.LineNumber == lineNumber &&
+          r.StartChar == startChar);
+
+      if (existing != null)
+        return; // Già tracciato
+
+      replaces.Add(new LineReplace
+      {
+        LineNumber = lineNumber,
+        StartChar = startChar,
+        EndChar = endChar,
+        OldText = oldText,
+        NewText = newText,
+        Category = category
+      });
+    }
   }
 
   /// <summary>

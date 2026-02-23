@@ -61,7 +61,7 @@ public static partial class VbParser
 
     private static readonly Regex ReDeclareFunction =
         new(@"^(Public|Private|Friend)?\s*Declare\s+Function\s+(\w+)\s+Lib\s+""([^""]+)""(?:\s+Alias\s+""[^""]+"")?\s*\((.*)\)\s*(As\s+([\w\.\(\)]+))?",
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReDeclareSub =
         new(@"^(Public|Private|Friend)?\s*Declare\s+Sub\s+(\w+)\s+Lib\s+""([^""]+)""(?:\s+Alias\s+""[^""]+"")?\s*\((.*)\)",

@@ -11,6 +11,12 @@ public static partial class VbParser
     {
       foreach (var mod in project.Modules)
       {
+        if (mod.IsSharedExternal)
+        {
+          KeepOriginalNames(mod);
+          continue;
+        }
+
         // Trackers per conflict resolution - scope separati
         var globalNamesUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var procedureNamesUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -304,18 +310,35 @@ public static partial class VbParser
         }
 
         // Controls - RAGGRUPPAMENTO per nome originale (gestione array di controlli)
-        var controlGroups = mod.Controls.GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase);
+        var controlGroups = mod.Controls.GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+              var proposedName = ApplyControlNaming(group.Key, group.First().ControlType);
+              return new
+              {
+                Group = group,
+                ProposedName = proposedName,
+                IsAlreadyConventional = group.Key.Equals(proposedName, StringComparison.OrdinalIgnoreCase)
+              };
+            })
+            .OrderByDescending(g => g.IsAlreadyConventional)
+            .ThenBy(g => g.Group.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-        foreach (var group in controlGroups)
+        var controlNamesUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in controlGroups)
         {
-          // Calcola ConventionalName una volta sola per il gruppo
-          var conventionalName = ApplyControlNaming(group.Key, group.First().ControlType);
+          var conventionalName = item.ProposedName;
 
           if (IsReservedWord(conventionalName))
-            conventionalName = group.Key; // Torna al nome originale se reserved
+            conventionalName = item.Group.Key; // Torna al nome originale se reserved
+
+          conventionalName = ResolveNameConflict(conventionalName, controlNamesUsed);
+          controlNamesUsed.Add(conventionalName);
 
           // Applica lo stesso ConventionalName a tutti i controlli del gruppo
-          foreach (var control in group)
+          foreach (var control in item.Group)
           {
             control.ConventionalName = conventionalName;
           }
@@ -613,6 +636,59 @@ public static partial class VbParser
             }
           }
         }
+      }
+    }
+
+    private static void KeepOriginalNames(VbModule mod)
+    {
+      mod.ConventionalName = mod.Name;
+
+      foreach (var v in mod.GlobalVariables)
+        v.ConventionalName = v.Name;
+
+      foreach (var c in mod.Constants)
+        c.ConventionalName = c.Name;
+
+      foreach (var t in mod.Types)
+      {
+        t.ConventionalName = t.Name;
+        foreach (var f in t.Fields)
+          f.ConventionalName = f.Name;
+      }
+
+      foreach (var e in mod.Enums)
+      {
+        e.ConventionalName = e.Name;
+        foreach (var v in e.Values)
+          v.ConventionalName = v.Name;
+      }
+
+      foreach (var c in mod.Controls)
+        c.ConventionalName = c.Name;
+
+      foreach (var ev in mod.Events)
+      {
+        ev.ConventionalName = ev.Name;
+        foreach (var param in ev.Parameters)
+          param.ConventionalName = param.Name;
+      }
+
+      foreach (var p in mod.Procedures)
+      {
+        p.ConventionalName = p.Name;
+        foreach (var c in p.Constants)
+          c.ConventionalName = c.Name;
+        foreach (var param in p.Parameters)
+          param.ConventionalName = param.Name;
+        foreach (var lv in p.LocalVariables)
+          lv.ConventionalName = lv.Name;
+      }
+
+      foreach (var prop in mod.Properties)
+      {
+        prop.ConventionalName = prop.Name;
+        foreach (var param in prop.Parameters)
+          param.ConventionalName = param.Name;
       }
     }
   }

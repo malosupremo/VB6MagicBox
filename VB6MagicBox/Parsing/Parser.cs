@@ -34,13 +34,15 @@ public static partial class VbParser
     var project = ParseProjectFromVbp(vbpPath);
     Console.WriteLine($"  -> {project.Modules.Count} moduli trovati");
 
+    var fileCache = BuildFileCache(project);
+
     // 2) Risoluzione semantica
     Console.WriteLine("Step 2/5: Risoluzione di tipi e chiamate...");
-    ResolveTypesAndCalls(project);
+    ResolveTypesAndCalls(project, fileCache);
 
     // 3) Dipendenze + marcatura Used
     Console.WriteLine("Step 3/5: Costruzione dipendenze e marcatura simboli utilizzati...");
-    BuildDependenciesAndUsage(project);
+    BuildDependenciesAndUsage(project, fileCache);
 
     // 4) Ordinamento e naming
     Console.WriteLine("Step 4/5: Applicazione convenzioni di naming e ordinamento...");
@@ -48,7 +50,7 @@ public static partial class VbParser
 
     // 5) Costruzione sostituzioni
     Console.WriteLine("Step 5/5: Costruzione sostituzioni precise (Replaces)...");
-    BuildReplaces(project);
+    BuildReplaces(project, fileCache);
 
     return project;
   }

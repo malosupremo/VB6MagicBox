@@ -1,4 +1,6 @@
 ﻿using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -25,7 +27,7 @@ public static partial class VbParser
     // RISOLUZIONE TIPI, CHIAMATE, CAMPI
     // ---------------------------------------------------------
 
-    public static void ResolveTypesAndCalls(VbProject project)
+    public static void ResolveTypesAndCalls(VbProject project, Dictionary<string, string[]> fileCache)
     {
         // Indicizzazione procedure per nome (ESCLUSE le proprietà)
         var procIndex = new Dictionary<string, List<(string Module, VbProcedure Proc)>>(
@@ -75,7 +77,7 @@ public static partial class VbParser
         // (es. costrutti nel form fuori da qualsiasi procedura: "If Not Is_Ready_To_Start Then")
         foreach (var mod in project.Modules)
         {
-            var fileLines = File.ReadAllLines(mod.FullPath);
+            var fileLines = GetFileLines(fileCache, mod);
             foreach (var rawLine in fileLines)
             {
                 var noCommentLine = rawLine;
@@ -128,15 +130,20 @@ public static partial class VbParser
         // Risoluzione chiamate e campi
         int moduleIndex = 0;
         int totalModules = project.Modules.Count;
+        var consoleLock = new object();
+        var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
 
-        foreach (var mod in project.Modules)
+        Parallel.ForEach(project.Modules, parallelOptions, mod =>
         {
-            moduleIndex++;
+            var currentIndex = Interlocked.Increment(ref moduleIndex);
 
             // Progress inline per il parsing
-            Console.Write($"\r      [{moduleIndex}/{totalModules}] {Path.GetFileName(mod.FullPath)}...".PadRight(Console.WindowWidth - 1));
+            lock (consoleLock)
+            {
+                Console.Write($"\r      [{currentIndex}/{totalModules}] {Path.GetFileName(mod.FullPath)}...".PadRight(Console.WindowWidth - 1));
+            }
 
-            var fileLines = File.ReadAllLines(mod.FullPath);
+            var fileLines = GetFileLines(fileCache, mod);
 
             // Pre-scan: Traccia i tipi globali attraverso assegnamenti Set a livello di modulo
             var globalTypeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -872,7 +879,7 @@ public static partial class VbParser
                 ResolveParameterReferences(mod, prop, fileLines);
                 ResolvePropertyReturnReferences(mod, prop, fileLines);
             }
-        }
+        });
 
         Console.WriteLine(); // Vai a capo dopo il progress del parsing
 
