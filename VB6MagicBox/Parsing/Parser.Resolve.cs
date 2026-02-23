@@ -890,7 +890,7 @@ public static partial class VbParser
         ResolveClassModuleReferences(project);
 
         // Aggiunge References ai valori enum usati (anche senza prefisso)
-        ResolveEnumValueReferences(project);
+        ResolveEnumValueReferences(project, fileCache);
 
         // Marcatura tipi usati
         MarkUsedTypes(project);

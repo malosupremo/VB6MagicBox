@@ -1,4 +1,5 @@
-﻿using VB6MagicBox.Models;
+﻿using System.Diagnostics;
+using VB6MagicBox.Models;
 using VB6MagicBox.Parsing;
 
 namespace VB6MagicBox;
@@ -240,6 +241,8 @@ public class Program
             return;
         }
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
           // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
@@ -272,6 +275,11 @@ public class Program
             Console.WriteLine();
             Console.WriteLine("[X] Errore durante la bacchetta magica:");
             Console.WriteLine(ex.ToString());
+        }
+        finally
+        {
+            stopwatch.Stop();
+            Console.WriteLine($"Tempo bacchetta magica: {stopwatch.Elapsed.TotalMilliseconds:0.000} ms");
         }
     }
 

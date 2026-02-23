@@ -102,6 +102,8 @@ public static partial class VbParser
             }
 
             var scanLine = MaskStringLiterals(noComment);
+            if (scanLine.IndexOf('.', StringComparison.Ordinal) < 0)
+                continue;
             var chainMatches = new List<(string Text, int Index)>();
 
             foreach (Match m in ReChainPattern.Matches(scanLine))
@@ -409,6 +411,8 @@ public static partial class VbParser
             }
 
             var scanLine = MaskStringLiterals(noComment);
+            if (scanLine.IndexOf('.', StringComparison.Ordinal) < 0)
+                continue;
             var chainMatches = new List<(string Text, int Index)>();
 
             foreach (Match m in ReChainPattern.Matches(scanLine))
@@ -641,44 +645,34 @@ public static partial class VbParser
                 break;
 
             // Rimuovi commenti
-            var noComment = raw;
-            var idx = noComment.IndexOf("'");
-            if (idx >= 0)
-                noComment = noComment.Substring(0, idx).Trim();
+            var noComment = StripInlineComment(raw);
+            noComment = MaskStringLiterals(noComment);
 
-            // Pattern: controlName.Property o controlName.Method() oppure controlName(index).Property
-            // ANCHE: ModuleName.controlName(index).Property per referenze cross-module
-            foreach (Match m in Regex.Matches(noComment, @"(\w+)(?:\([^\)]*\))?\.(\w+)"))
+            foreach (var (moduleName, controlName) in EnumerateControlAccesses(noComment))
             {
-                var controlName = m.Groups[1].Value;
+                if (string.IsNullOrEmpty(controlName))
+                    continue;
 
-                // Verifica se � un controllo del form corrente
-                if (controlIndex.TryGetValue(controlName, out var control))
+                if (string.IsNullOrEmpty(moduleName))
                 {
-                    MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
+                    if (controlIndex.TryGetValue(controlName, out var control))
+                        MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
+
+                    continue;
                 }
-            }
 
-            // Pattern avanzato per referenze cross-module: ModuleName.ControlName(index).Property
-            foreach (Match m in Regex.Matches(noComment, @"(\w+)\.(\w+)(?:\([^\)]*\))?\.(\w+)"))
-            {
-                var moduleName = m.Groups[1].Value;
-                var controlName = m.Groups[2].Value;
-
-                // Cerca il modulo nel progetto
                 var targetModule = mod.Owner?.Modules?.FirstOrDefault(module =>
                     string.Equals(module.Name, moduleName, StringComparison.OrdinalIgnoreCase));
 
-                if (targetModule != null)
-                {
-                    // Cerca TUTTI i controlli con lo stesso nome (array di controlli)
-                    var controls = targetModule.Controls.Where(c =>
-                        string.Equals(c.Name, controlName, StringComparison.OrdinalIgnoreCase));
+                if (targetModule == null)
+                    continue;
 
-                    foreach (var control in controls)
-                    {
-                        MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
-                    }
+                var controls = targetModule.Controls.Where(c =>
+                    string.Equals(c.Name, controlName, StringComparison.OrdinalIgnoreCase));
+
+                foreach (var control in controls)
+                {
+                    MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
                 }
             }
         }
@@ -917,6 +911,171 @@ public static partial class VbParser
         return false;
     }
 
+    private static IEnumerable<(string Token, int Index)> EnumerateTokens(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+            yield break;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            if (!IsIdentifierStart(line[i]))
+                continue;
+
+            if (i > 0 && IsIdentifierChar(line[i - 1]))
+                continue;
+
+            int start = i;
+            i++;
+            while (i < line.Length && IsIdentifierChar(line[i]))
+                i++;
+
+            yield return (line.Substring(start, i - start), start);
+            i--;
+        }
+    }
+
+    private static IEnumerable<(string Left, string Right)> EnumerateQualifiedTokens(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+            yield break;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            if (!IsIdentifierStart(line[i]))
+                continue;
+
+            if (i > 0 && IsIdentifierChar(line[i - 1]))
+                continue;
+
+            int leftStart = i;
+            i++;
+            while (i < line.Length && IsIdentifierChar(line[i]))
+                i++;
+
+            var left = line.Substring(leftStart, i - leftStart);
+
+            int dotIndex = i;
+            while (dotIndex < line.Length && char.IsWhiteSpace(line[dotIndex]))
+                dotIndex++;
+
+            if (dotIndex >= line.Length || line[dotIndex] != '.')
+            {
+                i--;
+                continue;
+            }
+
+            dotIndex++;
+            while (dotIndex < line.Length && char.IsWhiteSpace(line[dotIndex]))
+                dotIndex++;
+
+            if (dotIndex >= line.Length || !IsIdentifierStart(line[dotIndex]))
+            {
+                i--;
+                continue;
+            }
+
+            int rightStart = dotIndex;
+            dotIndex++;
+            while (dotIndex < line.Length && IsIdentifierChar(line[dotIndex]))
+                dotIndex++;
+
+            var right = line.Substring(rightStart, dotIndex - rightStart);
+            yield return (left, right);
+            i = dotIndex - 1;
+        }
+    }
+
+    private static bool IsIdentifierStart(char value)
+        => char.IsLetter(value) || value == '_';
+
+    private static IEnumerable<(string ModuleName, string ControlName)> EnumerateControlAccesses(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+            yield break;
+
+        int i = 0;
+        while (i < line.Length)
+        {
+            if (!IsIdentifierStart(line[i]) || (i > 0 && IsIdentifierChar(line[i - 1])))
+            {
+                i++;
+                continue;
+            }
+
+            int firstStart = i;
+            i++;
+            while (i < line.Length && IsIdentifierChar(line[i]))
+                i++;
+
+            var first = line.Substring(firstStart, i - firstStart);
+            int index = SkipWhitespace(line, i);
+            index = SkipOptionalParentheses(line, index);
+            index = SkipWhitespace(line, index);
+
+            if (index >= line.Length || line[index] != '.')
+                continue;
+
+            index++;
+            index = SkipWhitespace(line, index);
+
+            if (index >= line.Length || !IsIdentifierStart(line[index]))
+            {
+                i = index;
+                continue;
+            }
+
+            int secondStart = index;
+            index++;
+            while (index < line.Length && IsIdentifierChar(line[index]))
+                index++;
+
+            var second = line.Substring(secondStart, index - secondStart);
+            int afterSecond = SkipWhitespace(line, index);
+            int afterSecondParen = SkipOptionalParentheses(line, afterSecond);
+            afterSecondParen = SkipWhitespace(line, afterSecondParen);
+
+            if (afterSecondParen < line.Length && line[afterSecondParen] == '.')
+            {
+                yield return (first, second);
+                i = afterSecondParen + 1;
+            }
+            else
+            {
+                yield return (string.Empty, first);
+                i = index;
+            }
+        }
+    }
+
+    private static int SkipWhitespace(string line, int index)
+    {
+        while (index < line.Length && char.IsWhiteSpace(line[index]))
+            index++;
+
+        return index;
+    }
+
+    private static int SkipOptionalParentheses(string line, int index)
+    {
+        if (index >= line.Length || line[index] != '(')
+            return index;
+
+        int depth = 0;
+        for (int i = index; i < line.Length; i++)
+        {
+            if (line[i] == '(')
+                depth++;
+            else if (line[i] == ')')
+            {
+                depth--;
+                if (depth == 0)
+                    return i + 1;
+            }
+        }
+
+        return line.Length;
+    }
+
     private static bool ContainsToken(string line, string token)
     {
         if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(token))
@@ -986,7 +1145,7 @@ public static partial class VbParser
     // MARCATURA VALORI ENUM USATI
     // ---------------------------------------------------------
 
-    private static void MarkUsedEnumValues(VbProject project)
+    private static void MarkUsedEnumValues(VbProject project, Dictionary<string, string[]> fileCache = null)
     {
         // Indicizza tutti i valori enum per nome
         var allEnumValues = new Dictionary<string, List<VbEnumValue>>(StringComparer.OrdinalIgnoreCase);
@@ -1008,7 +1167,7 @@ public static partial class VbParser
         // Cerca l'uso dei valori enum in tutti i moduli
         foreach (var mod in project.Modules)
         {
-            var fileLines = File.ReadAllLines(mod.FullPath);
+            var fileLines = GetFileLines(fileCache, mod);
 
             foreach (var proc in mod.Procedures)
             {
@@ -1051,7 +1210,7 @@ public static partial class VbParser
     // MARCATURA EVENTI USATI (RaiseEvent)
     // ---------------------------------------------------------
 
-    private static void MarkUsedEvents(VbProject project)
+    private static void MarkUsedEvents(VbProject project, Dictionary<string, string[]> fileCache = null)
     {
         // Indicizza tutti gli eventi per modulo
         var eventsByModule = new Dictionary<string, List<VbEvent>>(StringComparer.OrdinalIgnoreCase);
@@ -1065,7 +1224,7 @@ public static partial class VbParser
         // Cerca RaiseEvent in tutti i moduli
         foreach (var mod in project.Modules)
         {
-            var fileLines = File.ReadAllLines(mod.FullPath);
+            var fileLines = GetFileLines(fileCache, mod);
 
             foreach (var proc in mod.Procedures)
             {
@@ -1103,7 +1262,7 @@ public static partial class VbParser
         }
     }
 
-    private static void ResolveEnumValueReferences(VbProject project)
+    private static void ResolveEnumValueReferences(VbProject project, Dictionary<string, string[]> fileCache)
     {
         var enumValueIndex = project.Modules
             .SelectMany(m => m.Enums.SelectMany(e => e.Values))
@@ -1117,7 +1276,7 @@ public static partial class VbParser
 
         foreach (var mod in project.Modules)
         {
-            var fileLines = File.ReadAllLines(mod.FullPath);
+            var fileLines = GetFileLines(fileCache, mod);
 
             foreach (var proc in mod.Procedures)
             {
@@ -1166,11 +1325,8 @@ public static partial class VbParser
                         }
                     }
 
-                    foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)\b"))
+                    foreach (var (enumName, valueName) in EnumerateQualifiedTokens(noComment))
                     {
-                        var enumName = m.Groups[1].Value;
-                        var valueName = m.Groups[2].Value;
-
                         if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
                         {
                           foreach (var enumDef in enumDefs)
@@ -1234,11 +1390,8 @@ public static partial class VbParser
                         }
                     }
 
-                    foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)\b"))
+                    foreach (var (enumName, valueName) in EnumerateQualifiedTokens(noComment))
                     {
-                        var enumName = m.Groups[1].Value;
-                        var valueName = m.Groups[2].Value;
-
                         if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
                         {
                           foreach (var enumDef in enumDefs)

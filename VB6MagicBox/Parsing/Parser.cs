@@ -1,4 +1,5 @@
-﻿using VB6MagicBox.Models;
+﻿using System.Diagnostics;
+using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
 
@@ -20,6 +21,8 @@ public static partial class VbParser
   {
     if (string.IsNullOrWhiteSpace(vbpPath))
       throw new ArgumentException("Percorso VBP non valido.", nameof(vbpPath));
+
+    var stopwatch = Stopwatch.StartNew();
 
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine();
@@ -51,6 +54,9 @@ public static partial class VbParser
     // 5) Costruzione sostituzioni
     Console.WriteLine("Step 5/5: Costruzione sostituzioni precise (Replaces)...");
     BuildReplaces(project, fileCache);
+
+    stopwatch.Stop();
+    Console.WriteLine($"Tempo totale: {stopwatch.Elapsed.TotalMilliseconds:0.000} ms");
 
     return project;
   }
