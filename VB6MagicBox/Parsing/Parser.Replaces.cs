@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using VB6MagicBox;
 using System.Threading;
 using System.Threading.Tasks;
 using VB6MagicBox.Models;
@@ -199,7 +200,7 @@ public static partial class VbParser
     }
 
     Console.WriteLine();
-    Console.WriteLine($"   [OK] {totalReplaces} sostituzioni preparate per {project.Modules.Count} moduli");
+    $"   [OK] {totalReplaces} sostituzioni preparate per {project.Modules.Count} moduli".WriteLineColored(ConsoleColor.Green);
   }
 
   /// <summary>

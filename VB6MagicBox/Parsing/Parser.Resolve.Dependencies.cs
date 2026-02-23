@@ -1,4 +1,5 @@
 using VB6MagicBox.Models;
+using VB6MagicBox;
 
 namespace VB6MagicBox.Parsing;
 
@@ -25,7 +26,7 @@ public static partial class VbParser
     }
     catch (IOException ex)
     {
-      Console.WriteLine($"    [WARN] Impossibile leggere {Path.GetFileName(filePath)}: {ex.Message}");
+      $"    [WARN] Impossibile leggere {Path.GetFileName(filePath)}: {ex.Message}".WriteLineColored(ConsoleColor.Yellow);
       return Array.Empty<string>();
     }
   }

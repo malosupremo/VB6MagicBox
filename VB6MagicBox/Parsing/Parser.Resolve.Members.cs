@@ -622,6 +622,12 @@ public static partial class VbParser
             c => c,
             StringComparer.OrdinalIgnoreCase);
 
+        var shadowedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in proc.Parameters)
+            shadowedNames.Add(p.Name);
+        foreach (var lv in proc.LocalVariables)
+            shadowedNames.Add(lv.Name);
+
         // Controlli di sicurezza per evitare IndexOutOfRangeException
         if (proc.StartLine <= 0)
             proc.StartLine = proc.LineNumber;
@@ -653,27 +659,40 @@ public static partial class VbParser
                 if (string.IsNullOrEmpty(controlName))
                     continue;
 
-                if (string.IsNullOrEmpty(moduleName))
+                if (!string.IsNullOrEmpty(moduleName))
                 {
-                    if (controlIndex.TryGetValue(controlName, out var control))
-                        MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
+                    var targetModule = mod.Owner?.Modules?.FirstOrDefault(module =>
+                        string.Equals(module.Name, moduleName, StringComparison.OrdinalIgnoreCase));
 
-                    continue;
+                    if (targetModule != null)
+                    {
+                        var controls = targetModule.Controls.Where(c =>
+                            string.Equals(c.Name, controlName, StringComparison.OrdinalIgnoreCase));
+
+                        foreach (var control in controls)
+                        {
+                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
+                        }
+
+                        continue;
+                    }
                 }
 
-                var targetModule = mod.Owner?.Modules?.FirstOrDefault(module =>
-                    string.Equals(module.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+                if (controlIndex.TryGetValue(moduleName, out var sameModuleControl))
+                    MarkControlAsUsed(sameModuleControl, mod.Name, proc.Name, i + 1);
+            }
 
-                if (targetModule == null)
+            foreach (Match match in ReTokens.Matches(noComment))
+            {
+                if (IsMemberAccessToken(noComment, match.Index))
                     continue;
 
-                var controls = targetModule.Controls.Where(c =>
-                    string.Equals(c.Name, controlName, StringComparison.OrdinalIgnoreCase));
+                var token = match.Value;
+                if (shadowedNames.Contains(token))
+                    continue;
 
-                foreach (var control in controls)
-                {
+                if (controlIndex.TryGetValue(token, out var control))
                     MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
-                }
             }
         }
     }
@@ -716,6 +735,9 @@ public static partial class VbParser
 
         if (startIndex >= fileLines.Length)
             return;
+
+        bool trackReturn = proc.Kind.Equals("Function", StringComparison.OrdinalIgnoreCase) &&
+                           !string.IsNullOrEmpty(proc.Name);
 
         for (int i = startIndex; i < endIndex; i++)
         {
@@ -765,6 +787,12 @@ public static partial class VbParser
                     globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
                   }
                 }
+            }
+
+            if (trackReturn && currentLineNumber != proc.LineNumber &&
+                ContainsStandaloneToken(noComment, proc.Name))
+            {
+                proc.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
             }
         }
     }
@@ -1041,7 +1069,7 @@ public static partial class VbParser
             }
             else
             {
-                yield return (string.Empty, first);
+                yield return (first, second);
                 i = index;
             }
         }

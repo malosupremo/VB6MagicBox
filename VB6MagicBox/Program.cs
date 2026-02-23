@@ -81,7 +81,7 @@ public class Program
 
                 default:
                     Console.WriteLine();
-                    Console.WriteLine("[X] Opzione non valida. Riprova.");
+            "[X] Opzione non valida. Riprova.".WriteLineColored(ConsoleColor.Red);
                     break;
             }
         }
@@ -95,7 +95,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            Console.WriteLine("[X] File .vbp non trovato!");
+            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
             return;
         }
 
@@ -107,7 +107,7 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            Console.WriteLine("[X] Errore durante l'armonizzazione spaziature:");
+            "[X] Errore durante l'armonizzazione spaziature:".WriteLineColored(ConsoleColor.Red);
             Console.WriteLine(ex.ToString());
         }
     }
@@ -120,7 +120,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            Console.WriteLine("[X] File non trovato!");
+            "[X] File non trovato!".WriteLineColored(ConsoleColor.Red);
             return;
         }
 
@@ -134,12 +134,12 @@ public class Program
             var project = VbParser.ParseAndResolve(vbpPath);
             ExportProjectFiles(project, vbpPath);
             Console.WriteLine();
-            Console.WriteLine("[OK] Analisi completata.");
+            "[OK] Analisi completata.".WriteLineColored(ConsoleColor.Green);
         }
         catch (Exception ex)
         {
             Console.WriteLine();
-            Console.WriteLine("[X] Errore durante l'analisi:");
+            "[X] Errore durante l'analisi:".WriteLineColored(ConsoleColor.Red);
             Console.WriteLine(ex.ToString());
         }
     }
@@ -152,7 +152,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            Console.WriteLine("[X] File .vbp non trovato!");
+            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
             return;
         }
 
@@ -167,7 +167,7 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            Console.WriteLine("[X] Errore durante l'aggiunta dei tipi:");
+            "[X] Errore durante l'aggiunta dei tipi:".WriteLineColored(ConsoleColor.Red);
             Console.WriteLine(ex.ToString());
         }
     }
@@ -180,7 +180,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            Console.WriteLine("[X] File .vbp non trovato!");
+            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
             return;
         }
 
@@ -199,7 +199,7 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            Console.WriteLine("[X] Errore durante il refactoring:");
+            "[X] Errore durante il refactoring:".WriteLineColored(ConsoleColor.Red);
             Console.WriteLine(ex.ToString());
         }
     }
@@ -212,7 +212,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            Console.WriteLine("[X] File .vbp non trovato!");
+            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
             return;
         }
 
@@ -224,7 +224,7 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            Console.WriteLine("[X] Errore durante il riordino:");
+            "[X] Errore durante il riordino:".WriteLineColored(ConsoleColor.Red);
             Console.WriteLine(ex.ToString());
         }
     }
@@ -237,7 +237,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            Console.WriteLine("[X] File .vbp non trovato!");
+            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
             return;
         }
 
@@ -264,22 +264,21 @@ public class Program
           CodeFormatter.ReorderLocalVariables(project);
 
             // 6) Armonizzazione spaziature
-            //TODO: per ora no, va provata meglio su casi reali prima di includerla nella bacchetta magica (rischia di introdurre regressioni)
             CodeFormatter.HarmonizeSpacing(project);
 
             Console.WriteLine();
-          Console.WriteLine("[OK] Bacchetta magica applicata!");
+          "[OK] Bacchetta magica applicata!".WriteLineColored(ConsoleColor.Green);
         }
         catch (Exception ex)
         {
             Console.WriteLine();
-            Console.WriteLine("[X] Errore durante la bacchetta magica:");
+            "[X] Errore durante la bacchetta magica:".WriteLineColored(ConsoleColor.Red);
             Console.WriteLine(ex.ToString());
         }
         finally
         {
             stopwatch.Stop();
-            Console.WriteLine($"Tempo bacchetta magica: {stopwatch.Elapsed.TotalMilliseconds:0.000} ms");
+            Console.WriteLine($"Tempo bacchetta magica: {stopwatch.Elapsed.TotalMilliseconds/1000:0.000} s");
         }
     }
 

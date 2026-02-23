@@ -1,4 +1,5 @@
 using System.Text;
+using VB6MagicBox;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox;
@@ -148,17 +149,17 @@ public static class Refactoring
         filesProcessed++;
         totalReplaces += replacesApplied;
         
-        Console.WriteLine($"   [OK] {replacesApplied} sostituzioni applicate");
+        $"   [OK] {replacesApplied} sostituzioni applicate".WriteLineColored(ConsoleColor.Green);
       }
       else
       {
-        Console.WriteLine($"   [i] Nessuna modifica (contenuto identico)");
+        "   [i] Nessuna modifica (contenuto identico)".WriteLineColored(ConsoleColor.Cyan);
       }
     }
 
     Console.WriteLine();
     Console.WriteLine("===========================================");
-    Console.WriteLine($"[OK] Refactoring completato!");
+    "[OK] Refactoring completato!".WriteLineColored(ConsoleColor.Green);
     Console.WriteLine($"     File modificati:   {filesProcessed}");
     Console.WriteLine($"     File backuppati:   {filesBackedUp}");
     Console.WriteLine($"     Sostituzioni totali: {totalReplaces}");

@@ -117,7 +117,7 @@ public static class TypeAnnotator
       if (!File.Exists(filePath)) continue;
 
       var originalContent = File.ReadAllText(filePath, enc);
-      var (changes, newContent) = ProcessFileWithFixes(originalContent, fixes);
+      var (changes, newContent) = ProcessFileWithFixes(originalContent, fixes, missingTypes, mod);
       if (changes == 0) continue;
 
       // Backup del file originale
@@ -137,12 +137,12 @@ public static class TypeAnnotator
 
     Console.WriteLine();
     if (totalChanges == 0)
-      Console.WriteLine("[OK] Nessun tipo mancante trovato.");
+      "[OK] Nessun tipo mancante trovato.".WriteLineColored(ConsoleColor.Green);
     else
-      Console.WriteLine($"[OK] {totalChanges} tipo/i aggiunto/i in {totalFiles} file/i.");
+      $"[OK] {totalChanges} tipo/i aggiunto/i in {totalFiles} file/i.".WriteLineColored(ConsoleColor.Green);
 
     if (missingTypes.Count > 0)
-      Console.WriteLine($"[WARN] Tipi non deducibili: {missingTypesPath}");
+      $"[WARN] Tipi non deducibili: {missingTypesPath}".WriteLineColored(ConsoleColor.Yellow);
   }
 
   // -------------------------
@@ -212,7 +212,7 @@ public static class TypeAnnotator
   /// Applica le fix al testo del file, modificando solo le righe indicate dal modello.
   /// </summary>
   private static (int changes, string newContent) ProcessFileWithFixes(
-    string content, List<SymbolFix> fixes)
+    string content, List<SymbolFix> fixes, List<MissingTypeInfo> missingTypes, VbModule mod)
   {
     if (fixes.Count == 0) return (0, content);
 
@@ -222,10 +222,25 @@ public static class TypeAnnotator
       .Select(f => f.LineNumber)
       .ToHashSet();
 
+    var fixesByLine = fixes
+      .GroupBy(f => f.LineNumber)
+      .ToDictionary(g => g.Key, g => g.ToList());
+
     var paramsByLine = fixes
       .Where(f => f.Kind == FixKind.Parameter)
       .GroupBy(f => f.LineNumber)
       .ToDictionary(g => g.Key, g => g.Select(f => f.Name).ToList());
+
+    var procedureLines = mod.Procedures.Select(p => p.LineNumber).ToHashSet();
+    var propertyLines = mod.Properties.Select(p => p.LineNumber).ToHashSet();
+    var constantLines = mod.Constants.Select(c => c.LineNumber).ToHashSet();
+    var globalVariableLines = mod.GlobalVariables.Select(v => v.LineNumber).ToHashSet();
+    var memberRanges = mod.Procedures.Select(p => (p.StartLine, p.EndLine))
+      .Concat(mod.Properties.Select(p => (p.StartLine, p.EndLine)))
+      .Where(r => r.StartLine > 0 && r.EndLine > 0)
+      .ToList();
+
+    bool applyVisibilityFixes = mod.IsClass || mod.IsForm;
 
     var lines   = content.Split('\n');
     int changes = 0;
@@ -241,11 +256,34 @@ public static class TypeAnnotator
 
       // Fix variabili/costanti: il trasformatore testo gestisce suffissi e multi-var
       if (varConstLines.Contains(lineNumber))
-        processed = ProcessLine(processed);
+      {
+        var (lineResult, missingConstantName) = ProcessLine(processed);
+        processed = lineResult;
+
+        if (!string.IsNullOrEmpty(missingConstantName) &&
+            fixesByLine.TryGetValue(lineNumber, out var lineFixes))
+        {
+          var lineFix = lineFixes.FirstOrDefault(f => f.Kind == FixKind.VariableOrConstant);
+          if (lineFix != null)
+          {
+            var kind = string.IsNullOrEmpty(lineFix.Procedure) ? "Constant" : "LocalConstant";
+            missingTypes.Add(new MissingTypeInfo(lineFix.Module, lineFix.Procedure, missingConstantName, kind));
+          }
+        }
+      }
 
       // Fix parametri: aggiunta mirata per nome, nuova funzionalità grazie al modello
       if (paramsByLine.TryGetValue(lineNumber, out var paramNames))
         processed = ApplyParameterFixes(processed, paramNames);
+
+      processed = ApplyVisibilityFixes(processed,
+        lineNumber,
+        applyVisibilityFixes,
+        procedureLines,
+        propertyLines,
+        constantLines,
+        globalVariableLines,
+        memberRanges);
 
       if (!string.Equals(clean, processed, StringComparison.Ordinal))
       {
@@ -262,25 +300,111 @@ public static class TypeAnnotator
   // -------------------------
 
   /// <summary>Applica le fix di tipo a una singola riga VB6. Internal per i test.</summary>
-  internal static string ProcessLine(string line)
+  internal static (string processed, string? missingConstantName) ProcessLine(string line)
   {
     var (code, comment) = SplitCodeAndComment(line);
     var trimmed         = code.TrimStart();
 
     if (string.IsNullOrWhiteSpace(trimmed) || code.TrimEnd().EndsWith("_"))
-      return line;
+      return (line, null);
 
-    return TryFixConstant(line, trimmed, comment)
-        ?? TryFixVariable(line, trimmed, comment)
-        ?? line;
+    var (constResult, missingName) = TryFixConstant(line, trimmed, comment);
+    if (constResult != null)
+      return (constResult, missingName);
+
+    var varResult = TryFixVariable(line, trimmed, comment);
+    return varResult != null ? (varResult, null) : (line, missingName);
   }
 
-  private static string? TryFixConstant(string originalLine, string trimmed, string comment)
+  private static string ApplyVisibilityFixes(
+    string line,
+    int lineNumber,
+    bool applyVisibilityFixes,
+    HashSet<int> procedureLines,
+    HashSet<int> propertyLines,
+    HashSet<int> constantLines,
+    HashSet<int> globalVariableLines,
+    List<(int StartLine, int EndLine)> memberRanges)
   {
-    if (ReConstHasAs.IsMatch(trimmed)) return null;
+    if (!applyVisibilityFixes || string.IsNullOrWhiteSpace(line))
+      return line;
+
+    var (code, comment) = SplitCodeAndComment(line);
+    var trimmed = code.TrimStart();
+    if (string.IsNullOrWhiteSpace(trimmed))
+      return line;
+
+    var indent = code[..(code.Length - trimmed.Length)];
+
+    if ((procedureLines.Contains(lineNumber) || propertyLines.Contains(lineNumber)) &&
+        StartsWithProcedureKeyword(trimmed) &&
+        !StartsWithVisibility(trimmed))
+    {
+      var updated = indent + "Public " + trimmed;
+      return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
+    }
+
+    if (globalVariableLines.Contains(lineNumber) &&
+        trimmed.StartsWith("Dim ", StringComparison.OrdinalIgnoreCase) &&
+        !IsInsideMember(lineNumber, memberRanges))
+    {
+      var updated = indent + "Private " + trimmed.Substring(4);
+      return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
+    }
+
+    if (constantLines.Contains(lineNumber) &&
+        trimmed.StartsWith("Const ", StringComparison.OrdinalIgnoreCase) &&
+        !StartsWithVisibility(trimmed) &&
+        !IsInsideMember(lineNumber, memberRanges))
+    {
+      var updated = indent + "Private " + trimmed;
+      return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
+    }
+
+    return line;
+  }
+
+  private static bool StartsWithVisibility(string trimmed)
+    => trimmed.StartsWith("Public ", StringComparison.OrdinalIgnoreCase) ||
+       trimmed.StartsWith("Private ", StringComparison.OrdinalIgnoreCase) ||
+       trimmed.StartsWith("Friend ", StringComparison.OrdinalIgnoreCase);
+
+  private static bool StartsWithProcedureKeyword(string trimmed)
+  {
+    if (trimmed.StartsWith("Sub ", StringComparison.OrdinalIgnoreCase) ||
+        trimmed.StartsWith("Function ", StringComparison.OrdinalIgnoreCase) ||
+        trimmed.StartsWith("Property ", StringComparison.OrdinalIgnoreCase))
+      return true;
+
+    if (trimmed.StartsWith("Static ", StringComparison.OrdinalIgnoreCase))
+    {
+      var afterStatic = trimmed.Substring("Static ".Length).TrimStart();
+      return afterStatic.StartsWith("Sub ", StringComparison.OrdinalIgnoreCase) ||
+             afterStatic.StartsWith("Function ", StringComparison.OrdinalIgnoreCase) ||
+             afterStatic.StartsWith("Property ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    return false;
+  }
+
+  private static bool IsInsideMember(int lineNumber, List<(int StartLine, int EndLine)> memberRanges)
+  {
+    foreach (var (start, end) in memberRanges)
+    {
+      if (lineNumber >= start && lineNumber <= end)
+        return true;
+    }
+
+    return false;
+  }
+
+  private static (string? result, string? missingConstantName) TryFixConstant(
+    string originalLine, string trimmed, string comment)
+  {
+    if (ReConstHasAs.IsMatch(trimmed)) return (null, null);
 
     var m = ReConstNoAs.Match(trimmed);
-    if (!m.Success) return null;
+    if (!m.Success) return (null, null);
 
     var keyword  = m.Groups[1].Value;
     var rawName  = m.Groups[2].Value;
@@ -289,7 +413,7 @@ public static class TypeAnnotator
     // Salta Const con lista di costanti sulla stessa riga (Const A=1, B=2)
     if (!rawValue.TrimStart().StartsWith('"') &&
         Regex.IsMatch(rawValue, @",\s*\w+\s*=", RegexOptions.IgnoreCase))
-      return null;
+      return (null, null);
 
     string typeName;
     string cleanName;
@@ -301,7 +425,9 @@ public static class TypeAnnotator
     else
     {
       cleanName = rawName;
-      typeName  = InferConstantType(rawValue) ?? "Variant";
+      typeName  = InferConstantType(rawValue);
+      if (string.IsNullOrEmpty(typeName))
+        return (null, cleanName);
     }
 
     var indent  = originalLine[..(originalLine.Length - originalLine.TrimStart().Length)];
@@ -309,7 +435,7 @@ public static class TypeAnnotator
     if (!string.IsNullOrEmpty(comment))
       newLine += " " + comment;
 
-    return newLine;
+    return (newLine, null);
   }
 
   private static string? TryFixVariable(string originalLine, string trimmed, string comment)
@@ -481,8 +607,9 @@ public static class TypeAnnotator
     //      gestiti sopra dal controllo TypeSuffixMap sul valore.
     if (v.StartsWith("&H", StringComparison.OrdinalIgnoreCase))
     {
-      var hexStr = v[2..].TrimEnd('&', 'L', 'l');
-      if (long.TryParse(hexStr,
+      var hexLiteral = v[2..].Trim();
+      if (TryStripNumericSuffix(hexLiteral, out var hexStr) && IsPureHexLiteral(hexStr) &&
+          long.TryParse(hexStr,
             System.Globalization.NumberStyles.HexNumber,
             System.Globalization.CultureInfo.InvariantCulture,
             out long hexVal) && hexVal >= 0)
@@ -497,15 +624,18 @@ public static class TypeAnnotator
     // Stessa logica: 16-bit (≤ &O177777 = 65535) → Integer, oltre → Long
     if (v.StartsWith("&O", StringComparison.OrdinalIgnoreCase))
     {
-      var octStr = v[2..].TrimEnd('&', '%', '!', '#', '@');
-      try
+      var octLiteral = v[2..].Trim();
+      if (TryStripNumericSuffix(octLiteral, out var octStr) && IsPureOctLiteral(octStr))
       {
-        var octVal = Convert.ToInt64(octStr, 8);
-        if (octVal >= 0 && octVal <= 0xFFFFL)     return "Integer";
-        if (octVal >= 0 && octVal <= 0xFFFFFFFFL) return "Long";
+        try
+        {
+          var octVal = Convert.ToInt64(octStr, 8);
+          if (octVal >= 0 && octVal <= 0xFFFFL)     return "Integer";
+          if (octVal >= 0 && octVal <= 0xFFFFFFFFL) return "Long";
+        }
+        catch (Exception) { }
       }
-      catch (Exception) { }
-      return "Long";
+      return null;
     }
 
     // Intero decimale: dimensione determina Integer vs Long
@@ -556,6 +686,36 @@ public static class TypeAnnotator
         return (line[..i].TrimEnd(), line[i..]);
     }
     return (line, string.Empty);
+  }
+
+  private static bool TryStripNumericSuffix(string value, out string stripped)
+  {
+    stripped = value.TrimEnd('&', '%', '!', '#', '@', 'L', 'l');
+    return !string.IsNullOrWhiteSpace(stripped) && stripped.Length != value.Length
+      ? true
+      : !string.IsNullOrWhiteSpace(stripped);
+  }
+
+  private static bool IsPureHexLiteral(string value)
+  {
+    foreach (var ch in value)
+    {
+      if (!Uri.IsHexDigit(ch))
+        return false;
+    }
+
+    return value.Length > 0;
+  }
+
+  private static bool IsPureOctLiteral(string value)
+  {
+    foreach (var ch in value)
+    {
+      if (ch < '0' || ch > '7')
+        return false;
+    }
+
+    return value.Length > 0;
   }
 
   /// <summary>

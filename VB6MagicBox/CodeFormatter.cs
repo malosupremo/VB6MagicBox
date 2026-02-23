@@ -119,9 +119,9 @@ public static class CodeFormatter
 
     Console.WriteLine();
     if (totalProcs == 0)
-      Console.WriteLine("[OK] Nessuna variabile da riordinare.");
+      "[OK] Nessuna variabile da riordinare.".WriteLineColored(ConsoleColor.Green);
     else
-      Console.WriteLine($"[OK] {totalProcs} procedura/e riordinata/e in {totalFiles} file/i.");
+      $"[OK] {totalProcs} procedura/e riordinata/e in {totalFiles} file/i.".WriteLineColored(ConsoleColor.Green);
   }
 
   /// <summary>
@@ -184,9 +184,9 @@ public static class CodeFormatter
 
     Console.WriteLine();
     if (totalFiles == 0)
-      Console.WriteLine("[OK] Nessuna modifica alle spaziature.");
+      "[OK] Nessuna modifica alle spaziature.".WriteLineColored(ConsoleColor.Green);
     else
-      Console.WriteLine($"[OK] Spaziature armonizzate in {totalFiles} file/i.");
+      $"[OK] Spaziature armonizzate in {totalFiles} file/i.".WriteLineColored(ConsoleColor.Green);
   }
 
   // -------------------------
