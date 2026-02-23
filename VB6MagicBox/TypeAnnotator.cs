@@ -63,7 +63,7 @@ public static class TypeAnnotator
 
   private enum FixKind { VariableOrConstant, Parameter }
   private sealed record SymbolFix(int LineNumber, FixKind Kind, string Name, string Module, string Procedure);
-  private sealed record MissingTypeInfo(string Module, string Procedure, string Name, string Kind);
+  private sealed record MissingTypeInfo(string Module, string Procedure, string Name, string ConventionalName, string Kind);
 
   // -------------------------
   // API PUBBLICA
@@ -162,7 +162,7 @@ public static class TypeAnnotator
     {
       fixes.Add(new SymbolFix(v.LineNumber, FixKind.VariableOrConstant, v.Name, mod.Name, string.Empty));
       if (!HasTypeSuffix(v.Name))
-        missingTypes.Add(new MissingTypeInfo(mod.Name, string.Empty, v.Name, "GlobalVariable"));
+        missingTypes.Add(new MissingTypeInfo(mod.Name, string.Empty, v.Name, v.ConventionalName, "GlobalVariable"));
     }
 
     // Costanti di modulo senza tipo (il parser cattura già Type="" per Const senza As)
@@ -171,12 +171,18 @@ public static class TypeAnnotator
 
     foreach (var proc in mod.Procedures)
     {
+      if (proc.Kind.Equals("Function", StringComparison.OrdinalIgnoreCase) &&
+          string.IsNullOrEmpty(proc.ReturnType))
+      {
+        missingTypes.Add(new MissingTypeInfo(mod.Name, proc.Name, proc.Name, proc.ConventionalName, "FunctionReturn"));
+      }
+
       // Parametri senza tipo (il parser cattura già Type="" per params senza As)
       foreach (var p in proc.Parameters.Where(p => string.IsNullOrEmpty(p.Type)))
       {
         fixes.Add(new SymbolFix(p.LineNumber, FixKind.Parameter, p.Name, mod.Name, proc.Name));
         if (!HasTypeSuffix(p.Name))
-          missingTypes.Add(new MissingTypeInfo(mod.Name, proc.Name, p.Name, "Parameter"));
+          missingTypes.Add(new MissingTypeInfo(mod.Name, proc.Name, p.Name, p.ConventionalName, "Parameter"));
       }
 
       // Variabili locali senza tipo (catturate dal parser fallback ReLocalVarNoType)
@@ -184,7 +190,7 @@ public static class TypeAnnotator
       {
         fixes.Add(new SymbolFix(v.LineNumber, FixKind.VariableOrConstant, v.Name, mod.Name, proc.Name));
         if (!HasTypeSuffix(v.Name))
-          missingTypes.Add(new MissingTypeInfo(mod.Name, proc.Name, v.Name, "LocalVariable"));
+          missingTypes.Add(new MissingTypeInfo(mod.Name, proc.Name, v.Name, v.ConventionalName, "LocalVariable"));
       }
 
       // Costanti locali senza tipo
@@ -198,8 +204,15 @@ public static class TypeAnnotator
       {
         fixes.Add(new SymbolFix(p.LineNumber, FixKind.Parameter, p.Name, mod.Name, prop.Name));
         if (!HasTypeSuffix(p.Name))
-          missingTypes.Add(new MissingTypeInfo(mod.Name, prop.Name, p.Name, "PropertyParameter"));
+          missingTypes.Add(new MissingTypeInfo(mod.Name, prop.Name, p.Name, p.ConventionalName, "PropertyParameter"));
       }
+
+    foreach (var prop in mod.Properties.Where(p =>
+               p.Kind.Equals("Get", StringComparison.OrdinalIgnoreCase) &&
+               string.IsNullOrEmpty(p.ReturnType)))
+    {
+      missingTypes.Add(new MissingTypeInfo(mod.Name, prop.Name, prop.Name, prop.ConventionalName, "PropertyReturn"));
+    }
 
     return fixes;
   }
@@ -267,7 +280,8 @@ public static class TypeAnnotator
           if (lineFix != null)
           {
             var kind = string.IsNullOrEmpty(lineFix.Procedure) ? "Constant" : "LocalConstant";
-            missingTypes.Add(new MissingTypeInfo(lineFix.Module, lineFix.Procedure, missingConstantName, kind));
+            var conventionalName = ResolveConstantConventionalName(mod, lineFix.Procedure, missingConstantName);
+            missingTypes.Add(new MissingTypeInfo(lineFix.Module, lineFix.Procedure, missingConstantName, conventionalName, kind));
           }
         }
       }
@@ -284,6 +298,8 @@ public static class TypeAnnotator
         constantLines,
         globalVariableLines,
         memberRanges);
+
+      processed = ApplyCallRemoval(processed);
 
       if (!string.Equals(clean, processed, StringComparison.Ordinal))
       {
@@ -362,6 +378,43 @@ public static class TypeAnnotator
     }
 
     return line;
+  }
+
+  private static string ApplyCallRemoval(string line)
+  {
+    if (string.IsNullOrWhiteSpace(line))
+      return line;
+
+    var (code, comment) = SplitCodeAndComment(line);
+    var trimmed = code.TrimStart();
+
+    if (!trimmed.StartsWith("Call ", StringComparison.OrdinalIgnoreCase))
+      return line;
+
+    var indent = code[..(code.Length - trimmed.Length)];
+    var callPart = trimmed.Substring(5).TrimStart();
+    if (string.IsNullOrEmpty(callPart))
+      return line;
+
+    var parenIndex = callPart.IndexOf('(');
+    if (parenIndex < 0)
+    {
+      var updated = indent + callPart;
+      return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
+    }
+
+    var endParenIndex = callPart.LastIndexOf(')');
+    if (endParenIndex <= parenIndex)
+      return line;
+
+    if (!string.IsNullOrWhiteSpace(callPart[(endParenIndex + 1)..]))
+      return line;
+
+    var target = callPart.Substring(0, parenIndex).TrimEnd();
+    var args = callPart.Substring(parenIndex + 1, endParenIndex - parenIndex - 1).Trim();
+    var updatedCall = string.IsNullOrEmpty(args) ? target : $"{target} {args}";
+    var updatedLine = indent + updatedCall;
+    return string.IsNullOrEmpty(comment) ? updatedLine : updatedLine + " " + comment;
   }
 
   private static bool StartsWithVisibility(string trimmed)
@@ -558,11 +611,11 @@ public static class TypeAnnotator
 
   private static void ExportMissingTypesCsv(string outputPath, List<MissingTypeInfo> missingTypes)
   {
-    var lines = new List<string> { "Module,Procedure,Name,Kind" };
+    var lines = new List<string> { "Module,Procedure,Name,ConventionalName,Kind" };
 
     foreach (var item in missingTypes)
     {
-      lines.Add($"\"{EscapeCsv(item.Module)}\",\"{EscapeCsv(item.Procedure)}\",\"{EscapeCsv(item.Name)}\",\"{EscapeCsv(item.Kind)}\"");
+      lines.Add($"\"{EscapeCsv(item.Module)}\",\"{EscapeCsv(item.Procedure)}\",\"{EscapeCsv(item.Name)}\",\"{EscapeCsv(item.ConventionalName)}\",\"{EscapeCsv(item.Kind)}\"");
     }
 
     File.WriteAllLines(outputPath, lines, Encoding.UTF8);
@@ -572,6 +625,26 @@ public static class TypeAnnotator
   {
     if (string.IsNullOrEmpty(value)) return string.Empty;
     return value.Replace("\"", "\"\"");
+  }
+
+  private static string ResolveConstantConventionalName(VbModule mod, string procedureName, string constantName)
+  {
+    if (string.IsNullOrEmpty(constantName))
+      return constantName;
+
+    if (string.IsNullOrEmpty(procedureName))
+    {
+      var moduleConst = mod.Constants.FirstOrDefault(c =>
+          c.Name.Equals(constantName, StringComparison.OrdinalIgnoreCase));
+      return moduleConst?.ConventionalName ?? constantName;
+    }
+
+    var proc = mod.Procedures.FirstOrDefault(p =>
+        p.Name.Equals(procedureName, StringComparison.OrdinalIgnoreCase));
+    var procConst = proc?.Constants.FirstOrDefault(c =>
+        c.Name.Equals(constantName, StringComparison.OrdinalIgnoreCase));
+
+    return procConst?.ConventionalName ?? constantName;
   }
 
   // -------------------------

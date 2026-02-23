@@ -34,7 +34,7 @@ public class Program
             Console.WriteLine("Opzioni:");
             Console.WriteLine("1. Analizza progetto VB6");
             Console.WriteLine("2. Applica refactoring automatico");
-            Console.WriteLine("3. Aggiunta tipi mancanti");
+            Console.WriteLine("3. Aggiunta tipi mancanti e scope e rimozione Call");
             Console.WriteLine("4. Riordina le variabili di procedura");
             Console.WriteLine("5. Armonizza le spaziature");
             Console.Write("6. ");

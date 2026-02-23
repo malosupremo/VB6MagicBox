@@ -12,7 +12,7 @@
 - se una variabile di modulo è DIM allora diventa Private
 
 
-- controllare se le function hanno AS qualcosa, se manca segnalo sugli errori
+- controllare se le function hanno AS qualcosa, se manca segnalo sugli errori (includere anche ConventionalName)
 - CALL da togliere ?
   - Call ExecuteReadStatus(m_PollRequest.PollCmd) --> ExecuteReadStatus m_PollRequest.PollCmdù
   - Call SetDataNotValid --> SetDataNotValid
