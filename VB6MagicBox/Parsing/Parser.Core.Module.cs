@@ -493,6 +493,7 @@ public static partial class VbParser
           EndLine = originalLineNumber
         };
         FixReturnTypeLineNumberForMultilineSignature(declareProc, originalLines, originalLineNumber);
+        FixParameterTypeLineNumbersForMultilineSignature(declareProc, originalLines, originalLineNumber);
 
         // AGGIUNGE REFERENCES AUTOMATICHE per i parametri su righe multiple
         AddParameterReferencesForMultilineDeclaration(declareProc, mod.Name, originalLines, originalLineNumber, lineMapping, lineIndex);

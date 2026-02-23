@@ -97,24 +97,21 @@ public static partial class VbParser
             if (withStack.Count > 0)
             {
                 var withPrefix = withStack.Peek();
-                noComment = Regex.Replace(noComment,
-                    @"(?<![\w)])\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
-                    m => withPrefix + "." + m.Groups[1].Value,
-                    RegexOptions.IgnoreCase);
+                noComment = ReWithDotReplacement.Replace(noComment,
+                    m => withPrefix + "." + m.Groups[1].Value);
             }
 
             var scanLine = MaskStringLiterals(noComment);
-            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
             var chainMatches = new List<(string Text, int Index)>();
 
-            foreach (Match m in Regex.Matches(scanLine, chainPattern, RegexOptions.IgnoreCase))
+            foreach (Match m in ReChainPattern.Matches(scanLine))
                 chainMatches.Add((m.Value, m.Index));
 
-            foreach (Match inner in Regex.Matches(scanLine, @"\(([^)]*)\)"))
+            foreach (Match inner in ReParenContent.Matches(scanLine))
             {
                 var innerText = inner.Groups[1].Value;
                 var innerStart = inner.Groups[1].Index;
-                foreach (Match m in Regex.Matches(innerText, chainPattern, RegexOptions.IgnoreCase))
+                foreach (Match m in ReChainPattern.Matches(innerText))
                     chainMatches.Add((m.Value, innerStart + m.Index));
             }
 
@@ -131,7 +128,7 @@ public static partial class VbParser
                 if (parts.Length < 2)
                     continue;
 
-                var tokenMatches = Regex.Matches(effectiveChain, @"\b[A-Za-z_]\w*\b");
+                var tokenMatches = ReTokens.Matches(effectiveChain);
                 var tokenPositions = tokenMatches.Select(m => (m.Value, effectiveIndex + m.Index)).ToList();
 
                 var baseVarName = parts[0];
@@ -407,24 +404,21 @@ public static partial class VbParser
             if (withStack.Count > 0)
             {
                 var withPrefix = withStack.Peek();
-                noComment = Regex.Replace(noComment,
-                    @"(?<![\w)])\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)",
-                    m => withPrefix + "." + m.Groups[1].Value,
-                    RegexOptions.IgnoreCase);
+                noComment = ReWithDotReplacement.Replace(noComment,
+                    m => withPrefix + "." + m.Groups[1].Value);
             }
 
             var scanLine = MaskStringLiterals(noComment);
-            var chainPattern = @"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+";
             var chainMatches = new List<(string Text, int Index)>();
 
-            foreach (Match m in Regex.Matches(scanLine, chainPattern, RegexOptions.IgnoreCase))
+            foreach (Match m in ReChainPattern.Matches(scanLine))
                 chainMatches.Add((m.Value, m.Index));
 
-            foreach (Match inner in Regex.Matches(scanLine, @"\(([^)]*)\)"))
+            foreach (Match inner in ReParenContent.Matches(scanLine))
             {
                 var innerText = inner.Groups[1].Value;
                 var innerStart = inner.Groups[1].Index;
-                foreach (Match m in Regex.Matches(innerText, chainPattern, RegexOptions.IgnoreCase))
+                foreach (Match m in ReChainPattern.Matches(innerText))
                     chainMatches.Add((m.Value, innerStart + m.Index));
             }
 
@@ -441,7 +435,7 @@ public static partial class VbParser
                 if (parts.Length < 2)
                     continue;
 
-                var tokenMatches = Regex.Matches(effectiveChain, @"\b[A-Za-z_]\w*\b");
+                var tokenMatches = ReTokens.Matches(effectiveChain);
                 var tokenPositions = tokenMatches.Select(m => (m.Value, effectiveIndex + m.Index)).ToList();
 
                 var baseVarName = parts[0];
@@ -743,12 +737,12 @@ public static partial class VbParser
             var noComment = StripInlineComment(raw).Trim();
 
             // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
-            noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
+            noComment = MaskStringLiterals(noComment);
 
             // Cerca tutti i token word nella riga
-            foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
+            foreach (Match m in ReTokens.Matches(noComment))
             {
-                var tokenName = m.Groups[1].Value;
+                var tokenName = m.Value;
 
                 // Controlla se � un parametro
                 if (parameterIndex.TryGetValue(tokenName, out var parameter))
@@ -815,7 +809,7 @@ public static partial class VbParser
             var noComment = StripInlineComment(raw).Trim();
 
             // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
-            noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
+            noComment = MaskStringLiterals(noComment);
 
             foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
             {
