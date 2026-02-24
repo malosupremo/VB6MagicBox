@@ -89,6 +89,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - Collects missing type cases (no suffix) and exports `*.missingTypes.csv` with `Module,Procedure,Name,ConventionalName,Kind`.
 - Tracks missing return types for `Function` and `Property Get` (kind `FunctionReturn`/`PropertyReturn`).
 - Skips `As Variant` defaults for constants; non-inferable constants go to missing types.
+- **Const expressions with `Or`/`And` or parentheses** are treated as non-inferable (no numeric type assigned) and go to missing types.
 - For forms/classes: adds explicit `Public` on procedures/properties without visibility and `Private` on module-level `Dim`/`Const`.
 - Cleans VB6 `Call` statements and removes `Step 1` from `For` loops.
 - **Runs AFTER refactoring** (uses conventional names already applied).

@@ -497,7 +497,10 @@ public static class TypeAnnotator
     else
     {
       cleanName = rawName;
-      typeName  = InferConstantType(rawValue)??string.Empty;
+      if (HasComplexConstantExpression(rawValue))
+        return (null, cleanName);
+
+      typeName = InferConstantType(rawValue) ?? string.Empty;
       if (string.IsNullOrEmpty(typeName))
         return (null, cleanName);
     }
@@ -749,6 +752,49 @@ public static class TypeAnnotator
       return "Double";
 
     return null;
+  }
+
+  private static bool HasComplexConstantExpression(string rawValue)
+  {
+    bool inString = false;
+    for (int i = 0; i < rawValue.Length; i++)
+    {
+      var ch = rawValue[i];
+      if (ch == '"')
+      {
+        if (!inString)
+          inString = true;
+        else if (i + 1 < rawValue.Length && rawValue[i + 1] == '"')
+          i++;
+        else
+          inString = false;
+
+        continue;
+      }
+
+      if (inString)
+        continue;
+
+      if (ch == '(' || ch == ')')
+        return true;
+
+      if (char.IsLetter(ch) || ch == '_')
+      {
+        var start = i;
+        i++;
+        while (i < rawValue.Length && (char.IsLetterOrDigit(rawValue[i]) || rawValue[i] == '_'))
+          i++;
+
+        var token = rawValue[start..i];
+        if (token.Equals("Or", StringComparison.OrdinalIgnoreCase) ||
+            token.Equals("And", StringComparison.OrdinalIgnoreCase))
+          return true;
+
+        i--;
+      }
+    }
+
+    return false;
   }
 
   // -------------------------
