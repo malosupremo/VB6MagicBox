@@ -18,6 +18,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 
 **Phase 3 (Type Annotation)**: `TypeAnnotator.AddMissingTypes`
 - Runs AFTER refactoring (uses conventional names already applied)
+- Adds cleanup: visibility normalization in forms/classes, Call removal, `For ... Step 1` cleanup
 
 ## Key Models
 - `VbModule`: `Procedures`, `Properties` (separate), `Types`, `Enums`, `Constants`, `GlobalVariables`, `Controls`, `ModuleReferences`, `Used`, **`Replaces`** (NEW - list of `LineReplace`), `StartLine/EndLine` lookups via `ContainsLine`/`GetProcedureAtLine`.
@@ -51,6 +52,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - `MarkUsedTypes` also scans Type fields.
 - Module `Used` propagated from any used member.
 - Public properties are scanned across modules (like globals) for bare uses.
+- **Default control property usage**: control references are tracked even when used bare (`lblTitle = "x"`) or as `Module.Control` without an explicit property.
 
 ## BuildReplaces (Parser.Replaces) - NEW
 - **Pre-calculates ALL substitutions** during analysis phase (after naming conventions applied).
@@ -84,7 +86,11 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 
 ## TypeAnnotator
 - Adds missing types only when suffix infers type. No default `As Object`.
-- Collects missing type cases (no suffix) and exports `*.missingTypes.csv` with `Module,Procedure,Name,Kind`.
+- Collects missing type cases (no suffix) and exports `*.missingTypes.csv` with `Module,Procedure,Name,ConventionalName,Kind`.
+- Tracks missing return types for `Function` and `Property Get` (kind `FunctionReturn`/`PropertyReturn`).
+- Skips `As Variant` defaults for constants; non-inferable constants go to missing types.
+- For forms/classes: adds explicit `Public` on procedures/properties without visibility and `Private` on module-level `Dim`/`Const`.
+- Cleans VB6 `Call` statements and removes `Step 1` from `For` loops.
 - **Runs AFTER refactoring** (uses conventional names already applied).
 
 ## Naming
@@ -115,6 +121,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Local declaration ordering**: procedure headers keep `Attribute` lines attached; local declarations are grouped as comments → constants → static → Dim, without extra blank lines or alphabetic sorting.
 - **Spacing rules tweaks**: no blank after initial file `Attribute` block; pre-procedure comment blocks stay contiguous with a single blank line before them; no blank at the start of a procedure even if the first statement is a comment for a following block.
 - **Single-line If spacing**: single-line `If` statements always add a blank line after; they add a blank line before unless preceded by a comment.
+- **Console output styling**: `[OK]` in green, `[WARN]` in yellow, `[X]` in red, `[i]` in cyan.
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**

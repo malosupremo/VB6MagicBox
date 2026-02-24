@@ -1,5 +1,3 @@
-using System;
-
 namespace VB6MagicBox;
 
 public static class ConsoleOutput

@@ -496,7 +496,7 @@ public static class TypeAnnotator
     else
     {
       cleanName = rawName;
-      typeName  = InferConstantType(rawValue);
+      typeName  = InferConstantType(rawValue)??string.Empty;
       if (string.IsNullOrEmpty(typeName))
         return (null, cleanName);
     }

@@ -377,7 +377,7 @@ public static partial class VbParser
           else
           {
             refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
-          }
+        }
         }
         else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
         {
@@ -397,6 +397,10 @@ public static partial class VbParser
                 referenceNewName,
                 category + "_Reference");
           }
+        }
+        else if (string.Equals(category, "Constant", StringComparison.OrdinalIgnoreCase))
+        {
+          AddConstantReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace);
         }
         else
         {
@@ -487,6 +491,83 @@ public static partial class VbParser
       index--;
 
     return end > index;
+  }
+
+  private static void AddConstantReferenceReplaces(
+      VbModule refModule,
+      string codePart,
+      int lineNum,
+      string oldName,
+      string newName,
+      string category,
+      int occIndex,
+      List<(int start, int end)> stringRanges,
+      bool allowStringReplace)
+  {
+    var pattern = $@"\b{Regex.Escape(oldName)}\b";
+    var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+
+    if (matches.Count == 0)
+      return;
+
+    IEnumerable<Match> targetMatches = matches.Cast<Match>();
+    if (occIndex > 0 && occIndex <= matches.Count)
+      targetMatches = new[] { matches[occIndex - 1] };
+
+    foreach (var match in targetMatches)
+    {
+      if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
+        continue;
+
+      if (IsConstantMemberAccessToken(codePart, match.Index))
+        continue;
+
+      if (IsTypeFieldDeclaration(codePart, match.Index, oldName))
+        continue;
+
+      refModule.Replaces.AddReplace(
+          lineNum,
+          match.Index,
+          match.Index + match.Length,
+          match.Value,
+          newName,
+          category + "_Reference");
+    }
+  }
+
+  private static bool IsConstantMemberAccessToken(string line, int tokenIndex)
+  {
+    if (tokenIndex <= 0)
+      return false;
+
+    var index = tokenIndex - 1;
+    while (index >= 0 && char.IsWhiteSpace(line[index]))
+      index--;
+
+    return index >= 0 && line[index] == '.';
+  }
+
+  private static bool IsTypeFieldDeclaration(string line, int tokenIndex, string token)
+  {
+    if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(token))
+      return false;
+
+    var trimmed = line.TrimStart();
+    if (trimmed.StartsWith("Public ", StringComparison.OrdinalIgnoreCase) ||
+        trimmed.StartsWith("Private ", StringComparison.OrdinalIgnoreCase))
+    {
+      trimmed = trimmed.Substring(trimmed.IndexOf(' ') + 1).TrimStart();
+    }
+
+    var tokenMatch = Regex.Match(trimmed, $@"^\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+    if (!tokenMatch.Success)
+      return false;
+
+    var asIndex = trimmed.IndexOf(" As ", StringComparison.OrdinalIgnoreCase);
+    if (asIndex < 0)
+      return false;
+
+    return tokenIndex <= line.IndexOf(" As ", StringComparison.OrdinalIgnoreCase);
   }
 
   private static List<(int start, int end)> GetStringLiteralRanges(string line)
