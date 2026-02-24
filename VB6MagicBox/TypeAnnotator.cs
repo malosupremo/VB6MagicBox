@@ -111,7 +111,6 @@ public static class TypeAnnotator
         continue;
 
       var fixes = CollectFixes(mod, missingTypes);
-      if (fixes.Count == 0) continue;
 
       var filePath = mod.FullPath;
       if (!File.Exists(filePath)) continue;
@@ -227,8 +226,6 @@ public static class TypeAnnotator
   private static (int changes, string newContent) ProcessFileWithFixes(
     string content, List<SymbolFix> fixes, List<MissingTypeInfo> missingTypes, VbModule mod)
   {
-    if (fixes.Count == 0) return (0, content);
-
     // Raggruppa le fix per numero di riga
     var varConstLines = fixes
       .Where(f => f.Kind == FixKind.VariableOrConstant)
@@ -404,11 +401,15 @@ public static class TypeAnnotator
       return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
     }
 
-    var endParenIndex = callPart.LastIndexOf(')');
-    if (endParenIndex <= parenIndex)
+    var lastNonSpace = callPart.Length - 1;
+    while (lastNonSpace >= 0 && char.IsWhiteSpace(callPart[lastNonSpace]))
+      lastNonSpace--;
+
+    if (lastNonSpace < 0 || callPart[lastNonSpace] != ')')
       return line;
 
-    if (!string.IsNullOrWhiteSpace(callPart[(endParenIndex + 1)..]))
+    var endParenIndex = callPart.LastIndexOf(')', lastNonSpace);
+    if (endParenIndex <= parenIndex)
       return line;
 
     var target = callPart.Substring(0, parenIndex).TrimEnd();
