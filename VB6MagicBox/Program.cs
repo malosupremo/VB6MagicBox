@@ -8,11 +8,9 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("===========================================");
-        Console.WriteLine("              VB6 Magic Box ");
-        Console.WriteLine("===========================================");
-        Console.WriteLine();
+        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        ConsoleX.WriteLineColor("              VB6 Magic Box ", ConsoleColor.Yellow);
+        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.ForegroundColor = ConsoleColor.Gray;
 
         // Se ci sono argomenti da riga di comando, usa la modalità legacy (analisi diretta)
@@ -38,9 +36,7 @@ public class Program
             Console.WriteLine("4. Riordina le variabili di procedura");
             Console.WriteLine("5. Armonizza le spaziature");
             Console.Write("6. ");
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.Write("BACCHETTA MAGICA");
-            Console.ForegroundColor = ConsoleColor.Gray;
+            ConsoleX.WriteColor("BACCHETTA MAGICA", ConsoleColor.Red);
             Console.WriteLine(": tutto insieme!");
             Console.WriteLine("0. Esci");
             Console.WriteLine();
@@ -81,7 +77,7 @@ public class Program
 
                 default:
                     Console.WriteLine();
-            "[X] Opzione non valida. Riprova.".WriteLineColored(ConsoleColor.Red);
+                    ConsoleX.WriteLineColor("[X] Opzione non valida. Riprova.", ConsoleColor.Red);
                     break;
             }
         }
@@ -95,7 +91,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
+            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -107,8 +103,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            "[X] Errore durante l'armonizzazione spaziature:".WriteLineColored(ConsoleColor.Red);
-            Console.WriteLine(ex.ToString());
+            ConsoleX.WriteLineColor("[X] Errore durante l'armonizzazione spaziature:", ConsoleColor.Red);
+            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -120,7 +116,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            "[X] File non trovato!".WriteLineColored(ConsoleColor.Red);
+            ConsoleX.WriteLineColor("[X] File non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -134,13 +130,13 @@ public class Program
             var project = VbParser.ParseAndResolve(vbpPath);
             ExportProjectFiles(project, vbpPath);
             Console.WriteLine();
-            "[OK] Analisi completata.".WriteLineColored(ConsoleColor.Green);
+            ConsoleX.WriteLineColor("[OK] Analisi completata.", ConsoleColor.Green);
         }
         catch (Exception ex)
         {
             Console.WriteLine();
-            "[X] Errore durante l'analisi:".WriteLineColored(ConsoleColor.Red);
-            Console.WriteLine(ex.ToString());
+            ConsoleX.WriteLineColor("[X] Errore durante l'analisi:", ConsoleColor.Red);
+            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -152,7 +148,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
+            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -167,8 +163,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            "[X] Errore durante l'aggiunta dei tipi:".WriteLineColored(ConsoleColor.Red);
-            Console.WriteLine(ex.ToString());
+            ConsoleX.WriteLineColor("[X] Errore durante l'aggiunta dei tipi:", ConsoleColor.Red);
+            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -180,7 +176,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
+            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -199,8 +195,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            "[X] Errore durante il refactoring:".WriteLineColored(ConsoleColor.Red);
-            Console.WriteLine(ex.ToString());
+            ConsoleX.WriteLineColor("[X] Errore durante il refactoring:", ConsoleColor.Red);
+            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -212,7 +208,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
+            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -224,8 +220,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            "[X] Errore durante il riordino:".WriteLineColored(ConsoleColor.Red);
-            Console.WriteLine(ex.ToString());
+            ConsoleX.WriteLineColor("[X] Errore durante il riordino:", ConsoleColor.Red);
+            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -237,7 +233,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            "[X] File .vbp non trovato!".WriteLineColored(ConsoleColor.Red);
+            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -245,40 +241,40 @@ public class Program
 
         try
         {
-          // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
-          var project = VbParser.ParseAndResolve(vbpPath);
+            // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
+            var project = VbParser.ParseAndResolve(vbpPath);
 
-          // 2) Export file di analisi (symbols.json, rename.json, rename.csv, linereplace.json, dependencies.md)
-          ExportProjectFiles(project, vbpPath);
+            // 2) Export file di analisi (symbols.json, rename.json, rename.csv, linereplace.json, dependencies.md)
+            ExportProjectFiles(project, vbpPath);
 
-          // 3) Refactoring: rinomina i simboli secondo le convenzioni
-          //    DEVE precedere TypeAnnotator perché dopo il rename i nomi nel sorgente
-          //    corrispondono ai ConventionalName del modello
-          Refactoring.ApplyRenames(project);
+            // 3) Refactoring: rinomina i simboli secondo le convenzioni
+            //    DEVE precedere TypeAnnotator perché dopo il rename i nomi nel sorgente
+            //    corrispondono ai ConventionalName del modello
+            Refactoring.ApplyRenames(project);
 
-          // 4) Aggiunta tipi mancanti: usa i nomi convenzionali dopo il rename
-          TypeAnnotator.AddMissingTypes(project);
+            // 4) Aggiunta tipi mancanti: usa i nomi convenzionali dopo il rename
+            TypeAnnotator.AddMissingTypes(project);
 
-          // 5) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
-          //    Deve seguire tutto il resto perché opera sui file già rinominati e tipizzati
-          CodeFormatter.ReorderLocalVariables(project);
+            // 5) Riordino variabili locali: sposta Dim/Static in cima a ogni procedura
+            //    Deve seguire tutto il resto perché opera sui file già rinominati e tipizzati
+            CodeFormatter.ReorderLocalVariables(project);
 
             // 6) Armonizzazione spaziature
             CodeFormatter.HarmonizeSpacing(project);
 
             Console.WriteLine();
-          "[OK] Bacchetta magica applicata!".WriteLineColored(ConsoleColor.Green);
+            ConsoleX.WriteLineColor("[OK] Bacchetta magica applicata!", ConsoleColor.Green);
         }
         catch (Exception ex)
         {
             Console.WriteLine();
-            "[X] Errore durante la bacchetta magica:".WriteLineColored(ConsoleColor.Red);
-            Console.WriteLine(ex.ToString());
+            ConsoleX.WriteLineColor("[X] Errore durante la bacchetta magica:", ConsoleColor.Red);
+            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
         finally
         {
             stopwatch.Stop();
-            Console.WriteLine($"Tempo bacchetta magica: {stopwatch.Elapsed.TotalMilliseconds/1000:0.000} s");
+            Console.WriteLine($"Tempo bacchetta magica: {stopwatch.Elapsed.TotalMilliseconds / 1000:0.000} s");
         }
     }
 
@@ -289,28 +285,28 @@ public class Program
     /// </summary>
     private static void ExportProjectFiles(VbProject project, string vbpPath)
     {
-      var vbpDir = Path.GetDirectoryName(vbpPath)!;
-      var vbpName = Path.GetFileNameWithoutExtension(vbpPath);
+        var vbpDir = Path.GetDirectoryName(vbpPath)!;
+        var vbpName = Path.GetFileNameWithoutExtension(vbpPath);
 
-      var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
-      var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
-      var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
-      var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
-      var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
+        var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
+        var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
+        var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
+        var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
+        var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
 
-      Console.WriteLine();
-      Console.WriteLine(">> Esportazione file di output...");
+        Console.WriteLine();
+        Console.WriteLine(">> Esportazione file di output...");
 
-      VbParser.ExportJson(project, jsonOut);
-      VbParser.ExportRenameJson(project, renameJson);
-      VbParser.ExportRenameCsv(project, renameCsv);
-      VbParser.ExportLineReplaceJson(project, lineReplaceJson);
-      VbParser.ExportMermaid(project, mermaidOut);
+        VbParser.ExportJson(project, jsonOut);
+        VbParser.ExportRenameJson(project, renameJson);
+        VbParser.ExportRenameCsv(project, renameCsv);
+        VbParser.ExportLineReplaceJson(project, lineReplaceJson);
+        VbParser.ExportMermaid(project, mermaidOut);
 
-      Console.WriteLine($"   JSON completo:     {jsonOut}");
-      Console.WriteLine($"   JSON rename:       {renameJson}");
-      Console.WriteLine($"   CSV rename:        {renameCsv}");
-      Console.WriteLine($"   JSON linereplace:  {lineReplaceJson}");
-      Console.WriteLine($"   Mermaid:           {mermaidOut}");
+        Console.WriteLine($"   JSON completo:     {jsonOut}");
+        Console.WriteLine($"   JSON rename:       {renameJson}");
+        Console.WriteLine($"   CSV rename:        {renameCsv}");
+        Console.WriteLine($"   JSON linereplace:  {lineReplaceJson}");
+        Console.WriteLine($"   Mermaid:           {mermaidOut}");
     }
 }

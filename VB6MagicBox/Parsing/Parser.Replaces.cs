@@ -1,7 +1,4 @@
 using System.Text.RegularExpressions;
-using VB6MagicBox;
-using System.Threading;
-using System.Threading.Tasks;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -24,13 +21,11 @@ public static partial class VbParser
     /// </summary>
     public static void BuildReplaces(VbProject project, Dictionary<string, string[]> fileCache)
     {
-        Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine();
-        Console.WriteLine("===========================================");
-        Console.WriteLine("  2: Costruzione sostituzioni (Replaces)");
-        Console.WriteLine("===========================================");
+        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        ConsoleX.WriteLineColor("  2: Costruzione sostituzioni (Replaces)", ConsoleColor.Yellow);
+        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.WriteLine();
-        Console.ForegroundColor = ConsoleColor.Gray;
 
         int totalReplaces = 0;
 
@@ -200,7 +195,7 @@ public static partial class VbParser
         }
 
         Console.WriteLine();
-        $"   [OK] {totalReplaces} sostituzioni preparate per {project.Modules.Count} moduli".WriteLineColored(ConsoleColor.Green);
+        ConsoleX.WriteLineColor($"   [OK] {totalReplaces} sostituzioni preparate per {project.Modules.Count} moduli", ConsoleColor.Green);
     }
 
     /// <summary>
