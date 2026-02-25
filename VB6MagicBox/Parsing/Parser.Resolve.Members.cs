@@ -15,9 +15,6 @@ public static partial class VbParser
     private static readonly Regex ReChainPattern = 
         new(@"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex ReParenContent = 
-        new(@"\(([^)]*)\)", RegexOptions.Compiled);
-
     private static readonly Regex ReTokens = 
         new(@"\b[A-Za-z_]\w*\b", RegexOptions.Compiled);
 
@@ -109,10 +106,8 @@ public static partial class VbParser
             foreach (Match m in ReChainPattern.Matches(scanLine))
                 chainMatches.Add((m.Value, m.Index));
 
-            foreach (Match inner in ReParenContent.Matches(scanLine))
+            foreach (var (innerText, innerStart) in EnumerateParenContents(scanLine))
             {
-                var innerText = inner.Groups[1].Value;
-                var innerStart = inner.Groups[1].Index;
                 foreach (Match m in ReChainPattern.Matches(innerText))
                     chainMatches.Add((m.Value, innerStart + m.Index));
             }
@@ -418,10 +413,8 @@ public static partial class VbParser
             foreach (Match m in ReChainPattern.Matches(scanLine))
                 chainMatches.Add((m.Value, m.Index));
 
-            foreach (Match inner in ReParenContent.Matches(scanLine))
+            foreach (var (innerText, innerStart) in EnumerateParenContents(scanLine))
             {
-                var innerText = inner.Groups[1].Value;
-                var innerStart = inner.Groups[1].Index;
                 foreach (Match m in ReChainPattern.Matches(innerText))
                     chainMatches.Add((m.Value, innerStart + m.Index));
             }
@@ -944,6 +937,31 @@ public static partial class VbParser
         }
 
         return false;
+    }
+
+    private static IEnumerable<(string Text, int Index)> EnumerateParenContents(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+            yield break;
+
+        var starts = new Stack<int>();
+        for (int i = 0; i < line.Length; i++)
+        {
+            if (line[i] == '(')
+            {
+                starts.Push(i + 1);
+                continue;
+            }
+
+            if (line[i] != ')' || starts.Count == 0)
+                continue;
+
+            var start = starts.Pop();
+            if (start > i)
+                continue;
+
+            yield return (line.Substring(start, i - start), start);
+        }
     }
 
     private static IEnumerable<(string Token, int Index)> EnumerateTokens(string line)
