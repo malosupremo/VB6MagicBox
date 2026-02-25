@@ -8,7 +8,7 @@ public class VbProcedure
   public required string Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
@@ -17,19 +17,19 @@ public class VbProcedure
   public bool IsStatic { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string Kind { get; set; }
+  public string? Kind { get; set; }
 
   [JsonPropertyOrder(5)]
-  public string ReturnType { get; set; }
+  public string? ReturnType { get; set; }
 
   [JsonPropertyOrder(6)]
-  public string Scope { get; set; }
+  public string? Scope { get; set; }
 
   [JsonPropertyOrder(7)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(8)]
-  public string Visibility { get; set; }
+  public string? Visibility { get; set; }
 
   [JsonPropertyOrder(9)]
   [JsonIgnore]
@@ -71,19 +71,19 @@ public class VbProcedure
 public class VbParameter
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonPropertyOrder(3)]
-  public string Passing { get; set; }
+  public string? Passing { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string Type { get; set; }
+  public string? Type { get; set; }
 
   [JsonPropertyOrder(5)]
   public bool Used { get; set; }
@@ -102,22 +102,22 @@ public class VbParameter
 public class VbEvent
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonPropertyOrder(3)]
-  public string Scope { get; set; }
+  public string? Scope { get; set; }
 
   [JsonPropertyOrder(4)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(5)]
-  public string Visibility { get; set; }
+  public string? Visibility { get; set; }
 
   [JsonIgnore]
   public int LineNumber { get; set; }
@@ -132,28 +132,28 @@ public class VbEvent
 public class VbProperty
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonPropertyOrder(3)]
-  public string Kind { get; set; } // "Get", "Let", "Set"
+  public string? Kind { get; set; } // "Get", "Let", "Set"
 
   [JsonPropertyOrder(4)]
-  public string Scope { get; set; }
+  public string? Scope { get; set; }
 
   [JsonPropertyOrder(5)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(6)]
-  public string Visibility { get; set; }
+  public string? Visibility { get; set; }
 
   [JsonPropertyOrder(7)]
-  public string ReturnType { get; set; }
+  public string? ReturnType { get; set; }
 
   [JsonIgnore]
   public int LineNumber { get; set; }
@@ -185,25 +185,25 @@ public class VbProperty
 public class VbCall
 {
   [JsonPropertyOrder(0)]
-  public string Raw { get; set; }
+  public string? Raw { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string MethodName { get; set; }
+  public string? MethodName { get; set; }
 
   [JsonPropertyOrder(2)]
-  public string ObjectName { get; set; }
+  public string? ObjectName { get; set; }
 
   [JsonPropertyOrder(3)]
-  public string ResolvedKind { get; set; }
+  public string? ResolvedKind { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string ResolvedModule { get; set; }
+  public string? ResolvedModule { get; set; }
 
   [JsonPropertyOrder(5)]
-  public string ResolvedProcedure { get; set; }
+  public string? ResolvedProcedure { get; set; }
 
   [JsonPropertyOrder(6)]
-  public string ResolvedType { get; set; }
+  public string? ResolvedType { get; set; }
 
   [JsonPropertyOrder(7)]
   [JsonIgnore]  // Dati interni per refactoring puntuale

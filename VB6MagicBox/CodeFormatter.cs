@@ -49,7 +49,7 @@ public static class CodeFormatter
     Console.WriteLine();
     Console.ForegroundColor = ConsoleColor.Gray;
 
-    var vbpDir        = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile))!;
+    var vbpDir        = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile!))!;
     var backupBaseDir = new DirectoryInfo(vbpDir).Parent?.FullName ?? vbpDir;
     var folderName    = new DirectoryInfo(backupBaseDir).Name;
     var backupDir     = Path.Combine(
@@ -142,7 +142,7 @@ public static class CodeFormatter
     Console.WriteLine();
     Console.ForegroundColor = ConsoleColor.Gray;
 
-    var vbpDir = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile))!;
+    var vbpDir = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile!))!;
     var backupBaseDir = new DirectoryInfo(vbpDir).Parent?.FullName ?? vbpDir;
     var folderName = new DirectoryInfo(backupBaseDir).Name;
     var backupDir = Path.Combine(
@@ -370,7 +370,7 @@ public static class CodeFormatter
     bool inProcedure = false;
     bool inProcHeaderGroup = false;
     HeaderGroupKind? currentGroup = null;
-    string currentPropertyName = null;
+    string? currentPropertyName = null;
     bool lastWasLabel = false;
 
     for (int i = startIdx; i < lines.Count; i++)
@@ -631,7 +631,7 @@ public static class CodeFormatter
 
   private static bool IsLabelLine(string line) => Regex.IsMatch(line.TrimStart(), @"^[A-Za-z_]\w*:\s*$");
 
-  private static bool IsProcedureStart(string line, out string propertyName)
+  private static bool IsProcedureStart(string line, out string? propertyName)
   {
     propertyName = null;
     var match = Regex.Match(line, @"^(Public|Private|Friend)?\s*(Static\s+)?(Sub|Function|Property)\s+(\w+)", RegexOptions.IgnoreCase);
@@ -757,7 +757,7 @@ public static class CodeFormatter
     return null;
   }
 
-  private static bool IsEndProperty(string line, string currentPropertyName, List<string> lines, int nextIndex)
+  private static bool IsEndProperty(string line, string? currentPropertyName, List<string> lines, int nextIndex)
   {
     if (!line.TrimStart().StartsWith("End Property", StringComparison.OrdinalIgnoreCase))
       return false;
@@ -773,7 +773,7 @@ public static class CodeFormatter
     return false;
   }
 
-  private static bool TryGetPropertyName(string line, out string propertyName)
+  private static bool TryGetPropertyName(string line, out string? propertyName)
   {
     propertyName = null;
     var match = Regex.Match(line, @"^(Public|Private|Friend)?\s*(Static\s+)?Property\s+(Get|Let|Set)\s+(\w+)", RegexOptions.IgnoreCase);

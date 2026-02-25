@@ -9,14 +9,14 @@ public class VbVariable
   public required string Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonIgnore]
   [JsonPropertyOrder(3)]
-  public string Level { get; set; }
+  public string? Level { get; set; }
 
   [JsonPropertyOrder(4)]
   public bool IsStatic { get; set; }
@@ -28,16 +28,16 @@ public class VbVariable
   public bool IsWithEvents { get; set; }
 
   [JsonPropertyOrder(7)]
-  public string Scope { get; set; }
+  public string? Scope { get; set; }
 
   [JsonPropertyOrder(8)]
-  public string Type { get; set; }
+  public string? Type { get; set; }
 
   [JsonPropertyOrder(9)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(10)]
-  public string Visibility { get; set; }
+  public string? Visibility { get; set; }
 
   [JsonPropertyOrder(11)]
   public List<VbReference> References { get; set; } = new();
@@ -48,31 +48,31 @@ public class VbVariable
 public class VbConstant
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonPropertyOrder(3)]
-  public string Level { get; set; }
+  public string? Level { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string Scope { get; set; }
+  public string? Scope { get; set; }
 
   [JsonPropertyOrder(5)]
-  public string Type { get; set; }
+  public string? Type { get; set; }
 
   [JsonPropertyOrder(6)]
   public bool Used { get; set; }
 
   [JsonPropertyOrder(7)]
-  public string Value { get; set; }
+  public string? Value { get; set; }
 
   [JsonPropertyOrder(8)]
-  public string Visibility { get; set; }
+  public string? Visibility { get; set; }
 
   [JsonPropertyOrder(9)]
   public List<VbReference> References { get; set; } = new();
@@ -84,10 +84,10 @@ public class VbConstant
 public class VbTypeDef
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
@@ -109,10 +109,10 @@ public class VbTypeDef
 public class VbField
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
@@ -121,7 +121,7 @@ public class VbField
   public bool IsArray { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string Type { get; set; }
+  public string? Type { get; set; }
 
   [JsonPropertyOrder(5)]
   public bool Used { get; set; }
@@ -136,10 +136,10 @@ public class VbField
 public class VbEnumDef
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
@@ -161,10 +161,10 @@ public class VbEnumDef
 public class VbEnumValue
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
@@ -182,16 +182,16 @@ public class VbEnumValue
 public class VbControl
 {
   [JsonPropertyOrder(0)]
-  public string Name { get; set; }
+  public string? Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonPropertyOrder(3)]
-  public string ControlType { get; set; }
+  public string? ControlType { get; set; }
 
   [JsonPropertyOrder(4)]
   public bool IsArray { get; set; }
@@ -217,10 +217,10 @@ public class VbControl
 public class VbReference
 {
   [JsonPropertyOrder(0)]
-  public string Module { get; set; }
+  public string? Module { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string Procedure { get; set; }
+  public string? Procedure { get; set; }
 
   [JsonPropertyOrder(2)]
   public List<int> LineNumbers { get; set; } = new();
@@ -252,31 +252,31 @@ public class LineReplace
   public int EndChar { get; set; }
 
   [JsonPropertyOrder(3)]
-  public string OldText { get; set; }
+  public string? OldText { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string NewText { get; set; }
+  public string? NewText { get; set; }
 
   [JsonPropertyOrder(5)]
-  public string Category { get; set; }
+  public string? Category { get; set; }
 }
 
 public class DependencyEdge
 {
   [JsonPropertyOrder(0)]
-  public string CallerModule { get; set; }
+  public string? CallerModule { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string CallerProcedure { get; set; }
+  public string? CallerProcedure { get; set; }
 
   [JsonPropertyOrder(2)]
-  public string CalleeModule { get; set; }
+  public string? CalleeModule { get; set; }
 
   [JsonPropertyOrder(3)]
-  public string CalleeProcedure { get; set; }
+  public string? CalleeProcedure { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string CalleeRaw { get; set; }
+  public string? CalleeRaw { get; set; }
 }
 
 /// <summary>

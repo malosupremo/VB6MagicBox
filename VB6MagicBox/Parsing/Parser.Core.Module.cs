@@ -37,13 +37,13 @@ public static partial class VbParser
     // Gestisci le righe con continuazione "_"
     var (collapsedLines, lineMapping) = CollapseLineContinuations(originalLines);
 
-    VbProcedure currentProc = null;
-    VbProperty currentProperty = null;
-    VbTypeDef currentType = null;
-    VbEnumDef currentEnum = null;
+    VbProcedure? currentProc = null;
+    VbProperty? currentProperty = null;
+    VbTypeDef? currentType = null;
+    VbEnumDef? currentEnum = null;
     bool insideControl = false;
-    VbControl currentControl = null;
-    string currentWith = null;
+    VbControl? currentControl = null;
+    string? currentWith = null;
 
     int lineIndex = 0;
 
@@ -166,7 +166,7 @@ public static partial class VbParser
       {
         var interfaceName = mi.Groups[1].Value;
         if (!string.IsNullOrEmpty(interfaceName) &&
-            !mod.ImplementsInterfaces.Any(i => i.Equals(interfaceName, StringComparison.OrdinalIgnoreCase)))
+            !mod.ImplementsInterfaces.Any(i => i?.Equals(interfaceName, StringComparison.OrdinalIgnoreCase) == true))
         {
           mod.ImplementsInterfaces.Add(interfaceName);
         }
@@ -709,7 +709,7 @@ public static partial class VbParser
           var isStatic = declarationType.Equals("Static", StringComparison.OrdinalIgnoreCase);
 
           // ml.Groups: 1=Scope(Dim/Static), 2=Name, 3=Array, 4=Type
-          currentProc.LocalVariables.Add(new VbVariable
+          currentProc?.LocalVariables.Add(new VbVariable
           {
             Name = ml.Groups[2].Value,
             Type = ml.Groups[4].Value,
@@ -727,7 +727,7 @@ public static partial class VbParser
           var mlnt = ReLocalVarNoType.Match(noComment);
           if (mlnt.Success)
           {
-            currentProc.LocalVariables.Add(new VbVariable
+            currentProc?.LocalVariables.Add(new VbVariable
             {
               Name = mlnt.Groups[2].Value,
               Type = "",
@@ -754,7 +754,7 @@ public static partial class VbParser
           }
 
           // Esclude parametri e variabili locali
-          if (currentProc.Parameters.Any(p => p.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase)))
+          if (currentProc?.Parameters.Any(p => p?.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase) == true) == true)
           {
             DebugLog(currentProc.Name, originalLineNumber, methodName, "SKIPPED: Parameter", "ReCall");
             continue;

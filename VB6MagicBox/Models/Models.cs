@@ -5,7 +5,7 @@ namespace VB6MagicBox.Models;
 public class VbProject
 {
   [JsonPropertyOrder(0)]
-  public required string ProjectFile { get; set; }
+  public required string? ProjectFile { get; set; }
 
   [JsonPropertyOrder(1)]
   public List<VbModule> Modules { get; set; } = new();
@@ -20,16 +20,16 @@ public class VbModule
   public required string Name { get; set; }
 
   [JsonPropertyOrder(1)]
-  public string ConventionalName { get; set; }
+  public string? ConventionalName { get; set; }
 
   [JsonPropertyOrder(2)]
   public bool IsConventional => string.Equals(Name, ConventionalName, StringComparison.Ordinal);
 
   [JsonPropertyOrder(3)]
-  public string Kind { get; set; }
+  public string? Kind { get; set; }
 
   [JsonPropertyOrder(4)]
-  public string Path { get; set; }
+  public string? Path { get; set; }
 
   [JsonPropertyOrder(5)]
   public bool IsSharedExternal { get; set; }
@@ -39,10 +39,10 @@ public class VbModule
 
   [JsonPropertyOrder(6)]
   [JsonIgnore]
-  public string FullPath { get; set; }
+  public string? FullPath { get; set; }
 
   [JsonIgnore]
-  public VbProject Owner { get; set; }
+  public VbProject? Owner { get; set; }
 
   [JsonPropertyOrder(7)]
   public List<VbConstant> Constants { get; set; } = new();
@@ -77,13 +77,13 @@ public class VbModule
   /// Popolato da BuildDependenciesAndUsage; usato per il grafo Mermaid.
   /// </summary>
   [JsonPropertyOrder(16)]
-  public List<string> ModuleReferences { get; set; } = new();
+  public List<string?> ModuleReferences { get; set; } = new();
 
   [JsonIgnore]
-  public bool IsClass => Kind.Equals("cls", StringComparison.OrdinalIgnoreCase);
+  public bool IsClass => Kind?.Equals("cls", StringComparison.OrdinalIgnoreCase) == true;
   
   [JsonIgnore]
-  public bool IsForm => Kind.Equals("frm", StringComparison.OrdinalIgnoreCase);
+  public bool IsForm => Kind?.Equals("frm", StringComparison.OrdinalIgnoreCase) == true;
 
   /// <summary>
   /// Trova la procedura che contiene il numero di riga specificato
@@ -94,7 +94,7 @@ public class VbModule
   }
 
   [JsonIgnore]
-  public List<string> ImplementsInterfaces { get; set; } = new();
+  public List<string?> ImplementsInterfaces { get; set; } = new();
 
   /// <summary>
   /// Lista di tutte le sostituzioni da applicare a questo modulo durante il refactoring.
