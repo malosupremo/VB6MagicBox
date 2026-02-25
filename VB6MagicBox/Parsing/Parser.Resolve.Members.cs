@@ -59,6 +59,10 @@ public static partial class VbParser
         }
 
         var withStack = new Stack<string>();
+        var moduleByName = mod.Owner?.Modules?.ToDictionary(
+            m => m.Name,
+            m => m,
+            StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, VbModule>(StringComparer.OrdinalIgnoreCase);
 
         for (int i = startIndex; i < endIndex; i++)
         {
@@ -73,6 +77,7 @@ public static partial class VbParser
                 var withExpr = trimmedNoComment.Substring(5).Trim();
                 if (withExpr.StartsWith(".") && withStack.Count > 0)
                     withExpr = withStack.Peek() + withExpr;
+                TryAddWithModuleReference(withExpr, noComment, i + 1, mod, proc, moduleByName);
                 if (!string.IsNullOrEmpty(withExpr))
                     withStack.Push(withExpr);
                 continue;
@@ -366,6 +371,10 @@ public static partial class VbParser
             return;
 
         var withStack = new Stack<string>();
+        var moduleByName = mod.Owner?.Modules?.ToDictionary(
+            m => m.Name,
+            m => m,
+            StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, VbModule>(StringComparer.OrdinalIgnoreCase);
 
         for (int i = startIndex; i < endIndex; i++)
         {
@@ -380,6 +389,7 @@ public static partial class VbParser
                 var withExpr = trimmedNoComment.Substring(5).Trim();
                 if (withExpr.StartsWith(".") && withStack.Count > 0)
                     withExpr = withStack.Peek() + withExpr;
+                TryAddWithModuleReference(withExpr, noComment, i + 1, mod, prop, moduleByName);
                 if (!string.IsNullOrEmpty(withExpr))
                     withStack.Push(withExpr);
                 continue;
@@ -774,6 +784,40 @@ public static partial class VbParser
         return moduleByName.TryGetValue(normalizedType, out targetModule);
     }
 
+    private static bool TryResolveModule(
+        string moduleName,
+        VbProperty prop,
+        VbModule mod,
+        Dictionary<string, VbModule> moduleByName,
+        out VbModule targetModule)
+    {
+        if (moduleByName.TryGetValue(moduleName, out targetModule))
+            return true;
+
+        string typeName = null;
+        var param = prop.Parameters.FirstOrDefault(p =>
+            string.Equals(p.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+        if (param != null)
+            typeName = param.Type;
+
+        if (string.IsNullOrEmpty(typeName))
+        {
+            var global = mod.GlobalVariables.FirstOrDefault(v =>
+                string.Equals(v.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+            if (global != null)
+                typeName = global.Type;
+        }
+
+        if (string.IsNullOrEmpty(typeName))
+        {
+            targetModule = null;
+            return false;
+        }
+
+        var normalizedType = NormalizeModuleTypeName(typeName);
+        return moduleByName.TryGetValue(normalizedType, out targetModule);
+    }
+
     private static string NormalizeModuleTypeName(string typeName)
     {
         if (string.IsNullOrWhiteSpace(typeName))
@@ -788,6 +832,69 @@ public static partial class VbParser
             normalized = normalized.Split('.').Last();
 
         return normalized.Trim();
+    }
+
+    private static void TryAddWithModuleReference(
+        string withExpr,
+        string rawLine,
+        int lineNumber,
+        VbModule currentModule,
+        VbProcedure proc,
+        Dictionary<string, VbModule> moduleByName)
+    {
+        if (!TryGetWithTokenInfo(withExpr, rawLine, lineNumber, out var token, out var occurrenceIndex))
+            return;
+
+        if (TryResolveModule(token, proc, currentModule, moduleByName, out var targetModule))
+        {
+            targetModule.Used = true;
+            targetModule.References.AddLineNumber(currentModule.Name, proc.Name, lineNumber, occurrenceIndex);
+        }
+    }
+
+    private static void TryAddWithModuleReference(
+        string withExpr,
+        string rawLine,
+        int lineNumber,
+        VbModule currentModule,
+        VbProperty prop,
+        Dictionary<string, VbModule> moduleByName)
+    {
+        if (!TryGetWithTokenInfo(withExpr, rawLine, lineNumber, out var token, out var occurrenceIndex))
+            return;
+
+        if (TryResolveModule(token, prop, currentModule, moduleByName, out var targetModule))
+        {
+            targetModule.Used = true;
+            targetModule.References.AddLineNumber(currentModule.Name, prop.Name, lineNumber, occurrenceIndex);
+        }
+    }
+
+    private static bool TryGetWithTokenInfo(
+        string withExpr,
+        string rawLine,
+        int lineNumber,
+        out string token,
+        out int occurrenceIndex)
+    {
+        token = null;
+        occurrenceIndex = -1;
+
+        if (string.IsNullOrWhiteSpace(withExpr))
+            return false;
+
+        var tokenMatch = ReTokens.Match(withExpr);
+        if (!tokenMatch.Success)
+            return false;
+
+        token = tokenMatch.Value;
+        var withStartIndex = rawLine.IndexOf(withExpr, StringComparison.OrdinalIgnoreCase);
+        if (withStartIndex < 0)
+            withStartIndex = 0;
+
+        var tokenIndex = rawLine.IndexOf(token, withStartIndex, StringComparison.OrdinalIgnoreCase);
+        occurrenceIndex = GetOccurrenceIndex(rawLine, token, tokenIndex, lineNumber);
+        return true;
     }
 
     // ---------------------------------------------------------
