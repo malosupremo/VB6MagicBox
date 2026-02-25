@@ -615,6 +615,13 @@ public static partial class VbParser
             c => c,
             StringComparer.OrdinalIgnoreCase);
 
+        var moduleByName = mod.Owner?.Modules?.ToDictionary(
+            m => m.Name,
+            m => m,
+            StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, VbModule>(StringComparer.OrdinalIgnoreCase);
+
+        var withStack = new Stack<string>();
+
         var shadowedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in proc.Parameters)
             shadowedNames.Add(p.Name);
@@ -645,6 +652,38 @@ public static partial class VbParser
 
             // Rimuovi commenti
             var noComment = StripInlineComment(raw);
+
+            var trimmedNoComment = noComment.TrimStart();
+            if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
+            {
+                var withExpr = trimmedNoComment.Substring(5).Trim();
+                if (withExpr.StartsWith(".") && withStack.Count > 0)
+                    withExpr = withStack.Peek() + withExpr;
+                if (!string.IsNullOrEmpty(withExpr))
+                    withStack.Push(withExpr);
+                continue;
+            }
+
+            if (trimmedNoComment.Equals("End With", StringComparison.OrdinalIgnoreCase))
+            {
+                if (withStack.Count > 0)
+                    withStack.Pop();
+                continue;
+            }
+
+            if (withStack.Count > 0 && trimmedNoComment.StartsWith(".", StringComparison.Ordinal))
+            {
+                var suffix = trimmedNoComment.Substring(1).TrimStart();
+                noComment = withStack.Peek() + "." + suffix;
+            }
+
+            if (withStack.Count > 0)
+            {
+                var withPrefix = withStack.Peek();
+                noComment = ReWithDotReplacement.Replace(noComment,
+                    m => withPrefix + "." + m.Groups[1].Value);
+            }
+
             noComment = MaskStringLiterals(noComment);
 
             foreach (var (moduleName, controlName, moduleIndex, controlNameIndex) in EnumerateControlAccesses(noComment))
@@ -654,10 +693,7 @@ public static partial class VbParser
 
                 if (!string.IsNullOrEmpty(moduleName))
                 {
-                    var targetModule = mod.Owner?.Modules?.FirstOrDefault(module =>
-                        string.Equals(module.Name, moduleName, StringComparison.OrdinalIgnoreCase));
-
-                    if (targetModule != null)
+                    if (TryResolveModule(moduleName, proc, mod, moduleByName, out var targetModule))
                     {
                         var controls = targetModule.Controls.Where(c =>
                             string.Equals(c.Name, controlName, StringComparison.OrdinalIgnoreCase));
@@ -678,7 +714,6 @@ public static partial class VbParser
                     MarkControlAsUsed(sameModuleControl, mod.Name, proc.Name, i + 1, occurrenceIndex);
                 }
             }
-
             foreach (Match match in ReTokens.Matches(noComment))
             {
                 if (IsMemberAccessToken(noComment, match.Index))
@@ -695,6 +730,64 @@ public static partial class VbParser
                 }
             }
         }
+    }
+
+    private static bool TryResolveModule(
+        string moduleName,
+        VbProcedure proc,
+        VbModule mod,
+        Dictionary<string, VbModule> moduleByName,
+        out VbModule targetModule)
+    {
+        if (moduleByName.TryGetValue(moduleName, out targetModule))
+            return true;
+
+        string typeName = null;
+        var param = proc.Parameters.FirstOrDefault(p =>
+            string.Equals(p.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+        if (param != null)
+            typeName = param.Type;
+
+        if (string.IsNullOrEmpty(typeName))
+        {
+            var local = proc.LocalVariables.FirstOrDefault(v =>
+                string.Equals(v.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+            if (local != null)
+                typeName = local.Type;
+        }
+
+        if (string.IsNullOrEmpty(typeName))
+        {
+            var global = mod.GlobalVariables.FirstOrDefault(v =>
+                string.Equals(v.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+            if (global != null)
+                typeName = global.Type;
+        }
+
+        if (string.IsNullOrEmpty(typeName))
+        {
+            targetModule = null;
+            return false;
+        }
+
+        var normalizedType = NormalizeModuleTypeName(typeName);
+        return moduleByName.TryGetValue(normalizedType, out targetModule);
+    }
+
+    private static string NormalizeModuleTypeName(string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+            return string.Empty;
+
+        var normalized = typeName;
+        var parenIndex = normalized.IndexOf('(');
+        if (parenIndex >= 0)
+            normalized = normalized.Substring(0, parenIndex);
+
+        if (normalized.Contains('.'))
+            normalized = normalized.Split('.').Last();
+
+        return normalized.Trim();
     }
 
     // ---------------------------------------------------------
