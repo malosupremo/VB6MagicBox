@@ -654,7 +654,7 @@ public static partial class VbParser
             var noComment = StripInlineComment(raw);
             noComment = MaskStringLiterals(noComment);
 
-            foreach (var (moduleName, controlName) in EnumerateControlAccesses(noComment))
+            foreach (var (moduleName, controlName, moduleIndex, controlNameIndex) in EnumerateControlAccesses(noComment))
             {
                 if (string.IsNullOrEmpty(controlName))
                     continue;
@@ -671,7 +671,8 @@ public static partial class VbParser
 
                         foreach (var control in controls)
                         {
-                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
+                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
                         }
 
                         continue;
@@ -679,7 +680,10 @@ public static partial class VbParser
                 }
 
                 if (controlIndex.TryGetValue(moduleName, out var sameModuleControl))
-                    MarkControlAsUsed(sameModuleControl, mod.Name, proc.Name, i + 1);
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, moduleName, moduleIndex, i + 1);
+                    MarkControlAsUsed(sameModuleControl, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                }
             }
 
             foreach (Match match in ReTokens.Matches(noComment))
@@ -692,7 +696,10 @@ public static partial class VbParser
                     continue;
 
                 if (controlIndex.TryGetValue(token, out var control))
-                    MarkControlAsUsed(control, mod.Name, proc.Name, i + 1);
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, token, match.Index, i + 1);
+                    MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                }
             }
         }
     }
@@ -1016,7 +1023,7 @@ public static partial class VbParser
     private static bool IsIdentifierStart(char value)
         => char.IsLetter(value) || value == '_';
 
-    private static IEnumerable<(string ModuleName, string ControlName)> EnumerateControlAccesses(string line)
+    private static IEnumerable<(string ModuleName, string ControlName, int ModuleIndex, int ControlIndex)> EnumerateControlAccesses(string line)
     {
         if (string.IsNullOrEmpty(line))
             yield break;
@@ -1064,12 +1071,12 @@ public static partial class VbParser
 
             if (afterSecondParen < line.Length && line[afterSecondParen] == '.')
             {
-                yield return (first, second);
+                yield return (first, second, firstStart, secondStart);
                 i = afterSecondParen + 1;
             }
             else
             {
-                yield return (first, second);
+                yield return (first, second, firstStart, secondStart);
                 i = index;
             }
         }

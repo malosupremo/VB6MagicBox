@@ -19,3 +19,4 @@
 - Always use `GetProcedureAtLine(lineNum)` instead of `FirstOrDefault(p => lineNum >= p.LineNumber)`; this ensures the use of the `ContainsLine()` method for accurate procedure identification.
 - When reordering variables, keep any `Attribute` line immediately following a procedure signature attached (do not move it).
 - When moving local constants/variables to the top of a procedure, left-trim and indent them with two spaces for alignment.
+- In this project, `LineReplace.StartChar`/`EndChar` refer to positions in the original source before substitutions; only `NewText` changes later.
