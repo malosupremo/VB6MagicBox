@@ -1110,8 +1110,7 @@ public static partial class VbParser
                 if (!parameterIndex.ContainsKey(tokenName) &&
                     !localVariableIndex.ContainsKey(tokenName) &&
                     !globalVariableIndex.ContainsKey(tokenName) &&
-                    moduleByName.TryGetValue(tokenName, out var referencedModule) &&
-                    !string.Equals(referencedModule.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
+                    moduleByName.TryGetValue(tokenName, out var referencedModule))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
                     referencedModule.Used = true;
