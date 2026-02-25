@@ -9,19 +9,19 @@ public static partial class VbParser
     // REGEX COMPILATE PER HOT-PATH (ResolveFieldAccesses, ResolveControlAccesses, etc.)
     // ---------------------------------------------------------
 
-    private static readonly Regex ReWithDotReplacement = 
+    private static readonly Regex ReWithDotReplacement =
         new(@"(?<![\w)])\.(\s*[A-Za-z_]\w*(?:\([^)]*\))?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex ReChainPattern = 
+    private static readonly Regex ReChainPattern =
         new(@"([A-Za-z_]\w*(?:\([^)]*\))?)(?:\s*\.\s*[A-Za-z_]\w*(?:\([^)]*\))?)+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex ReTokens = 
+    private static readonly Regex ReTokens =
         new(@"\b[A-Za-z_]\w*\b", RegexOptions.Compiled);
 
-    private static readonly Regex ReControlAccess = 
+    private static readonly Regex ReControlAccess =
         new(@"(\w+)(?:\([^\)]*\))?\.(\w+)", RegexOptions.Compiled);
 
-    private static readonly Regex ReControlAccessCrossModule = 
+    private static readonly Regex ReControlAccessCrossModule =
         new(@"(\w+)\.(\w+)(?:\([^\)]*\))?\.(\w+)", RegexOptions.Compiled);
 
     // ---------------------------------------------------------
@@ -255,7 +255,7 @@ public static partial class VbParser
                                 var tp = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                                     t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                                 var oi = GetOccurrenceIndex(scanLine, fieldName, tp.Item2, i + 1);
-                                
+
                                 anyField.Used = true;
                                 anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, oi);
                                 typeName = anyField.Type;
@@ -320,7 +320,7 @@ public static partial class VbParser
                                 var fallbackTokenPos = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                                     t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                                 var fallbackOccIdx = GetOccurrenceIndex(noComment, fieldName, fallbackTokenPos.Item2, i + 1);
-                                
+
                                 anyField.Used = true;
                                 anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, fallbackOccIdx);
                                 fieldFoundInAnyType = true;
@@ -344,7 +344,7 @@ public static partial class VbParser
                         t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                     var occurrenceIndex = GetOccurrenceIndex(scanLine, fieldName, tokenPosition.Item2, i + 1);
 
-                    
+
 
                     field.Used = true;
                     field.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex);
@@ -1026,10 +1026,10 @@ public static partial class VbParser
             v => v,
             StringComparer.OrdinalIgnoreCase);
 
-    var globalVariableIndex = mod.GlobalVariables.ToDictionary(
-        v => v.Name,
-        v => v,
-        StringComparer.OrdinalIgnoreCase);
+        var globalVariableIndex = mod.GlobalVariables.ToDictionary(
+            v => v.Name,
+            v => v,
+            StringComparer.OrdinalIgnoreCase);
 
         // Controlli di sicurezza per evitare IndexOutOfRangeException
         if (proc.StartLine <= 0)
@@ -1100,11 +1100,11 @@ public static partial class VbParser
                 // Controlla se � una variabile globale del modulo (e non � shadowed)
                 if (!parameterIndex.ContainsKey(tokenName) && !localVariableIndex.ContainsKey(tokenName))
                 {
-                  if (globalVariableIndex.TryGetValue(tokenName, out var globalVar))
-                  {
-                    globalVar.Used = true;
-                    globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
-                  }
+                    if (globalVariableIndex.TryGetValue(tokenName, out var globalVar))
+                    {
+                        globalVar.Used = true;
+                        globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+                    }
                 }
 
                 if (!parameterIndex.ContainsKey(tokenName) &&
@@ -1773,19 +1773,19 @@ public static partial class VbParser
                     {
                         if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
                         {
-                          foreach (var enumDef in enumDefs)
-                          {
-                            enumDef.Used = true;
-                            enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1);
-
-                            var value = enumDef.Values.FirstOrDefault(v =>
-                                v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
-                            if (value != null)
+                            foreach (var enumDef in enumDefs)
                             {
-                              value.Used = true;
-                              value.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                                enumDef.Used = true;
+                                enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+
+                                var value = enumDef.Values.FirstOrDefault(v =>
+                                    v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
+                                if (value != null)
+                                {
+                                    value.Used = true;
+                                    value.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                                }
                             }
-                          }
                         }
                     }
                 }
@@ -1829,8 +1829,8 @@ public static partial class VbParser
 
                         foreach (var enumValue in enumValues)
                         {
-                          enumValue.Used = true;
-                          enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                            enumValue.Used = true;
+                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1);
                         }
                     }
 
@@ -1838,19 +1838,19 @@ public static partial class VbParser
                     {
                         if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
                         {
-                          foreach (var enumDef in enumDefs)
-                          {
-                            enumDef.Used = true;
-                            enumDef.References.AddLineNumber(mod.Name, prop.Name, i + 1);
-
-                            var value = enumDef.Values.FirstOrDefault(v =>
-                                v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
-                            if (value != null)
+                            foreach (var enumDef in enumDefs)
                             {
-                              value.Used = true;
-                              value.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                                enumDef.Used = true;
+                                enumDef.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+
+                                var value = enumDef.Values.FirstOrDefault(v =>
+                                    v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
+                                if (value != null)
+                                {
+                                    value.Used = true;
+                                    value.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                                }
                             }
-                          }
                         }
                     }
                 }
@@ -1858,118 +1858,118 @@ public static partial class VbParser
         }
     }
 
-  private static int GetOccurrenceIndex(string line, string token, int tokenIndex, int currentLineNumber = 0)
-  {
+    private static int GetOccurrenceIndex(string line, string token, int tokenIndex, int currentLineNumber = 0)
+    {
         bool isDebug = false;
 
-    if (tokenIndex < 0)
-      return -1;
+        if (tokenIndex < 0)
+            return -1;
 
-    var matches = Regex.Matches(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+        var matches = Regex.Matches(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
 
-    if (isDebug)
-    {
-      Console.WriteLine($"[DEBUG GetOccurrenceIndex] Line {currentLineNumber}, Token={token}, TokenIndex={tokenIndex}");
-      Console.WriteLine($"[DEBUG]   Line: {line}");
-      Console.WriteLine($"[DEBUG]   Total matches: {matches.Count}");
-      for (int j = 0; j < matches.Count; j++)
-        Console.WriteLine($"[DEBUG]     Match {j+1} at index {matches[j].Index}: '{matches[j].Value}'");
-    }
-
-    for (int i = 0; i < matches.Count; i++)
-    {
-      if (matches[i].Index == tokenIndex)
-      {
         if (isDebug)
-          Console.WriteLine($"[DEBUG]   ? Returning occurrence {i+1}");
-        return i + 1; // 1-based occurrence index
-      }
-    }
-
-    if (isDebug)
-      Console.WriteLine($"[DEBUG]   ? Token not found at specified index, returning -1");
-
-    return -1;
-  }
-
-  private static bool TryUnwrapFunctionChain(string chainText, int chainIndex, out string unwrappedChain, out int unwrappedIndex)
-  {
-    unwrappedChain = null;
-    unwrappedIndex = chainIndex;
-
-    if (string.IsNullOrEmpty(chainText))
-      return false;
-
-    var parenIndex = chainText.IndexOf('(');
-    if (parenIndex <= 0)
-      return false;
-
-    int depth = 0;
-    int closeIndex = -1;
-    for (int i = parenIndex; i < chainText.Length; i++)
-    {
-      if (chainText[i] == '(')
-        depth++;
-      else if (chainText[i] == ')')
-      {
-        depth--;
-        if (depth == 0)
         {
-          closeIndex = i;
-          break;
+            Console.WriteLine($"[DEBUG GetOccurrenceIndex] Line {currentLineNumber}, Token={token}, TokenIndex={tokenIndex}");
+            Console.WriteLine($"[DEBUG]   Line: {line}");
+            Console.WriteLine($"[DEBUG]   Total matches: {matches.Count}");
+            for (int j = 0; j < matches.Count; j++)
+                Console.WriteLine($"[DEBUG]     Match {j + 1} at index {matches[j].Index}: '{matches[j].Value}'");
         }
-      }
+
+        for (int i = 0; i < matches.Count; i++)
+        {
+            if (matches[i].Index == tokenIndex)
+            {
+                if (isDebug)
+                    Console.WriteLine($"[DEBUG]   ? Returning occurrence {i + 1}");
+                return i + 1; // 1-based occurrence index
+            }
+        }
+
+        if (isDebug)
+            Console.WriteLine($"[DEBUG]   ? Token not found at specified index, returning -1");
+
+        return -1;
     }
 
-    if (closeIndex >= 0 && closeIndex + 1 < chainText.Length && chainText[closeIndex + 1] == '.')
-      return false;
-
-    var prefix = chainText.Substring(0, parenIndex).Trim();
-    if (prefix.Contains('.'))
-      return false;
-
-    unwrappedChain = chainText.Substring(parenIndex + 1).TrimStart();
-    unwrappedIndex = chainIndex + parenIndex + 1;
-    return !string.IsNullOrEmpty(unwrappedChain);
-  }
-
-  private static bool MatchesName(string name, string conventionalName, string token)
-  {
-    return string.Equals(name, token, StringComparison.OrdinalIgnoreCase) ||
-           string.Equals(conventionalName, token, StringComparison.OrdinalIgnoreCase);
-  }
-
-  private static string[] SplitChainParts(string chainText)
-  {
-    if (string.IsNullOrEmpty(chainText))
-      return Array.Empty<string>();
-
-    var parts = new List<string>();
-    int depth = 0;
-    int start = 0;
-
-    for (int i = 0; i < chainText.Length; i++)
+    private static bool TryUnwrapFunctionChain(string chainText, int chainIndex, out string unwrappedChain, out int unwrappedIndex)
     {
-      if (chainText[i] == '(')
-        depth++;
-      else if (chainText[i] == ')')
-        depth = Math.Max(0, depth - 1);
-      else if (chainText[i] == '.' && depth == 0)
-      {
-        var part = chainText.Substring(start, i - start).Trim();
-        if (part.Length > 0)
-          parts.Add(part);
-        start = i + 1;
-      }
+        unwrappedChain = null;
+        unwrappedIndex = chainIndex;
+
+        if (string.IsNullOrEmpty(chainText))
+            return false;
+
+        var parenIndex = chainText.IndexOf('(');
+        if (parenIndex <= 0)
+            return false;
+
+        int depth = 0;
+        int closeIndex = -1;
+        for (int i = parenIndex; i < chainText.Length; i++)
+        {
+            if (chainText[i] == '(')
+                depth++;
+            else if (chainText[i] == ')')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    closeIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (closeIndex >= 0 && closeIndex + 1 < chainText.Length && chainText[closeIndex + 1] == '.')
+            return false;
+
+        var prefix = chainText.Substring(0, parenIndex).Trim();
+        if (prefix.Contains('.'))
+            return false;
+
+        unwrappedChain = chainText.Substring(parenIndex + 1).TrimStart();
+        unwrappedIndex = chainIndex + parenIndex + 1;
+        return !string.IsNullOrEmpty(unwrappedChain);
     }
 
-    if (start <= chainText.Length)
+    private static bool MatchesName(string name, string conventionalName, string token)
     {
-      var tail = chainText.Substring(start).Trim();
-      if (tail.Length > 0)
-        parts.Add(tail);
+        return string.Equals(name, token, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(conventionalName, token, StringComparison.OrdinalIgnoreCase);
     }
 
-    return parts.ToArray();
-  }
+    private static string[] SplitChainParts(string chainText)
+    {
+        if (string.IsNullOrEmpty(chainText))
+            return Array.Empty<string>();
+
+        var parts = new List<string>();
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < chainText.Length; i++)
+        {
+            if (chainText[i] == '(')
+                depth++;
+            else if (chainText[i] == ')')
+                depth = Math.Max(0, depth - 1);
+            else if (chainText[i] == '.' && depth == 0)
+            {
+                var part = chainText.Substring(start, i - start).Trim();
+                if (part.Length > 0)
+                    parts.Add(part);
+                start = i + 1;
+            }
+        }
+
+        if (start <= chainText.Length)
+        {
+            var tail = chainText.Substring(start).Trim();
+            if (tail.Length > 0)
+                parts.Add(tail);
+        }
+
+        return parts.ToArray();
+    }
 }

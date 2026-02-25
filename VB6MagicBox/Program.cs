@@ -6,6 +6,8 @@ namespace VB6MagicBox;
 
 public class Program
 {
+    private const string LastVbpFileName = "last.vbp.path";
+
     public static void Main(string[] args)
     {
         ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
@@ -86,8 +88,7 @@ public class Program
     private static void RunSpacingInteractive()
     {
         Console.WriteLine();
-        Console.Write("Percorso del file .vbp: ");
-        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = ReadVbpPath("Percorso del file .vbp");
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
@@ -111,8 +112,7 @@ public class Program
     private static void RunAnalysisInteractive()
     {
         Console.WriteLine();
-        Console.Write("Percorso del file .vbp: ");
-        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = ReadVbpPath("Percorso del file .vbp");
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
@@ -143,8 +143,7 @@ public class Program
     private static void RunTypeAnnotatorInteractive()
     {
         Console.WriteLine();
-        Console.Write("Percorso del file .vbp: ");
-        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = ReadVbpPath("Percorso del file .vbp");
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
@@ -171,8 +170,7 @@ public class Program
     private static void RunRefactoringInteractive()
     {
         Console.WriteLine();
-        Console.Write("Percorso del file .vbp: ");
-        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = ReadVbpPath("Percorso del file .vbp");
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
@@ -203,8 +201,7 @@ public class Program
     private static void RunVariableReorderInteractive()
     {
         Console.WriteLine();
-        Console.Write("Percorso del file .vbp: ");
-        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = ReadVbpPath("Percorso del file .vbp");
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
@@ -223,6 +220,44 @@ public class Program
             ConsoleX.WriteLineColor("[X] Errore durante il riordino:", ConsoleColor.Red);
             ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
+    }
+
+    private static string ReadVbpPath(string label)
+    {
+        var lastPath = ReadLastVbpPath();
+        if (!string.IsNullOrWhiteSpace(lastPath))
+            Console.Write($"{label} ({lastPath}): ");
+        else
+            Console.Write($"{label}: ");
+
+        var input = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = string.IsNullOrWhiteSpace(input) ? lastPath : input;
+
+        if (!string.IsNullOrWhiteSpace(vbpPath))
+            SaveLastVbpPath(vbpPath);
+
+        return vbpPath;
+    }
+
+    private static string ReadLastVbpPath()
+    {
+        var lastPathFile = GetLastVbpPathFile();
+        if (!File.Exists(lastPathFile))
+            return string.Empty;
+
+        return File.ReadAllText(lastPathFile).Trim();
+    }
+
+    private static void SaveLastVbpPath(string vbpPath)
+    {
+        var lastPathFile = GetLastVbpPathFile();
+        File.WriteAllText(lastPathFile, vbpPath);
+    }
+
+    private static string GetLastVbpPathFile()
+    {
+        var basePath = AppContext.BaseDirectory;
+        return Path.Combine(basePath, LastVbpFileName);
     }
 
     private static void RunMagicWandInteractive()
