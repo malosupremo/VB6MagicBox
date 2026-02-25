@@ -553,7 +553,8 @@ public static partial class VbParser
             if (IsReservedWord(v.ConventionalName))
             {
               localScopeNamesUsed.Remove(v.ConventionalName);
-              v.ConventionalName = v.ConventionalName + "Value";
+              if (!v.ConventionalName.EndsWith("Value", StringComparison.OrdinalIgnoreCase))
+                v.ConventionalName = v.ConventionalName + "Value";
               localScopeNamesUsed.Add(v.ConventionalName);
             }
           }
