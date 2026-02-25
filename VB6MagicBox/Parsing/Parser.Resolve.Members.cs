@@ -904,7 +904,8 @@ public static partial class VbParser
     private static void ResolveParameterAndLocalVariableReferences(
         VbModule mod,
         VbProcedure proc,
-        string[] fileLines)
+        string[] fileLines,
+        Dictionary<string, VbModule> moduleByName)
     {
         // Indicizza i parametri per nome
         var parameterIndex = proc.Parameters.ToDictionary(
@@ -986,6 +987,17 @@ public static partial class VbParser
                     globalVar.Used = true;
                     globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
                   }
+                }
+
+                if (!parameterIndex.ContainsKey(tokenName) &&
+                    !localVariableIndex.ContainsKey(tokenName) &&
+                    !globalVariableIndex.ContainsKey(tokenName) &&
+                    moduleByName.TryGetValue(tokenName, out var referencedModule) &&
+                    !string.Equals(referencedModule.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
+                    referencedModule.Used = true;
+                    referencedModule.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, occurrenceIndex);
                 }
             }
 

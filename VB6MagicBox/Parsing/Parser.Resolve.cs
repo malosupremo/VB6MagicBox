@@ -400,7 +400,7 @@ public static partial class VbParser
                 ResolveControlAccesses(mod, proc, fileLines);
 
                 // Risoluzione reference per parametri e variabili locali
-                ResolveParameterAndLocalVariableReferences(mod, proc, fileLines);
+                ResolveParameterAndLocalVariableReferences(mod, proc, fileLines, moduleByName);
 
                 // Rilevamento delle occorrenze nude di altre procedure nel corpo (es. "Not Is_Caller_Busy" o "If Is_Caller_Busy Then")
                 // Controlli di sicurezza per evitare IndexOutOfRangeException
@@ -777,6 +777,25 @@ public static partial class VbParser
                         {
                             referencedModule.Used = true;
                             referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1);
+
+                            var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1);
+                            var moduleProc = referencedModule.Procedures.FirstOrDefault(p =>
+                                string.Equals(p.Name, methodName, StringComparison.OrdinalIgnoreCase));
+                            if (moduleProc != null)
+                            {
+                                moduleProc.Used = true;
+                                moduleProc.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex);
+                            }
+                            else
+                            {
+                                var moduleProp = referencedModule.Properties.FirstOrDefault(p =>
+                                    string.Equals(p.Name, methodName, StringComparison.OrdinalIgnoreCase));
+                                if (moduleProp != null)
+                                {
+                                    moduleProp.Used = true;
+                                    moduleProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex);
+                                }
+                            }
                         }
 
                         // Se objName NON è un oggetto noto in env, non proseguire con la risoluzione del tipo
