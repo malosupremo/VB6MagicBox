@@ -75,9 +75,11 @@ public static partial class VbParser
                 cleanType = cleanType.Substring(12);
             else if (cleanType.StartsWith("Threed.SS", StringComparison.OrdinalIgnoreCase))
                 cleanType = cleanType.Substring(9);
+            else if (cleanType.StartsWith("MSFlexGridLib.MSFlex", StringComparison.OrdinalIgnoreCase))   
+                cleanType = cleanType.Substring(20);
 
-            // Cerca nella mappa dei prefissi standard
-            if (ControlPrefixes.TryGetValue(cleanType, out var prefix))
+                // Cerca nella mappa dei prefissi standard
+                if (ControlPrefixes.TryGetValue(cleanType, out var prefix))
                 return prefix;
 
             // Regola generica per controlli custom: iniziale + rimozione vocali (tranne iniziale)

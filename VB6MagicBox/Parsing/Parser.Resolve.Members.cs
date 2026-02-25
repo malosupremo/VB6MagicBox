@@ -691,6 +691,41 @@ public static partial class VbParser
                 var withExpr = trimmedNoComment.Substring(5).Trim();
                 if (withExpr.StartsWith(".") && withStack.Count > 0)
                     withExpr = withStack.Peek() + withExpr;
+                var withQualified = EnumerateQualifiedTokens(withExpr).FirstOrDefault();
+                if (!string.IsNullOrEmpty(withQualified.Left))
+                {
+                    if (string.Equals(withQualified.Left, "Me", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (controlIndex.TryGetValue(withQualified.Right, out var meControl))
+                        {
+                            var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
+                            MarkControlAsUsed(meControl, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                        }
+                    }
+                    else if (TryResolveModule(withQualified.Left, proc, mod, moduleByName, out var targetModule))
+                    {
+                        var controls = targetModule.Controls.Where(c =>
+                            string.Equals(c.Name, withQualified.Right, StringComparison.OrdinalIgnoreCase));
+
+                        foreach (var control in controls)
+                        {
+                            var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
+                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                        }
+                    }
+                }
+                else
+                {
+                    var token = EnumerateTokens(withExpr).FirstOrDefault().Token;
+                    if (!string.IsNullOrEmpty(token) && controlIndex.TryGetValue(token, out var control))
+                    {
+                        var tokenIndex = noComment.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+                        var occurrenceIndex = GetOccurrenceIndex(noComment, token, tokenIndex, i + 1);
+                        MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                    }
+                }
                 if (!string.IsNullOrEmpty(withExpr))
                     withStack.Push(withExpr);
                 continue;
@@ -770,6 +805,173 @@ public static partial class VbParser
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, token, match.Index, i + 1);
                     MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                }
+            }
+        }
+    }
+
+    private static void ResolveControlAccesses(
+        VbModule mod,
+        VbProperty prop,
+        string[] fileLines)
+    {
+        var controlIndex = mod.Controls.ToDictionary(
+            c => c.Name,
+            c => c,
+            StringComparer.OrdinalIgnoreCase);
+
+        var moduleByName = mod.Owner?.Modules?.ToDictionary(
+            m => m.Name,
+            m => m,
+            StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, VbModule>(StringComparer.OrdinalIgnoreCase);
+
+        var withStack = new Stack<string>();
+
+        var shadowedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in prop.Parameters)
+            shadowedNames.Add(p.Name);
+
+        if (prop.StartLine <= 0)
+            prop.StartLine = prop.LineNumber;
+
+        if (prop.EndLine <= 0)
+            prop.EndLine = fileLines.Length;
+
+        var startIndex = Math.Max(0, prop.StartLine - 1);
+        var endIndex = Math.Min(fileLines.Length, prop.EndLine);
+
+        if (startIndex >= fileLines.Length)
+            return;
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            var raw = fileLines[i].Trim();
+
+            if (i > prop.LineNumber - 1 && IsProcedureEndLine(raw, prop.Kind))
+                break;
+
+            var noComment = StripInlineComment(raw);
+
+            var trimmedNoComment = noComment.TrimStart();
+            if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
+            {
+                var withExpr = trimmedNoComment.Substring(5).Trim();
+                if (withExpr.StartsWith(".") && withStack.Count > 0)
+                    withExpr = withStack.Peek() + withExpr;
+                var withQualified = EnumerateQualifiedTokens(withExpr).FirstOrDefault();
+                if (!string.IsNullOrEmpty(withQualified.Left))
+                {
+                    if (string.Equals(withQualified.Left, "Me", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (controlIndex.TryGetValue(withQualified.Right, out var meControl))
+                        {
+                            var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
+                            MarkControlAsUsed(meControl, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                        }
+                    }
+                    else if (TryResolveModule(withQualified.Left, prop, mod, moduleByName, out var targetModule))
+                    {
+                        var controls = targetModule.Controls.Where(c =>
+                            string.Equals(c.Name, withQualified.Right, StringComparison.OrdinalIgnoreCase));
+
+                        foreach (var control in controls)
+                        {
+                            var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
+                            MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                        }
+                    }
+                }
+                else
+                {
+                    var token = EnumerateTokens(withExpr).FirstOrDefault().Token;
+                    if (!string.IsNullOrEmpty(token) && controlIndex.TryGetValue(token, out var control))
+                    {
+                        var tokenIndex = noComment.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+                        var occurrenceIndex = GetOccurrenceIndex(noComment, token, tokenIndex, i + 1);
+                        MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                    }
+                }
+                if (!string.IsNullOrEmpty(withExpr))
+                    withStack.Push(withExpr);
+                continue;
+            }
+
+            if (trimmedNoComment.Equals("End With", StringComparison.OrdinalIgnoreCase))
+            {
+                if (withStack.Count > 0)
+                    withStack.Pop();
+                continue;
+            }
+
+            if (withStack.Count > 0 && trimmedNoComment.StartsWith(".", StringComparison.Ordinal))
+            {
+                var suffix = trimmedNoComment.Substring(1).TrimStart();
+                noComment = withStack.Peek() + "." + suffix;
+            }
+
+            if (withStack.Count > 0)
+            {
+                var withPrefix = withStack.Peek();
+                noComment = ReWithDotReplacement.Replace(noComment,
+                    m => withPrefix + "." + m.Groups[1].Value);
+            }
+
+            noComment = MaskStringLiterals(noComment);
+
+            foreach (var (moduleName, controlName, moduleIndex, controlNameIndex) in EnumerateControlAccesses(noComment))
+            {
+                if (string.IsNullOrEmpty(controlName))
+                    continue;
+
+                if (!string.IsNullOrEmpty(moduleName))
+                {
+                    if (string.Equals(moduleName, "Me", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (controlIndex.TryGetValue(controlName, out var meControl))
+                        {
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
+                            MarkControlAsUsed(meControl, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                        }
+
+                        continue;
+                    }
+
+                    if (TryResolveModule(moduleName, prop, mod, moduleByName, out var targetModule))
+                    {
+                        var controls = targetModule.Controls.Where(c =>
+                            string.Equals(c.Name, controlName, StringComparison.OrdinalIgnoreCase));
+
+                        foreach (var control in controls)
+                        {
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
+                            MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                        }
+
+                        continue;
+                    }
+                }
+
+                if (controlIndex.TryGetValue(moduleName, out var sameModuleControl))
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, moduleName, moduleIndex, i + 1);
+                    MarkControlAsUsed(sameModuleControl, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                }
+            }
+            foreach (Match match in ReTokens.Matches(noComment))
+            {
+                if (IsMemberAccessToken(noComment, match.Index))
+                    continue;
+
+                var token = match.Value;
+                if (shadowedNames.Contains(token))
+                    continue;
+
+                if (controlIndex.TryGetValue(token, out var control))
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, token, match.Index, i + 1);
+                    MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
                 }
             }
         }

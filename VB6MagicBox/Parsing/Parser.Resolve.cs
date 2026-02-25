@@ -894,6 +894,7 @@ public static partial class VbParser
                         env[p.Name] = p.Type;
 
                 ResolveFieldAccesses(mod, prop, fileLines, typeIndex, env, classIndex);
+                ResolveControlAccesses(mod, prop, fileLines);
                 ResolveParameterReferences(mod, prop, fileLines);
                 ResolvePropertyReturnReferences(mod, prop, fileLines);
             }
