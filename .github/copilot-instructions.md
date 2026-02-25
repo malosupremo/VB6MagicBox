@@ -3,6 +3,7 @@
 ## General Guidelines
 - First general instruction
 - Second general instruction
+- When fixing issues, add handling unless there's an obvious error, to avoid regressions.
 
 ## Code Style
 - Use specific formatting rules

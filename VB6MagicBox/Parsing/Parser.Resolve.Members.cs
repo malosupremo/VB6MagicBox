@@ -79,8 +79,11 @@ public static partial class VbParser
                     withExpr = withStack.Peek() + withExpr;
                 TryAddWithModuleReference(withExpr, noComment, i + 1, mod, proc, moduleByName);
                 if (!string.IsNullOrEmpty(withExpr))
+                {
                     withStack.Push(withExpr);
-                continue;
+                    noComment = withExpr;
+                    trimmedNoComment = withExpr;
+                }
             }
 
             if (trimmedNoComment.Equals("End With", StringComparison.OrdinalIgnoreCase))
@@ -107,15 +110,19 @@ public static partial class VbParser
             if (scanLine.IndexOf('.', StringComparison.Ordinal) < 0)
                 continue;
             var chainMatches = new List<(string Text, int Index)>();
+            var chainMatchSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (Match m in ReChainPattern.Matches(scanLine))
-                chainMatches.Add((m.Value, m.Index));
+                AddChainMatch(chainMatches, chainMatchSet, m.Value, m.Index);
 
             foreach (var (innerText, innerStart) in EnumerateParenContents(scanLine))
             {
                 foreach (Match m in ReChainPattern.Matches(innerText))
-                    chainMatches.Add((m.Value, innerStart + m.Index));
+                    AddChainMatch(chainMatches, chainMatchSet, m.Value, innerStart + m.Index);
             }
+
+            foreach (var (chainText, chainIndex) in EnumerateDotChains(scanLine))
+                AddChainMatch(chainMatches, chainMatchSet, chainText, chainIndex);
 
             foreach (var (chainText, chainIndex) in chainMatches)
             {
@@ -391,8 +398,11 @@ public static partial class VbParser
                     withExpr = withStack.Peek() + withExpr;
                 TryAddWithModuleReference(withExpr, noComment, i + 1, mod, prop, moduleByName);
                 if (!string.IsNullOrEmpty(withExpr))
+                {
                     withStack.Push(withExpr);
-                continue;
+                    noComment = withExpr;
+                    trimmedNoComment = withExpr;
+                }
             }
 
             if (trimmedNoComment.Equals("End With", StringComparison.OrdinalIgnoreCase))
@@ -419,15 +429,19 @@ public static partial class VbParser
             if (scanLine.IndexOf('.', StringComparison.Ordinal) < 0)
                 continue;
             var chainMatches = new List<(string Text, int Index)>();
+            var chainMatchSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (Match m in ReChainPattern.Matches(scanLine))
-                chainMatches.Add((m.Value, m.Index));
+                AddChainMatch(chainMatches, chainMatchSet, m.Value, m.Index);
 
             foreach (var (innerText, innerStart) in EnumerateParenContents(scanLine))
             {
                 foreach (Match m in ReChainPattern.Matches(innerText))
-                    chainMatches.Add((m.Value, innerStart + m.Index));
+                    AddChainMatch(chainMatches, chainMatchSet, m.Value, innerStart + m.Index);
             }
+
+            foreach (var (chainText, chainIndex) in EnumerateDotChains(scanLine))
+                AddChainMatch(chainMatches, chainMatchSet, chainText, chainIndex);
 
             foreach (var (chainText, chainIndex) in chainMatches)
             {
@@ -472,24 +486,32 @@ public static partial class VbParser
                     }
                 }
 
+                int startPartIndex = 1;
                 if (!env.TryGetValue(baseVarName, out var typeName) || string.IsNullOrEmpty(typeName))
-                    continue;
+                {
+                    if (!TryResolveModulePrefixedChain(mod, prop.Name, baseVarName, parts, tokenPositions, scanLine, i + 1, moduleByName, out typeName, out startPartIndex))
+                        continue;
+                }
 
                 // Verifica se il tipo base � nel progetto (interno) o esterno
                 // Se � esterno, NON tracciare References per nessun membro della catena
                 var initialTypeName = typeName;
-                if (initialTypeName.Contains('('))
-                    initialTypeName = initialTypeName.Substring(0, initialTypeName.IndexOf('('));
-                if (initialTypeName.Contains('.'))
-                    initialTypeName = initialTypeName.Split('.').Last();
+                bool isInternalType = true;
+                if (!string.IsNullOrEmpty(initialTypeName))
+                {
+                    if (initialTypeName.Contains('('))
+                        initialTypeName = initialTypeName.Substring(0, initialTypeName.IndexOf('('));
+                    if (initialTypeName.Contains('.'))
+                        initialTypeName = initialTypeName.Split('.').Last();
 
-                bool isInternalType = typeIndex.ContainsKey(initialTypeName) || classIndex.ContainsKey(initialTypeName);
+                    isInternalType = typeIndex.ContainsKey(initialTypeName) || classIndex.ContainsKey(initialTypeName);
+                }
 
                 // Se il tipo � esterno (non nel progetto), interrompi la catena
                 if (!isInternalType)
                     continue;
 
-                for (int partIndex = 1; partIndex < parts.Length; partIndex++)
+                for (int partIndex = startPartIndex; partIndex < parts.Length; partIndex++)
                 {
                     var fieldName = parts[partIndex];
                     var fieldParenIndex = fieldName.IndexOf('(');
@@ -845,6 +867,80 @@ public static partial class VbParser
         return normalized.Trim();
     }
 
+    private static bool TryResolveModulePrefixedChain(
+        VbModule currentModule,
+        string contextName,
+        string moduleName,
+        string[] parts,
+        List<(string Value, int Index)> tokenPositions,
+        string scanLine,
+        int lineNumber,
+        Dictionary<string, VbModule> moduleByName,
+        out string typeName,
+        out int startPartIndex)
+    {
+        typeName = null;
+        startPartIndex = 1;
+
+        if (string.IsNullOrWhiteSpace(moduleName) || parts.Length < 2)
+            return false;
+
+        if (!moduleByName.TryGetValue(moduleName, out var targetModule))
+            return false;
+
+        var baseTokenPosition = tokenPositions.FirstOrDefault();
+        var baseOccIdx = GetOccurrenceIndex(scanLine, moduleName, baseTokenPosition.Item2, lineNumber);
+        targetModule.Used = true;
+        targetModule.References.AddLineNumber(currentModule.Name, contextName, lineNumber, baseOccIdx);
+
+        var memberName = parts[1];
+        var parenIndex = memberName.IndexOf('(');
+        if (parenIndex >= 0)
+            memberName = memberName.Substring(0, parenIndex);
+
+        if (string.IsNullOrEmpty(memberName))
+            return false;
+
+        var memberTokenPosition = tokenPositions.Skip(1).FirstOrDefault(t =>
+            t.Value.Equals(memberName, StringComparison.OrdinalIgnoreCase));
+        var memberOccIdx = GetOccurrenceIndex(scanLine, memberName, memberTokenPosition.Item2, lineNumber);
+
+        var globalVar = targetModule.GlobalVariables.FirstOrDefault(v =>
+            !string.IsNullOrEmpty(v.Name) && MatchesName(v.Name, v.ConventionalName, memberName));
+        if (globalVar != null)
+        {
+            globalVar.Used = true;
+            globalVar.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberOccIdx);
+            typeName = globalVar.Type;
+            startPartIndex = 2;
+            return true;
+        }
+
+        var property = targetModule.Properties.FirstOrDefault(p =>
+            !string.IsNullOrEmpty(p.Name) && MatchesName(p.Name, p.ConventionalName, memberName));
+        if (property != null)
+        {
+            property.Used = true;
+            property.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberOccIdx);
+            typeName = property.ReturnType;
+            startPartIndex = 2;
+            return true;
+        }
+
+        var procedure = targetModule.Procedures.FirstOrDefault(p =>
+            !string.IsNullOrEmpty(p.Name) && MatchesName(p.Name, p.ConventionalName, memberName));
+        if (procedure != null)
+        {
+            procedure.Used = true;
+            procedure.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberOccIdx);
+            typeName = procedure.ReturnType;
+            startPartIndex = 2;
+            return true;
+        }
+
+        return false;
+    }
+
     private static void TryAddWithModuleReference(
         string withExpr,
         string rawLine,
@@ -967,9 +1063,20 @@ public static partial class VbParser
             // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
             noComment = MaskStringLiterals(noComment);
 
+            var memberTokenStarts = new HashSet<int>();
+            foreach (var (chainText, chainIndex) in EnumerateDotChains(noComment))
+            {
+                var chainTokens = ReTokens.Matches(chainText);
+                for (int ct = 1; ct < chainTokens.Count; ct++)
+                    memberTokenStarts.Add(chainIndex + chainTokens[ct].Index);
+            }
+
             // Cerca tutti i token word nella riga
             foreach (Match m in ReTokens.Matches(noComment))
             {
+                if (IsMemberAccessToken(noComment, m.Index) || memberTokenStarts.Contains(m.Index))
+                    continue;
+
                 var tokenName = m.Value;
 
                 // Controlla se � un parametro
@@ -1185,6 +1292,67 @@ public static partial class VbParser
 
             yield return (line.Substring(start, i - start), start);
         }
+    }
+
+    private static IEnumerable<(string Text, int Index)> EnumerateDotChains(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+            yield break;
+
+        int i = 0;
+        while (i < line.Length)
+        {
+            if (!IsIdentifierStart(line[i]) || (i > 0 && IsIdentifierChar(line[i - 1])))
+            {
+                i++;
+                continue;
+            }
+
+            int start = i;
+            i++;
+            while (i < line.Length && IsIdentifierChar(line[i]))
+                i++;
+
+            int end = i;
+            bool hasDot = false;
+
+            while (true)
+            {
+                int index = SkipWhitespace(line, end);
+                int afterParen = SkipOptionalParentheses(line, index);
+                if (afterParen != index)
+                    end = afterParen;
+
+                index = SkipWhitespace(line, end);
+                if (index >= line.Length || line[index] != '.')
+                    break;
+
+                hasDot = true;
+                index++;
+                index = SkipWhitespace(line, index);
+                if (index >= line.Length || !IsIdentifierStart(line[index]))
+                    break;
+
+                end = index + 1;
+                while (end < line.Length && IsIdentifierChar(line[end]))
+                    end++;
+            }
+
+            if (hasDot && end > start)
+                yield return (line.Substring(start, end - start), start);
+
+            i = Math.Max(i, end + 1);
+        }
+    }
+
+    private static void AddChainMatch(List<(string Text, int Index)> chainMatches, HashSet<string> chainMatchSet, string text, int index)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        var key = $"{index}:{text}";
+        if (chainMatchSet.Add(key))
+            chainMatches.Add((text, index));
     }
 
     private static IEnumerable<(string Token, int Index)> EnumerateTokens(string line)
