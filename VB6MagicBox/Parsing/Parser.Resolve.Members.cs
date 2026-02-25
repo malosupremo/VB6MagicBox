@@ -703,6 +703,17 @@ public static partial class VbParser
 
                 if (!string.IsNullOrEmpty(moduleName))
                 {
+                    if (string.Equals(moduleName, "Me", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (controlIndex.TryGetValue(controlName, out var meControl))
+                        {
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
+                            MarkControlAsUsed(meControl, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                        }
+
+                        continue;
+                    }
+
                     if (TryResolveModule(moduleName, proc, mod, moduleByName, out var targetModule))
                     {
                         var controls = targetModule.Controls.Where(c =>
