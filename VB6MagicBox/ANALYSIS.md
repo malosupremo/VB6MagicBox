@@ -59,6 +59,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - For each symbol: finds exact character position in source using `References.LineNumbers`.
 - Special handling:
   - Properties in other modules: only `.PropertyName` (dot-prefixed)
+  - Property/global variable shadowing: if a local parameter/variable matches the renamed symbol (case-insensitive), bare references are qualified as `ModuleName.Symbol`
   - Controls in `Begin` lines: only control name (skip library/type)
   - Attributes: `Attribute VB_Name = "..."` and `Attribute VarName.VB_VarHelpID`
   - Constants: `skipStringLiterals=true` to avoid replacing inside string values
@@ -109,6 +110,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 ## Recent Fixes (2024)
 - **External object members**: member-access tokens (e.g., `obj.Prop`) are excluded from parameter/local reference scans so external member names are not renamed.
 - **Enum value collisions**: when multiple enum values converge to the same `ConventionalName`, references are qualified as `EnumName.Value` to avoid ambiguity.
+- **Property/global variable shadowing**: when a public property or module-level variable is renamed and a local parameter/variable uses the same name (case-insensitive), bare references are qualified as `ModuleName.Symbol` to avoid shadowing.
 - **Enum qualification guard**: if the value is already qualified (`EnumName.Value`), only the value is renamed, preventing `Enum.Enum.Value` or wrong enum prefixes.
 - **Inline calls after `Then`**: procedure references are recorded even if a call is already present in `Calls`, ensuring inline statements are renamed.
 - **Screaming snake to PascalCase**: enum value naming preserves only known acronyms, so `RIC_RUN_CMD_CALLER` -> `RicRunCmdCaller`.

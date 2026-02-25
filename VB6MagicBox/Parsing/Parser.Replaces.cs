@@ -330,8 +330,9 @@ public static partial class VbParser
                 var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
 
                 var sourceModule = GetDefiningModule(project, source!);
-                bool isPropertyInOtherModule = source is VbProperty &&
-                    !string.Equals(sourceModule, refModuleName, StringComparison.OrdinalIgnoreCase);
+                var sourceModuleInfo = project.Modules.FirstOrDefault(m =>
+                    string.Equals(m.Name, sourceModule, StringComparison.OrdinalIgnoreCase));
+                var sourceModuleReferenceName = sourceModuleInfo?.ConventionalName ?? sourceModule;
 
                 int replacesBefore = isDebugSymbol && lineNum == 3146 ? refModule.Replaces.Count : 0;
 
@@ -347,32 +348,17 @@ public static partial class VbParser
                     continue;
                 }
 
-                if (isPropertyInOtherModule)
+                if (source is VbProperty)
                 {
-                    var dotPattern = $@"\.{Regex.Escape(oldName)}\b";
-                    var dotMatches = Regex.Matches(codePart, dotPattern, RegexOptions.IgnoreCase);
-
-                    if (dotMatches.Count > 0)
-                    {
-                        foreach (Match match in dotMatches)
-                        {
-                            if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
-                                continue;
-
-                            var nameStartIndex = match.Index + 1;
-                            refModule.Replaces.AddReplace(
-                                lineNum,
-                                nameStartIndex,
-                                nameStartIndex + oldName.Length,
-                                match.Value.Substring(1),
-                                referenceNewName,
-                                category + "_Reference");
-                        }
-                    }
-                    else
-                    {
-                        refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
-                    }
+                    var shouldQualify = ShouldQualifyPropertyReference(refModule, lineNum, referenceNewName);
+                    var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, refModule, refModuleName, shouldQualify);
+                    AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace, propertyQualifier);
+                }
+                else if (source is VbVariable variable && IsGlobalVariable(project, sourceModule, variable))
+                {
+                    var shouldQualify = ShouldQualifyModuleMemberReference(refModule, lineNum, referenceNewName);
+                    var qualifier = shouldQualify ? sourceModuleReferenceName : null;
+                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace, qualifier);
                 }
                 else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
                 {
@@ -671,6 +657,174 @@ public static partial class VbParser
     /// <summary>
     /// Helper: estrae il nome del modulo che definisce il simbolo
     /// </summary>
+    private static bool ShouldQualifyPropertyReference(VbModule refModule, int lineNum, string? referenceName)
+    {
+        if (string.IsNullOrWhiteSpace(referenceName))
+            return false;
+
+        var proc = refModule.GetProcedureAtLine(lineNum);
+        if (proc != null)
+            return HasShadowing(proc.Parameters, proc.LocalVariables, referenceName);
+
+        var prop = refModule.Properties.FirstOrDefault(p => p.ContainsLine(lineNum));
+        if (prop != null)
+            return HasShadowing(prop.Parameters, null, referenceName);
+
+        return false;
+    }
+
+    private static bool ShouldQualifyModuleMemberReference(VbModule refModule, int lineNum, string? referenceName)
+    {
+        if (string.IsNullOrWhiteSpace(referenceName))
+            return false;
+
+        var proc = refModule.GetProcedureAtLine(lineNum);
+        if (proc != null)
+            return HasShadowing(proc.Parameters, proc.LocalVariables, referenceName);
+
+        var prop = refModule.Properties.FirstOrDefault(p => p.ContainsLine(lineNum));
+        if (prop != null)
+            return HasShadowing(prop.Parameters, null, referenceName);
+
+        return false;
+    }
+
+    private static bool IsGlobalVariable(VbProject project, string sourceModule, VbVariable variable)
+    {
+        if (variable == null)
+            return false;
+
+        var module = project.Modules.FirstOrDefault(m =>
+            string.Equals(m.Name, sourceModule, StringComparison.OrdinalIgnoreCase));
+
+        return module != null && module.GlobalVariables.Contains(variable);
+    }
+
+    private static string? GetPropertyQualifier(string sourceModule, string? sourceModuleReferenceName, VbModule refModule, string refModuleName, bool shouldQualify)
+    {
+        if (!shouldQualify)
+            return null;
+
+        return sourceModuleReferenceName;
+    }
+
+    private static void AddPropertyReferenceReplaces(
+        VbModule refModule,
+        string codePart,
+        int lineNum,
+        string oldName,
+        string newName,
+        string category,
+        int occIndex,
+        List<(int start, int end)> stringRanges,
+        bool allowStringReplace,
+        string? qualifier)
+    {
+        var pattern = $@"\b{Regex.Escape(oldName)}\b";
+        var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+
+        if (matches.Count == 0)
+            return;
+
+        IEnumerable<Match> targetMatches = matches.Cast<Match>();
+        if (occIndex > 0 && occIndex <= matches.Count)
+            targetMatches = new[] { matches[occIndex - 1] };
+
+        foreach (var match in targetMatches)
+        {
+            if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
+                continue;
+
+            var replacement = newName;
+            if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
+                replacement = $"{qualifier}.{newName}";
+
+            if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            refModule.Replaces.AddReplace(
+                lineNum,
+                match.Index,
+                match.Index + match.Length,
+                match.Value,
+                replacement,
+                category + "_Reference");
+        }
+    }
+
+    private static void AddModuleMemberReferenceReplaces(
+        VbModule refModule,
+        string codePart,
+        int lineNum,
+        string oldName,
+        string newName,
+        string category,
+        int occIndex,
+        List<(int start, int end)> stringRanges,
+        bool allowStringReplace,
+        string? qualifier)
+    {
+        var pattern = $@"\b{Regex.Escape(oldName)}\b";
+        var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+
+        if (matches.Count == 0)
+            return;
+
+        IEnumerable<Match> targetMatches = matches.Cast<Match>();
+        if (occIndex > 0 && occIndex <= matches.Count)
+            targetMatches = new[] { matches[occIndex - 1] };
+
+        foreach (var match in targetMatches)
+        {
+            if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
+                continue;
+
+            var replacement = newName;
+            if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
+                replacement = $"{qualifier}.{newName}";
+
+            if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            refModule.Replaces.AddReplace(
+                lineNum,
+                match.Index,
+                match.Index + match.Length,
+                match.Value,
+                replacement,
+                category + "_Reference");
+        }
+    }
+
+    private static bool HasShadowing(IEnumerable<VbParameter> parameters, IEnumerable<VbVariable>? locals, string referenceName)
+    {
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        foreach (var parameter in parameters)
+        {
+            var name = GetEffectiveName(parameter);
+            if (!string.IsNullOrEmpty(name) && comparer.Equals(name, referenceName))
+                return true;
+        }
+
+        if (locals != null)
+        {
+            foreach (var local in locals)
+            {
+                var name = GetEffectiveName(local);
+                if (!string.IsNullOrEmpty(name) && comparer.Equals(name, referenceName))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? GetEffectiveName(VbParameter parameter)
+        => string.IsNullOrWhiteSpace(parameter.ConventionalName) ? parameter.Name : parameter.ConventionalName;
+
+    private static string? GetEffectiveName(VbVariable variable)
+        => string.IsNullOrWhiteSpace(variable.ConventionalName) ? variable.Name : variable.ConventionalName;
+
     private static string GetDefiningModule(VbProject project, object source)
     {
         if (source is VbModule mod)
