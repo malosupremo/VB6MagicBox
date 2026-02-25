@@ -358,7 +358,7 @@ public static partial class VbParser
                 {
                     var shouldQualify = ShouldQualifyModuleMemberReference(refModule, lineNum, referenceNewName);
                     var qualifier = shouldQualify ? sourceModuleReferenceName : null;
-                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace, qualifier);
+                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName);
                 }
                 else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
                 {
@@ -762,7 +762,9 @@ public static partial class VbParser
         int occIndex,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
-        string? qualifier)
+        string? qualifier,
+        string? sourceModuleName,
+        string? sourceModuleReferenceName)
     {
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
         var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
@@ -779,6 +781,17 @@ public static partial class VbParser
             if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
                 continue;
 
+            if (IsMemberAccessToken(codePart, match.Index))
+            {
+                var memberQualifier = GetMemberAccessQualifier(codePart, match.Index);
+                if (!string.IsNullOrWhiteSpace(memberQualifier) &&
+                    !string.Equals(memberQualifier, sourceModuleName, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(memberQualifier, sourceModuleReferenceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+            }
+
             var replacement = newName;
             if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
                 replacement = $"{qualifier}.{newName}";
@@ -794,6 +807,33 @@ public static partial class VbParser
                 replacement,
                 category + "_Reference");
         }
+    }
+
+    private static string? GetMemberAccessQualifier(string line, int tokenIndex)
+    {
+        if (tokenIndex <= 0)
+            return null;
+
+        var index = tokenIndex - 1;
+        while (index >= 0 && char.IsWhiteSpace(line[index]))
+            index--;
+
+        if (index < 0 || line[index] != '.')
+            return null;
+
+        index--;
+        while (index >= 0 && char.IsWhiteSpace(line[index]))
+            index--;
+
+        if (index < 0 || !IsIdentifierChar(line[index]))
+            return null;
+
+        var end = index + 1;
+        while (index >= 0 && IsIdentifierChar(line[index]))
+            index--;
+
+        var start = index + 1;
+        return line.Substring(start, end - start);
     }
 
     private static bool HasShadowing(IEnumerable<VbParameter> parameters, IEnumerable<VbVariable>? locals, string referenceName)

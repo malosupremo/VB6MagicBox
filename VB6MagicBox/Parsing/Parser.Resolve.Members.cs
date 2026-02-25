@@ -1071,19 +1071,32 @@ public static partial class VbParser
                     memberTokenStarts.Add(chainIndex + chainTokens[ct].Index);
             }
 
+            var parenTokenStarts = new HashSet<int>();
+            foreach (var (chainText, chainIndex) in EnumerateDotChains(noComment))
+            {
+                foreach (var (parenText, parenIndex) in EnumerateParenContents(chainText))
+                {
+                    var parenTokens = ReTokens.Matches(parenText);
+                    foreach (Match parenToken in parenTokens)
+                        parenTokenStarts.Add(chainIndex + parenIndex + parenToken.Index);
+                }
+            }
+
             // Cerca tutti i token word nella riga
             foreach (Match m in ReTokens.Matches(noComment))
             {
-                if (IsMemberAccessToken(noComment, m.Index) || memberTokenStarts.Contains(m.Index))
+                var isMemberToken = IsMemberAccessToken(noComment, m.Index) || memberTokenStarts.Contains(m.Index);
+                if (isMemberToken && !parenTokenStarts.Contains(m.Index))
                     continue;
 
                 var tokenName = m.Value;
+                var tokenOccurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
 
                 // Controlla se � un parametro
                 if (parameterIndex.TryGetValue(tokenName, out var parameter))
                 {
                     parameter.Used = true;
-                    parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+                    parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex);
                 }
 
                 // Controlla se � una variabile locale
@@ -1094,7 +1107,7 @@ public static partial class VbParser
                         continue;
 
                     localVar.Used = true;
-                    localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+                    localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex);
                 }
 
                 // Controlla se � una variabile globale del modulo (e non � shadowed)
@@ -1103,7 +1116,7 @@ public static partial class VbParser
                     if (globalVariableIndex.TryGetValue(tokenName, out var globalVar))
                     {
                         globalVar.Used = true;
-                        globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+                        globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex);
                     }
                 }
 
