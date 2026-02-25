@@ -391,6 +391,10 @@ public static partial class VbParser
               if (proc.Name.StartsWith(ctrl.Name + "_", StringComparison.OrdinalIgnoreCase))
               {
                 // It is a control event - mark control as used
+                var eventPart = proc.Name.Substring(ctrl.Name.Length + 1);
+                if (eventPart.Contains("_"))
+                  continue;
+
                 ctrl.Used = true;
                 ctrl.References.Add(new VbReference
                 {
@@ -398,7 +402,6 @@ public static partial class VbParser
                   Procedure = proc.Name
                 });
 
-                var eventPart = proc.Name.Substring(ctrl.Name.Length + 1);
                 conventionalName = ctrl.ConventionalName + "_" + ToPascalCase(eventPart); // Use ConventionalName of Control!
                 isEvent = true;
                 break;
@@ -417,6 +420,9 @@ public static partial class VbParser
                 if (proc.Name.StartsWith(v.Name + "_", StringComparison.OrdinalIgnoreCase))
                 {
                   var eventPart = proc.Name.Substring(v.Name.Length + 1);
+                  if (eventPart.Contains("_"))
+                    continue;
+
                   // Use ConventionalName of Variable (which strips prefix/underscore etc) + "_" + Event
                   // But for Event part, we apply PascalCase.
                   conventionalName = v.ConventionalName + "_" + ToPascalCase(eventPart);
