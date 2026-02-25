@@ -36,7 +36,7 @@ public class Program
             Console.WriteLine("4. Riordina le variabili di procedura");
             Console.WriteLine("5. Armonizza le spaziature");
             Console.Write("6. ");
-            ConsoleX.WriteColor("BACCHETTA MAGICA", ConsoleColor.Red);
+            ConsoleX.WriteColor("BACCHETTA MAGICA", ConsoleColor.Yellow);
             Console.WriteLine(": tutto insieme!");
             Console.WriteLine("0. Esci");
             Console.WriteLine();

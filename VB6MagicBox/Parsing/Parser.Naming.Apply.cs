@@ -485,6 +485,13 @@ public static partial class VbParser
           foreach (var p in proc.Parameters)
           {
             var paramConventionalName = ToCamelCase(p.Name);
+            if (string.Equals(paramConventionalName, proc.ConventionalName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(paramConventionalName, proc.Name, StringComparison.OrdinalIgnoreCase))
+            {
+              p.ConventionalName = p.Name;
+              localScopeNamesUsed.Add(p.ConventionalName);
+              continue;
+            }
             p.ConventionalName = ResolveNameConflict(paramConventionalName, localScopeNamesUsed);
             localScopeNamesUsed.Add(p.ConventionalName);
 
@@ -525,6 +532,14 @@ public static partial class VbParser
             }
             else
               localConventionalName = ToCamelCase(baseName);
+
+            if (string.Equals(localConventionalName, proc.ConventionalName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(localConventionalName, proc.Name, StringComparison.OrdinalIgnoreCase))
+            {
+              v.ConventionalName = v.Name;
+              localScopeNamesUsed.Add(v.ConventionalName);
+              continue;
+            }
 
             v.ConventionalName = ResolveNameConflict(localConventionalName, localScopeNamesUsed);
             localScopeNamesUsed.Add(v.ConventionalName);
