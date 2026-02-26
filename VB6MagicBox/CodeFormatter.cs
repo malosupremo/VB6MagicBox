@@ -541,6 +541,13 @@ public static class CodeFormatter
                         !IsClosingComment(nextNonBlank))
                         result.Add(string.Empty);
                 }
+                else if (IsNextLine(trimmed))
+                {
+                    var nextNonBlank = NextNonBlank(lines, i + 1);
+                    if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank) &&
+                        !IsClosingComment(nextNonBlank))
+                        result.Add(string.Empty);
+                }
                 else if (RequiresBlankAfterEnd(trimmed))
                 {
                     var nextNonBlank = NextNonBlank(lines, i + 1);
@@ -669,6 +676,11 @@ public static class CodeFormatter
     private static bool IsEndIf(string line)
     {
         return line.TrimStart().StartsWith("End If", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNextLine(string line)
+    {
+        return line.TrimStart().StartsWith("Next", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RequiresBlankAfterEnd(string line)

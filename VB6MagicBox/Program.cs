@@ -263,8 +263,7 @@ public class Program
     private static void RunMagicWandInteractive()
     {
         Console.WriteLine();
-        Console.Write("Percorso del file .vbp: ");
-        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = ReadVbpPath("Percorso del file .vbp");
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {

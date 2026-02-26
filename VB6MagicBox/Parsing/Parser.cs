@@ -76,10 +76,6 @@ public static partial class VbParser
         var renameOutputPath = jsonOutputPath.Replace(".json", ".rename.json");
         ExportRenameJson(project, renameOutputPath);
 
-        // Genera anche il file .rename.csv
-        var renameCsvPath = jsonOutputPath.Replace(".json", ".rename.csv");
-        ExportRenameCsv(project, renameCsvPath);
-
         ExportMermaid(project, mermaidOutputPath);
         Console.WriteLine("  -> Completato!");
     }
