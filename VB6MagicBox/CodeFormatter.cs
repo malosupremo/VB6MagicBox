@@ -501,6 +501,7 @@ public static class CodeFormatter
                 var nextNonBlank = NextNonBlank(lines, i + 1);
                 if (!string.IsNullOrEmpty(prevNonBlank) &&
                     !IsIfBoundary(prevNonBlank) &&
+                    !IsBlockStart(prevNonBlank) &&
                     !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
                     !IsCommentLine(prevNonBlank))
                 {
@@ -509,7 +510,7 @@ public static class CodeFormatter
 
                 result.Add(normalized);
 
-                if (!string.IsNullOrEmpty(nextNonBlank))
+                if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank))
                     result.Add(string.Empty);
                 continue;
             }
@@ -680,7 +681,8 @@ public static class CodeFormatter
 
     private static bool IsNextLine(string line)
     {
-        return line.TrimStart().StartsWith("Next", StringComparison.OrdinalIgnoreCase);
+        var trimmed = StripInlineComment(line).TrimStart();
+        return trimmed.StartsWith("Next", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RequiresBlankAfterEnd(string line)
