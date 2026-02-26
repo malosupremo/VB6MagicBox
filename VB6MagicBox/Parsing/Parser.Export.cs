@@ -481,6 +481,115 @@ public static partial class VbParser
     File.WriteAllText(outputPath, string.Join(Environment.NewLine, csvLines));
   }
 
+  // ---------------------------------------------------------
+  // ESPORTAZIONE CSV SHADOWS (locali che nascondono oggetti esterni)
+  // ---------------------------------------------------------
+
+  public static void ExportShadowsCsv(VbProject project, string outputPath)
+  {
+    var csvLines = new List<string>
+    {
+      "Module,Procedure,LocalKind,LocalName,ShadowedKind,ShadowedName,ShadowedModule"
+    };
+
+    static bool IsPrivateVisibility(string? visibility)
+    {
+      return string.Equals(visibility, "Private", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(visibility, "Dim", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static IEnumerable<string> GetNameCandidates(string? name, string? conventionalName)
+    {
+      var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      if (!string.IsNullOrWhiteSpace(name))
+        names.Add(name);
+      if (!string.IsNullOrWhiteSpace(conventionalName))
+        names.Add(conventionalName);
+      return names;
+    }
+
+    var externalSymbols = new List<(string Module, string Kind, string Name)>();
+
+    foreach (var mod in project.Modules)
+    {
+      foreach (var v in mod.GlobalVariables.Where(v => !IsPrivateVisibility(v.Visibility)))
+      {
+        foreach (var name in GetNameCandidates(v.Name, v.ConventionalName))
+          externalSymbols.Add((mod.Name, "GlobalVariable", name));
+      }
+
+      foreach (var c in mod.Constants.Where(c => !IsPrivateVisibility(c.Visibility)))
+      {
+        foreach (var name in GetNameCandidates(c.Name, c.ConventionalName))
+          externalSymbols.Add((mod.Name, "Constant", name));
+      }
+
+      foreach (var p in mod.Properties.Where(p => !IsPrivateVisibility(p.Visibility)))
+      {
+        foreach (var name in GetNameCandidates(p.Name, p.ConventionalName))
+          externalSymbols.Add((mod.Name, $"Property{p.Kind}", name));
+      }
+
+      foreach (var ctrl in mod.Controls)
+      {
+        foreach (var name in GetNameCandidates(ctrl.Name, ctrl.ConventionalName))
+          externalSymbols.Add((mod.Name, "Control", name));
+      }
+    }
+
+    var rowKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var mod in project.Modules)
+    {
+      foreach (var proc in mod.Procedures)
+      {
+        var locals = new List<(string Kind, string Name)>
+        {
+          // Parameters
+        };
+
+        foreach (var param in proc.Parameters)
+        {
+          foreach (var name in GetNameCandidates(param.Name, param.ConventionalName))
+            locals.Add(("Parameter", name));
+        }
+
+        foreach (var localVar in proc.LocalVariables)
+        {
+          foreach (var name in GetNameCandidates(localVar.Name, localVar.ConventionalName))
+            locals.Add(("LocalVariable", name));
+        }
+
+        foreach (var localConst in proc.Constants)
+        {
+          foreach (var name in GetNameCandidates(localConst.Name, localConst.ConventionalName))
+            locals.Add(("LocalConstant", name));
+        }
+
+        foreach (var (localKind, localName) in locals)
+        {
+          foreach (var (shadowModule, shadowKind, shadowName) in externalSymbols)
+          {
+            if (string.Equals(shadowModule, mod.Name, StringComparison.OrdinalIgnoreCase))
+              continue;
+
+            if (!string.Equals(localName, shadowName, StringComparison.OrdinalIgnoreCase))
+              continue;
+
+            var key = $"{mod.Name}|{proc.Name}|{localKind}|{localName}|{shadowKind}|{shadowName}|{shadowModule}";
+            if (!rowKeys.Add(key))
+              continue;
+
+            csvLines.Add(
+              $"\"{EscapeCsv(mod.Name)}\",\"{EscapeCsv(proc.Name)}\",\"{EscapeCsv(localKind)}\",\"{EscapeCsv(localName)}\",\"{EscapeCsv(shadowKind)}\",\"{EscapeCsv(shadowName)}\",\"{EscapeCsv(shadowModule)}\"");
+          }
+        }
+      }
+    }
+
+    File.WriteAllText(outputPath, string.Join(Environment.NewLine, csvLines));
+  }
+
   private static string EscapeCsv(string value)
   {
     if (string.IsNullOrEmpty(value))
