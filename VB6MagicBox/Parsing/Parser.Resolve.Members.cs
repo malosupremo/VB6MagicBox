@@ -1268,9 +1268,19 @@ public static partial class VbParser
             var memberTokenStarts = new HashSet<int>();
             foreach (var (chainText, chainIndex) in EnumerateDotChains(noComment))
             {
+                var parenRanges = new List<(int start, int end)>();
+                foreach (var (innerText, innerStart) in EnumerateParenContents(chainText))
+                    parenRanges.Add((innerStart, innerStart + innerText.Length));
+
                 var chainTokens = ReTokens.Matches(chainText);
                 for (int ct = 1; ct < chainTokens.Count; ct++)
-                    memberTokenStarts.Add(chainIndex + chainTokens[ct].Index);
+                {
+                    var tokenIndex = chainTokens[ct].Index;
+                    if (parenRanges.Any(r => tokenIndex >= r.start && tokenIndex < r.end))
+                        continue;
+
+                    memberTokenStarts.Add(chainIndex + tokenIndex);
+                }
             }
 
             // Cerca tutti i token word nella riga

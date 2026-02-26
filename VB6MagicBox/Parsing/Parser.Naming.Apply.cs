@@ -214,7 +214,16 @@ public static partial class VbParser
         foreach (var e in mod.Enums)
         {
           // Convert SCREAMING_SNAKE_CASE to PascalCase
-          var conventionalName = ToPascalCaseFromScreamingSnake(e.Name);
+          var enumName = e.Name;
+          if (!string.IsNullOrEmpty(enumName) &&
+              enumName.Length > 1 &&
+              enumName[0] == 'e' &&
+              char.IsUpper(enumName[1]))
+          {
+            enumName = enumName.Substring(1);
+          }
+
+          var conventionalName = ToPascalCaseFromScreamingSnake(enumName);
           e.ConventionalName = ResolveNameConflict(conventionalName, globalNamesUsed);
           globalNamesUsed.Add(e.ConventionalName);
 

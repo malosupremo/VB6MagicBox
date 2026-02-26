@@ -735,9 +735,10 @@ public static partial class VbParser
             if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
                 continue;
 
-            var replacement = newName;
             if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
-                replacement = $"{qualifier}.{newName}";
+                continue;
+
+            var replacement = newName;
 
             if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
                 continue;
