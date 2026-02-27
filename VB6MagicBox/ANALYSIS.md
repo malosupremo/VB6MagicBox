@@ -121,6 +121,8 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Chain splitting outside parentheses**: dot-chain parsing ignores dots inside parentheses, enabling nested calls like `Evap_Info(...)` without breaking earlier cases.
 - **Control arrays renaming**: controls use all `LineNumbers` for `Begin` lines so every element in a control array is renamed consistently.
 - **Global constant shadowing**: global constant references are skipped when a local variable/parameter shadows the constant name.
+- **Self module references**: module references are recorded even inside their own module, so form/module names passed as values are renamed consistently.
+- **Event handler guard for double underscores**: procedures/properties with an extra underscore in the event part are treated as normal routines (PascalCase), not control/WithEvents events.
 - **Local declaration ordering**: procedure headers keep `Attribute` lines attached; local declarations are grouped as comments → constants → static → Dim, without extra blank lines or alphabetic sorting.
 - **Spacing rules tweaks**: no blank after initial file `Attribute` block; pre-procedure comment blocks stay contiguous with a single blank line before them; no blank at the start of a procedure even if the first statement is a comment for a following block.
 - **Single-line If spacing**: single-line `If` statements always add a blank line after; they add a blank line before unless preceded by a comment.

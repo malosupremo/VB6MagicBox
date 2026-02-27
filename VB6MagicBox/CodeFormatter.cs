@@ -501,6 +501,7 @@ public static class CodeFormatter
                 var nextNonBlank = NextNonBlank(lines, i + 1);
                 if (!string.IsNullOrEmpty(prevNonBlank) &&
                     !IsIfBoundary(prevNonBlank) &&
+                    !IsBlockStart(prevNonBlank) &&
                     !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
                     !IsCommentLine(prevNonBlank))
                 {
@@ -509,7 +510,7 @@ public static class CodeFormatter
 
                 result.Add(normalized);
 
-                if (!string.IsNullOrEmpty(nextNonBlank))
+                if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank))
                     result.Add(string.Empty);
                 continue;
             }
@@ -535,6 +536,13 @@ public static class CodeFormatter
                     currentPropertyName = null;
                 }
                 else if (IsEndIf(trimmed))
+                {
+                    var nextNonBlank = NextNonBlank(lines, i + 1);
+                    if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank) &&
+                        !IsClosingComment(nextNonBlank))
+                        result.Add(string.Empty);
+                }
+                else if (IsNextLine(trimmed))
                 {
                     var nextNonBlank = NextNonBlank(lines, i + 1);
                     if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank) &&
@@ -669,6 +677,12 @@ public static class CodeFormatter
     private static bool IsEndIf(string line)
     {
         return line.TrimStart().StartsWith("End If", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNextLine(string line)
+    {
+        var trimmed = StripInlineComment(line).TrimStart();
+        return trimmed.StartsWith("Next", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RequiresBlankAfterEnd(string line)

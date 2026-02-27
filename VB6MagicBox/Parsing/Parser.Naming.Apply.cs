@@ -214,7 +214,16 @@ public static partial class VbParser
         foreach (var e in mod.Enums)
         {
           // Convert SCREAMING_SNAKE_CASE to PascalCase
-          var conventionalName = ToPascalCaseFromScreamingSnake(e.Name);
+          var enumName = e.Name;
+          if (!string.IsNullOrEmpty(enumName) &&
+              enumName.Length > 1 &&
+              enumName[0] == 'e' &&
+              char.IsUpper(enumName[1]))
+          {
+            enumName = enumName.Substring(1);
+          }
+
+          var conventionalName = ToPascalCaseFromScreamingSnake(enumName);
           e.ConventionalName = ResolveNameConflict(conventionalName, globalNamesUsed);
           globalNamesUsed.Add(e.ConventionalName);
 
@@ -391,6 +400,10 @@ public static partial class VbParser
               if (proc.Name.StartsWith(ctrl.Name + "_", StringComparison.OrdinalIgnoreCase))
               {
                 // It is a control event - mark control as used
+                var eventPart = proc.Name.Substring(ctrl.Name.Length + 1);
+                if (eventPart.Contains("_"))
+                  continue;
+
                 ctrl.Used = true;
                 ctrl.References.Add(new VbReference
                 {
@@ -398,7 +411,6 @@ public static partial class VbParser
                   Procedure = proc.Name
                 });
 
-                var eventPart = proc.Name.Substring(ctrl.Name.Length + 1);
                 conventionalName = ctrl.ConventionalName + "_" + ToPascalCase(eventPart); // Use ConventionalName of Control!
                 isEvent = true;
                 break;
@@ -417,6 +429,9 @@ public static partial class VbParser
                 if (proc.Name.StartsWith(v.Name + "_", StringComparison.OrdinalIgnoreCase))
                 {
                   var eventPart = proc.Name.Substring(v.Name.Length + 1);
+                  if (eventPart.Contains("_"))
+                    continue;
+
                   // Use ConventionalName of Variable (which strips prefix/underscore etc) + "_" + Event
                   // But for Event part, we apply PascalCase.
                   conventionalName = v.ConventionalName + "_" + ToPascalCase(eventPart);
@@ -547,7 +562,8 @@ public static partial class VbParser
             if (IsReservedWord(v.ConventionalName))
             {
               localScopeNamesUsed.Remove(v.ConventionalName);
-              v.ConventionalName = v.ConventionalName + "Value";
+              if (!v.ConventionalName.EndsWith("Value", StringComparison.OrdinalIgnoreCase))
+                v.ConventionalName = v.ConventionalName + "Value";
               localScopeNamesUsed.Add(v.ConventionalName);
             }
           }

@@ -242,13 +242,16 @@ public static class TypeAnnotator
         var procedureLines = mod.Procedures.Select(p => p.LineNumber).ToHashSet();
         var propertyLines = mod.Properties.Select(p => p.LineNumber).ToHashSet();
         var constantLines = mod.Constants.Select(c => c.LineNumber).ToHashSet();
+        var enumLines = mod.Enums.Select(e => e.LineNumber).ToHashSet();
+        var typeLines = mod.Types.Select(t => t.LineNumber).ToHashSet();
         var globalVariableLines = mod.GlobalVariables.Select(v => v.LineNumber).ToHashSet();
         var memberRanges = mod.Procedures.Select(p => (p.StartLine, p.EndLine))
           .Concat(mod.Properties.Select(p => (p.StartLine, p.EndLine)))
           .Where(r => r.StartLine > 0 && r.EndLine > 0)
           .ToList();
 
-        bool applyVisibilityFixes = mod.IsClass || mod.IsForm;
+        bool applyVisibilityFixes = mod.IsClass || mod.IsForm ||
+                                    mod.Kind?.Equals("bas", StringComparison.OrdinalIgnoreCase) == true;
 
         var lines = content.Split('\n');
         int changes = 0;
@@ -291,6 +294,8 @@ public static class TypeAnnotator
               procedureLines,
               propertyLines,
               constantLines,
+              enumLines,
+              typeLines,
               globalVariableLines,
               memberRanges);
 
@@ -335,6 +340,8 @@ public static class TypeAnnotator
       HashSet<int> procedureLines,
       HashSet<int> propertyLines,
       HashSet<int> constantLines,
+      HashSet<int> enumLines,
+      HashSet<int> typeLines,
       HashSet<int> globalVariableLines,
       List<(int StartLine, int EndLine)> memberRanges)
     {
@@ -370,6 +377,24 @@ public static class TypeAnnotator
             !IsInsideMember(lineNumber, memberRanges))
         {
             var updated = indent + "Private " + trimmed;
+            return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
+        }
+
+        if (enumLines.Contains(lineNumber) &&
+            trimmed.StartsWith("Enum ", StringComparison.OrdinalIgnoreCase) &&
+            !StartsWithVisibility(trimmed) &&
+            !IsInsideMember(lineNumber, memberRanges))
+        {
+            var updated = indent + "Public " + trimmed;
+            return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
+        }
+
+        if (typeLines.Contains(lineNumber) &&
+            trimmed.StartsWith("Type ", StringComparison.OrdinalIgnoreCase) &&
+            !StartsWithVisibility(trimmed) &&
+            !IsInsideMember(lineNumber, memberRanges))
+        {
+            var updated = indent + "Public " + trimmed;
             return string.IsNullOrEmpty(comment) ? updated : updated + " " + comment;
         }
 

@@ -263,8 +263,7 @@ public class Program
     private static void RunMagicWandInteractive()
     {
         Console.WriteLine();
-        Console.Write("Percorso del file .vbp: ");
-        var vbpPath = Console.ReadLine()?.Trim().Trim('"');
+        var vbpPath = ReadVbpPath("Percorso del file .vbp");
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
@@ -326,6 +325,7 @@ public class Program
         var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
         var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
         var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
+        var shadowsCsv = Path.Combine(vbpDir, $"{vbpName}.shadows.csv");
         var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
         var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
 
@@ -335,12 +335,14 @@ public class Program
         VbParser.ExportJson(project, jsonOut);
         VbParser.ExportRenameJson(project, renameJson);
         VbParser.ExportRenameCsv(project, renameCsv);
+        VbParser.ExportShadowsCsv(project, shadowsCsv);
         VbParser.ExportLineReplaceJson(project, lineReplaceJson);
         VbParser.ExportMermaid(project, mermaidOut);
 
         Console.WriteLine($"   JSON completo:     {jsonOut}");
         Console.WriteLine($"   JSON rename:       {renameJson}");
         Console.WriteLine($"   CSV rename:        {renameCsv}");
+        Console.WriteLine($"   CSV shadows:       {shadowsCsv}");
         Console.WriteLine($"   JSON linereplace:  {lineReplaceJson}");
         Console.WriteLine($"   Mermaid:           {mermaidOut}");
     }

@@ -62,6 +62,27 @@ public static partial class VbParser
       if (name.StartsWith("m", StringComparison.OrdinalIgnoreCase))
         return name;
 
+      var underscoreMatch = Regex.Match(name, @"^([a-z]{3})_(.+)$");
+      if (underscoreMatch.Success)
+      {
+        var prefix = underscoreMatch.Groups[1].Value;
+        var remainder = underscoreMatch.Groups[2].Value;
+
+        if (prefix.Equals("cur", StringComparison.OrdinalIgnoreCase))
+        {
+          if (!string.IsNullOrEmpty(variableType) &&
+              variableType.Equals("Currency", StringComparison.OrdinalIgnoreCase))
+          {
+            return remainder;
+          }
+
+          return name;
+        }
+
+        if (HungarianPrefixes.Contains(prefix))
+          return remainder;
+      }
+
       var match = Regex.Match(name, @"^([a-z]{3})([A-Z].*)");
       if (match.Success)
       {
@@ -201,6 +222,11 @@ public static partial class VbParser
         return ToPascalCase(name);
       }
 
+      if (!name.Contains('_') && name.All(char.IsLetter) && name.ToUpperInvariant() == name)
+      {
+        return name;
+      }
+
       var parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);
       var result = new System.Text.StringBuilder();
 
@@ -208,6 +234,12 @@ public static partial class VbParser
       {
         if (part.Length > 0)
         {
+          if (part.Length == 2 && part.All(char.IsLetter) && part.ToUpperInvariant() == part)
+          {
+            result.Append(part);
+            continue;
+          }
+
           if (part.All(char.IsLetter) && part.ToUpperInvariant() == part &&
               KnownAcronyms.Any(acr => acr.Equals(part, StringComparison.OrdinalIgnoreCase)))
           {
