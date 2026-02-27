@@ -87,6 +87,14 @@ public static partial class VbParser
         new(@"^\s*(Dim|Static)\s+(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    private static readonly Regex ReLocalVarSegment =
+        new(@"^\s*(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex ReLocalVarNoTypeSegment = new(
+        @"^\s*(\w+)([$%&!#@]?)(\([^)]*\))?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex ReMemberVar =
         new(@"^(Public|Private|Friend|Dim)\s+(\w+)(\([^)]*\))?\s+As\s+(?:New\s+)?([\w\.\(\)]+)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);

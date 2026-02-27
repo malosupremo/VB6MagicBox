@@ -708,18 +708,51 @@ public static partial class VbParser
           var declarationType = ml.Groups[1].Value; // Dim or Static
           var isStatic = declarationType.Equals("Static", StringComparison.OrdinalIgnoreCase);
 
-          // ml.Groups: 1=Scope(Dim/Static), 2=Name, 3=Array, 4=Type
-          currentProc?.LocalVariables.Add(new VbVariable
+          var declMatch = Regex.Match(noComment, @"^\s*(Dim|Static)\s+(.*)$", RegexOptions.IgnoreCase);
+          var declBody = declMatch.Success ? declMatch.Groups[2].Value : string.Empty;
+          var segments = string.IsNullOrWhiteSpace(declBody)
+              ? new List<string> { noComment }
+              : SplitTopLevel(declBody);
+
+          foreach (var segment in segments)
           {
-            Name = ml.Groups[2].Value,
-            Type = ml.Groups[4].Value,
-            IsStatic = isStatic,
-            IsArray = !string.IsNullOrEmpty(ml.Groups[3].Value),
-            Scope = "Procedure",
-            Visibility = "Private",
-            Level = "Local",
-            LineNumber = originalLineNumber
-          });
+            var segmentText = segment.Trim();
+            if (string.IsNullOrEmpty(segmentText))
+              continue;
+
+            var segMatch = ReLocalVarSegment.Match(segmentText);
+            if (segMatch.Success)
+            {
+              currentProc?.LocalVariables.Add(new VbVariable
+              {
+                Name = segMatch.Groups[1].Value,
+                Type = segMatch.Groups[3].Value,
+                IsStatic = isStatic,
+                IsArray = !string.IsNullOrEmpty(segMatch.Groups[2].Value),
+                Scope = "Procedure",
+                Visibility = "Private",
+                Level = "Local",
+                LineNumber = originalLineNumber
+              });
+              continue;
+            }
+
+            var segNoType = ReLocalVarNoTypeSegment.Match(segmentText);
+            if (segNoType.Success)
+            {
+              currentProc?.LocalVariables.Add(new VbVariable
+              {
+                Name = segNoType.Groups[1].Value,
+                Type = "",
+                IsStatic = isStatic,
+                IsArray = !string.IsNullOrEmpty(segNoType.Groups[3].Value),
+                Scope = "Procedure",
+                Visibility = "Private",
+                Level = "Local",
+                LineNumber = originalLineNumber
+              });
+            }
+          }
         }
         else
         {
@@ -949,5 +982,32 @@ public static partial class VbParser
     }
 
     return mod;
+  }
+
+  private static List<string> SplitTopLevel(string input)
+  {
+    var segments = new List<string>();
+    int depth = 0;
+    int start = 0;
+
+    for (int i = 0; i < input.Length; i++)
+    {
+      switch (input[i])
+      {
+        case '(':
+          depth++;
+          break;
+        case ')':
+          depth--;
+          break;
+        case ',' when depth == 0:
+          segments.Add(input[start..i]);
+          start = i + 1;
+          break;
+      }
+    }
+
+    segments.Add(input[start..]);
+    return segments;
   }
 }

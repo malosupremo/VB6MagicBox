@@ -310,7 +310,7 @@ public static partial class VbParser
         Console.WriteLine(); // Vai a capo dopo il progress del parsing
 
         // Marcatura tipi usati
-        MarkUsedTypes(project);
+        MarkUsedTypes(project, fileCache);
 
         // Propaga Used al modulo: se qualunque membro è usato, il modulo è usato
         foreach (var mod in project.Modules)

@@ -1914,8 +1914,8 @@ public static partial class VbParser
                         var enumValueName = kvp.Key;
                         var enumValues = kvp.Value;
 
-                        // Usa word boundary per evitare match parziali
-                        if (ContainsToken(noComment, enumValueName))
+                        var matches = Regex.Matches(noComment, $@"\b{Regex.Escape(enumValueName)}\b", RegexOptions.IgnoreCase);
+                        if (matches.Count > 0)
                         {
                             var filteredEnumValues = enumValues;
                             if (enumTypeDefsInLine.Count > 0)
@@ -1935,10 +1935,18 @@ public static partial class VbParser
                             if (filteredEnumValues.Count == 0 && enumValues.Count > 1)
                                 continue;
 
-                            foreach (var enumValue in filteredEnumValues)
+                            foreach (Match match in matches)
                             {
-                                enumValue.Used = true;
-                                enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                                if (IsMemberAccessToken(noComment, match.Index))
+                                    continue;
+
+                                var occurrenceIndex = GetOccurrenceIndex(noComment, enumValueName, match.Index, i + 1);
+                                var tokenStartChar = match.Index;
+                                foreach (var enumValue in filteredEnumValues)
+                                {
+                                    enumValue.Used = true;
+                                    enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar);
+                                }
                             }
                         }
                     }
@@ -1948,17 +1956,25 @@ public static partial class VbParser
                         if (!enumDefIndex.TryGetValue(enumName, out var enumDefs))
                             continue;
 
+                        var enumTokenIndex = noComment.IndexOf(enumName, StringComparison.OrdinalIgnoreCase);
+                        var enumOccIndex = GetOccurrenceIndex(noComment, enumName, enumTokenIndex, i + 1);
+                        var enumStartChar = enumTokenIndex;
+
+                        var valueTokenIndex = noComment.IndexOf(valueName, StringComparison.OrdinalIgnoreCase);
+                        var occurrenceIndex = GetOccurrenceIndex(noComment, valueName, valueTokenIndex, i + 1);
+                        var tokenStartChar = valueTokenIndex;
+
                         foreach (var enumDef in enumDefs)
                         {
                             enumDef.Used = true;
-                            enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                            enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumStartChar);
 
                             var value = enumDef.Values.FirstOrDefault(v =>
                                 v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
                             if (value != null)
                             {
                                 value.Used = true;
-                                value.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                                value.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar);
                             }
                         }
                     }

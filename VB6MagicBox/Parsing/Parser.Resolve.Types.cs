@@ -1,4 +1,5 @@
-﻿using VB6MagicBox.Models;
+﻿using System.Text.RegularExpressions;
+using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
 
@@ -17,30 +18,52 @@ public static partial class VbParser
   /// </summary>
   private static void ResolveTypeReferences(
       VbProject project,
-      Dictionary<string, VbTypeDef> typeIndex)
+      Dictionary<string, VbTypeDef> typeIndex,
+      Dictionary<string, string[]> fileCache)
   {
     foreach (var mod in project.Modules)
     {
+      var fileLines = GetFileLines(fileCache, mod);
+
       // 1. Campi di altri Type: "FieldName As OTHER_TYPE"
       foreach (var typeDef in mod.Types)
       {
-        foreach (var field in typeDef.Fields)
+        for (int i = 0; i < typeDef.Fields.Count; i++)
         {
-          AddTypeReference(field.Type, field.LineNumber, mod.Name, string.Empty, typeIndex, -1);
+          var field = typeDef.Fields[i];
+          var occurrence = typeDef.Fields.Take(i)
+              .Count(f => f.LineNumber == field.LineNumber &&
+                          f.Type?.Equals(field.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+
+          var lineText = field.LineNumber > 0 && field.LineNumber <= fileLines.Length
+              ? fileLines[field.LineNumber - 1]
+              : string.Empty;
+          AddTypeReference(field.Type, lineText, field.LineNumber, mod.Name, string.Empty, typeIndex, occurrence);
         }
       }
 
       // 2. Variabili globali: "Public/Dim varName As TYPE"
-      foreach (var variable in mod.GlobalVariables)
+      for (int i = 0; i < mod.GlobalVariables.Count; i++)
       {
-        AddTypeReference(variable.Type, variable.LineNumber, mod.Name, string.Empty, typeIndex, -1);
+        var variable = mod.GlobalVariables[i];
+        var occurrence = mod.GlobalVariables.Take(i)
+            .Count(v => v.LineNumber == variable.LineNumber &&
+                        v.Type?.Equals(variable.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+
+        var lineText = variable.LineNumber > 0 && variable.LineNumber <= fileLines.Length
+            ? fileLines[variable.LineNumber - 1]
+            : string.Empty;
+        AddTypeReference(variable.Type, lineText, variable.LineNumber, mod.Name, string.Empty, typeIndex, occurrence);
       }
 
       // 3. Parametri e variabili locali delle procedure
       foreach (var proc in mod.Procedures)
       {
         var procReturnLine = proc.ReturnTypeLineNumber > 0 ? proc.ReturnTypeLineNumber : proc.LineNumber;
-        AddTypeReference(proc.ReturnType, procReturnLine, mod.Name, proc.Name, typeIndex, -1);
+        var procReturnText = procReturnLine > 0 && procReturnLine <= fileLines.Length
+            ? fileLines[procReturnLine - 1]
+            : string.Empty;
+        AddTypeReference(proc.ReturnType, procReturnText, procReturnLine, mod.Name, proc.Name, typeIndex, -1);
 
         // Per i parametri, calcola occurrenceIndex per gestire più parametri dello stesso tipo sulla stessa riga
         for (int i = 0; i < proc.Parameters.Count; i++)
@@ -54,18 +77,34 @@ public static partial class VbParser
                 .Count(p => (p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber) == paramLine &&
                             p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
 
-          AddTypeReference(param.Type, paramLine, mod.Name, proc.Name, typeIndex, occurrence);
+          var paramLineText = paramLine > 0 && paramLine <= fileLines.Length
+              ? fileLines[paramLine - 1]
+              : string.Empty;
+          AddTypeReference(param.Type, paramLineText, paramLine, mod.Name, proc.Name, typeIndex, occurrence);
         }
 
-        foreach (var localVar in proc.LocalVariables)
-          AddTypeReference(localVar.Type, localVar.LineNumber, mod.Name, proc.Name, typeIndex, -1);
+        for (int i = 0; i < proc.LocalVariables.Count; i++)
+        {
+          var localVar = proc.LocalVariables[i];
+          var occurrence = proc.LocalVariables.Take(i)
+              .Count(v => v.LineNumber == localVar.LineNumber &&
+                          v.Type?.Equals(localVar.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
+
+          var localLineText = localVar.LineNumber > 0 && localVar.LineNumber <= fileLines.Length
+              ? fileLines[localVar.LineNumber - 1]
+              : string.Empty;
+          AddTypeReference(localVar.Type, localLineText, localVar.LineNumber, mod.Name, proc.Name, typeIndex, occurrence);
+        }
       }
 
       // 4. Parametri delle proprietà
       foreach (var prop in mod.Properties)
       {
         var propReturnLine = prop.ReturnTypeLineNumber > 0 ? prop.ReturnTypeLineNumber : prop.LineNumber;
-        AddTypeReference(prop.ReturnType, propReturnLine, mod.Name, prop.Name, typeIndex, -1);
+        var propReturnText = propReturnLine > 0 && propReturnLine <= fileLines.Length
+            ? fileLines[propReturnLine - 1]
+            : string.Empty;
+        AddTypeReference(prop.ReturnType, propReturnText, propReturnLine, mod.Name, prop.Name, typeIndex, -1);
 
         // Per i parametri, calcola occurrenceIndex
         for (int i = 0; i < prop.Parameters.Count; i++)
@@ -79,7 +118,10 @@ public static partial class VbParser
                 .Count(p => (p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber) == paramLine &&
                             p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
 
-          AddTypeReference(param.Type, paramLine, mod.Name, prop.Name, typeIndex, occurrence);
+          var paramLineText = paramLine > 0 && paramLine <= fileLines.Length
+              ? fileLines[paramLine - 1]
+              : string.Empty;
+          AddTypeReference(param.Type, paramLineText, paramLine, mod.Name, prop.Name, typeIndex, occurrence);
         }
       }
     }
@@ -91,6 +133,7 @@ public static partial class VbParser
   /// </summary>
   private static void AddTypeReference(
       string typeName,
+      string lineText,
       int lineNumber,
       string moduleName,
       string procedureName,
@@ -145,8 +188,36 @@ public static partial class VbParser
       Console.WriteLine($"[DEBUG] ✅ Adding Reference to {baseTypeName}");
     }
 
+    var startChar = -1;
+    var effectiveOccurrenceIndex = occurrenceIndex;
+    if (!string.IsNullOrEmpty(lineText))
+    {
+      var noComment = StripInlineComment(lineText);
+      startChar = GetTokenIndex(noComment, baseTypeName, occurrenceIndex);
+      if (startChar < 0 && !string.Equals(baseTypeName, typeName, StringComparison.OrdinalIgnoreCase))
+        startChar = GetTokenIndex(noComment, typeName, occurrenceIndex);
+
+      if (effectiveOccurrenceIndex < 0 && startChar >= 0)
+        effectiveOccurrenceIndex = GetOccurrenceIndex(noComment, baseTypeName, startChar, lineNumber);
+    }
+
     referencedType.Used = true;
-    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex);
+    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, effectiveOccurrenceIndex, startChar);
+  }
+
+  private static int GetTokenIndex(string line, string token, int occurrenceIndex)
+  {
+    if (string.IsNullOrWhiteSpace(line) || string.IsNullOrWhiteSpace(token))
+      return -1;
+
+    var matches = Regex.Matches(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+    if (matches.Count == 0)
+      return -1;
+
+    if (occurrenceIndex > 0 && occurrenceIndex <= matches.Count)
+      return matches[occurrenceIndex - 1].Index;
+
+    return matches[0].Index;
   }
 
   // ---------------------------------------------------------
@@ -239,7 +310,7 @@ public static partial class VbParser
   // MARCATURA TIPI USATI
   // ---------------------------------------------------------
 
-  private static void MarkUsedTypes(VbProject project)
+  private static void MarkUsedTypes(VbProject project, Dictionary<string, string[]> fileCache)
   {
     var allTypes = project.Modules
         .SelectMany(m => m.Types)
@@ -267,6 +338,25 @@ public static partial class VbParser
       }
     }
 
+    bool TryGetLineInfo(string moduleName, int lineNumber, out string line)
+    {
+      line = null;
+      if (lineNumber <= 0)
+        return false;
+
+      var mod = project.Modules.FirstOrDefault(m =>
+          string.Equals(m.Name, moduleName, StringComparison.OrdinalIgnoreCase));
+      if (mod == null)
+        return false;
+
+      var lines = GetFileLines(fileCache, mod);
+      if (lineNumber > lines.Length)
+        return false;
+
+      line = lines[lineNumber - 1];
+      return true;
+    }
+
     void Mark(string typeName, string moduleName, string procedureName = null, int lineNumber = 0)
     {
       if (string.IsNullOrWhiteSpace(typeName))
@@ -278,18 +368,31 @@ public static partial class VbParser
       if (clean.Contains("."))
         clean = clean.Split('.').Last();
 
-      if (allTypes.TryGetValue(clean, out var t))
+    var occurrenceIndex = -1;
+    var startChar = -1;
+    if (TryGetLineInfo(moduleName, lineNumber, out var lineText))
+    {
+      var noComment = StripInlineComment(lineText);
+      startChar = GetTokenIndex(noComment, clean, occurrenceIndex);
+      if (startChar >= 0)
+        occurrenceIndex = GetOccurrenceIndex(noComment, clean, startChar, lineNumber);
+    }
+
+    if (startChar < 0)
+      return;
+
+    if (allTypes.TryGetValue(clean, out var t))
       {
         t.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-          t.References.AddLineNumber(moduleName, procedureName, lineNumber);
+        t.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
       }
 
       if (allEnums.TryGetValue(clean, out var e))
       {
         e.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-          e.References.AddLineNumber(moduleName, procedureName, lineNumber);
+        e.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
       }
 
       // Traccia anche le classi usate come tipo
@@ -297,7 +400,7 @@ public static partial class VbParser
       {
         cls.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-          cls.References.AddLineNumber(moduleName, procedureName, lineNumber);
+        cls.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
       }
     }
 

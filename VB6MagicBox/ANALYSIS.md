@@ -26,6 +26,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - `VbProperty`: same as procedure (separate list), `ReturnType`, `Parameters`, `References`.
 - `VbTypeDef`/`VbField`, `VbEnumDef`/`VbEnumValue` with `References`.
 - `VbControl`: `LineNumbers` for control arrays, `References`.
+- `VbReference`: now tracks `StartChars` alongside `LineNumbers`/`OccurrenceIndexes` for exact replace positions.
 - **`LineReplace`** (NEW): `LineNumber`, `StartChar`, `EndChar`, `OldText`, `NewText`, `Category` - precise substitution with exact character position.
 
 ## Parsing (Parser.Core)
@@ -47,6 +48,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - Property blocks are resolved separately (field/parameter/return references).
 - Function return variable is typed in `env` (function name -> return type) and return assignments are referenced for renames.
 - Enum values: explicit pass `ResolveEnumValueReferences` adds references for bare enum values and qualified `EnumName.Value`, respecting shadowing.
+- Enum/type references now capture exact `StartChar` (and normalized occurrence) from source lines; ambiguous matches without context are skipped.
 - Class usage via `ResolveClassModuleReferences`.
 - Type references via `ResolveTypeReferences` for every `As TypeName` occurrence.
 - `MarkUsedTypes` also scans Type fields.
@@ -115,6 +117,10 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Inline calls after `Then`**: procedure references are recorded even if a call is already present in `Calls`, ensuring inline statements are renamed.
 - **Screaming snake to PascalCase**: enum value naming preserves only known acronyms, so `RIC_RUN_CMD_CALLER` -> `RicRunCmdCaller`.
 - **String-aware comment stripping**: comment removal ignores apostrophes inside string literals, preventing truncation of lines with text (e.g., `"E' ..."`).
+- **StartChar-first replaces**: references now carry `StartChar`, so `BuildReplaces` can apply substitutions without re-scanning the line (fallbacks only when missing).
+- **Enum reference filtering**: member-access tokens (e.g., `Enum.Value`) are excluded from bare enum-value matches; qualified tokens record both enum/value positions.
+- **Type name normalization**: trailing single-letter `T` is stripped before appending `_T` (e.g., `ParamT` → `Param_T`).
+- **Local multi-declaration parsing**: comma-separated `Dim` declarations are split into multiple locals so all occurrences are tracked and renamed.
 - **Base variable in chains**: base identifiers used in member chains are marked as references, ensuring parameters are renamed even in `obj.Member...` expressions.
 - **String-literal safe replaces**: reference renames skip string literals, with a special allowance for `Attribute ...` lines to keep VB attributes in sync.
 - **Function-chain unwrap**: member chains inside function calls (e.g., `CStr(...)`) are unwrapped for resolution; array access (`var(i).Member`) is excluded from unwrap.
@@ -150,3 +156,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 5. **Incremental mode** - cache parsed project, only reparse changed files
 6. **Lazy References** - optionally skip reference tracking if not needed
 7. **Streaming parser** - process line-by-line without loading entire file in memory
+
+## IDE Memory Note (2024)
+- Visual Studio memory usage can grow significantly during long analysis/debug sessions.
+- Symptom: RAM grows until VS becomes sluggish; the reliable workaround is restarting Visual Studio and opening a new chat/session.

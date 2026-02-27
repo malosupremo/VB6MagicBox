@@ -903,7 +903,7 @@ public static partial class VbParser
         Console.WriteLine(); // Vai a capo dopo il progress del parsing
 
         // Aggiunge References ai tipi per ogni posizione in cui appaiono in "As TypeName"
-        ResolveTypeReferences(project, typeIndex);
+        ResolveTypeReferences(project, typeIndex, fileCache);
 
         // Aggiunge References alle classi per ogni dichiarazione "As [New] ClassName"
         ResolveClassModuleReferences(project);
@@ -912,7 +912,7 @@ public static partial class VbParser
         ResolveEnumValueReferences(project, fileCache);
 
         // Marcatura tipi usati
-        MarkUsedTypes(project);
+        MarkUsedTypes(project, fileCache);
     }
 }
 

@@ -308,6 +308,12 @@ public static partial class VbParser
             {
                 baseName = baseName.Substring(0, baseName.Length - 1);
             }
+            else if (baseName.EndsWith("T", StringComparison.OrdinalIgnoreCase) &&
+                     baseName.Length > 1 &&
+                     (char.IsLower(baseName[baseName.Length - 2]) || char.IsDigit(baseName[baseName.Length - 2])))
+            {
+                baseName = baseName.Substring(0, baseName.Length - 1);
+            }
 
             var parts = baseName.Split('_', StringSplitOptions.RemoveEmptyEntries);
             var result = new System.Text.StringBuilder();
