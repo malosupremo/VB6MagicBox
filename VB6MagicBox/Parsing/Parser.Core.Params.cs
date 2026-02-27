@@ -77,6 +77,11 @@ public static partial class VbParser
 
         // Trova tutte le righe originali che costituivano questa dichiarazione collapsed
         var originalStartIndex = startLineNumber - 1; // Convert to 0-based
+        if (originalStartIndex < 0 || originalStartIndex >= originalLines.Length)
+            return;
+
+        if (!originalLines[originalStartIndex].TrimEnd().EndsWith("_"))
+            return;
         var originalEndIndex = originalStartIndex;
 
         // Trova l'ultima riga della dichiarazione (seguendo i "_")
@@ -94,26 +99,22 @@ public static partial class VbParser
             for (int lineIdx = originalStartIndex; lineIdx <= originalEndIndex; lineIdx++)
             {
                 var originalLine = originalLines[lineIdx];
+                var noComment = StripInlineComment(originalLine);
+                noComment = MaskStringLiterals(noComment);
 
                 // Cerca il nome del parametro in questa riga (word boundary per evitare match parziali)
                 var paramPattern = $@"\b{Regex.Escape(param.Name)}\b";
-                if (Regex.IsMatch(originalLine, paramPattern, RegexOptions.IgnoreCase))
+                var match = Regex.Match(noComment, paramPattern, RegexOptions.IgnoreCase);
+                if (match.Success)
                 {
                     var resolvedLineNumber = lineIdx + 1;
+                    var startChar = match.Index;
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, param.Name, startChar, resolvedLineNumber);
                     param.LineNumber = resolvedLineNumber;
 
                     // Trovato! Aggiungi una Reference a questa riga specifica
                     // ma solo se non l'ho già segnato
-
-                    if (!param.References.Any(r => r.Module == moduleName && r.Procedure == procedure.Name))
-                    {
-                        param.References.Add(new VbReference
-                        {
-                            Module = moduleName, // Sarà impostato dal chiamante se necessario
-                            Procedure = procedure.Name,
-                            LineNumbers = new List<int> { resolvedLineNumber }
-                        });
-                    }
+                    param.References.AddLineNumber(moduleName, procedure.Name, resolvedLineNumber, occurrenceIndex, startChar);
 
                     // Un parametro può apparire solo una volta, quindi esci dal loop
                     break;
