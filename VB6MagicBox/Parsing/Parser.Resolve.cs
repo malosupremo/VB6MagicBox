@@ -484,7 +484,8 @@ public static partial class VbParser
                                     if (classProp != null)
                                     {
                                         classProp.Used = true;
-                                        classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1);
+                                        var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1);
+                                        classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, callMatch.Groups[2].Index);
 
                                         proc.Calls.Add(new VbCall
                                         {
@@ -554,7 +555,8 @@ public static partial class VbParser
                                     mod.Name,
                                     proc.Name,
                                     li + 1,
-                                    GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1));
+                                    GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1),
+                                    callMatch.Groups[2].Index);
                                 if (!alreadyInCalls)
                                 {
                                   proc.Calls.Add(new VbCall
@@ -620,7 +622,8 @@ public static partial class VbParser
                                         mod.Name,
                                         proc.Name,
                                         li + 1,
-                                        GetOccurrenceIndex(noCommentLine, tokenName, tokenMatch.Index, li + 1));
+                                        GetOccurrenceIndex(noCommentLine, tokenName, tokenMatch.Index, li + 1),
+                                        tokenMatch.Index);
                                     if (!alreadyInCalls)
                                     {
                                       proc.Calls.Add(new VbCall
@@ -658,7 +661,8 @@ public static partial class VbParser
                                 if (propTarget.Prop != null)
                                 {
                                     propTarget.Prop.Used = true;
-                                    propTarget.Prop.References.AddLineNumber(mod.Name, proc.Name, li + 1);
+                                    var occurrenceIndex = GetOccurrenceIndex(noCommentLine, tokenName, tokenMatch.Index, li + 1);
+                                    propTarget.Prop.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, tokenMatch.Index);
                                     if (!alreadyInCalls)
                                     {
                                       proc.Calls.Add(new VbCall
@@ -705,8 +709,8 @@ public static partial class VbParser
                                 if (classProp != null)
                                 {
                                     classProp.Used = true;
-
-                                    classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1);
+                                    var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, methodAccessMatch.Groups[2].Index, li + 1);
+                                    classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, methodAccessMatch.Groups[2].Index);
 
                                     if (!alreadyInCalls)
                                     {
@@ -776,7 +780,8 @@ public static partial class VbParser
                             !string.Equals(referencedModule.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
                         {
                             referencedModule.Used = true;
-                            referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1);
+                            var moduleOccurrenceIndex = GetOccurrenceIndex(noCommentLine, objName, genericMethodMatch.Groups[1].Index, li + 1);
+                            referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1, moduleOccurrenceIndex, genericMethodMatch.Groups[1].Index);
 
                             var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1);
                             var moduleProc = referencedModule.Procedures.FirstOrDefault(p =>
@@ -784,7 +789,7 @@ public static partial class VbParser
                             if (moduleProc != null)
                             {
                                 moduleProc.Used = true;
-                                moduleProc.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex);
+                                moduleProc.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index);
                             }
                             else
                             {
@@ -793,7 +798,7 @@ public static partial class VbParser
                                 if (moduleProp != null)
                                 {
                                     moduleProp.Used = true;
-                                    moduleProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex);
+                                    moduleProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index);
                                 }
                             }
                         }
@@ -820,7 +825,8 @@ public static partial class VbParser
                             {
                                 classProp.Used = true;
 
-                                classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1);
+                                var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1);
+                                classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index);
 
                                 if (!alreadyInCalls)
                                 {
@@ -850,7 +856,8 @@ public static partial class VbParser
                                             mod.Name,
                                             proc.Name,
                                             li + 1,
-                                            GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1));
+                                            GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1),
+                                            genericMethodMatch.Groups[2].Index);
                                     if (!alreadyInCalls)
                                     {
                                       proc.Calls.Add(new VbCall
@@ -906,7 +913,7 @@ public static partial class VbParser
         ResolveTypeReferences(project, typeIndex, fileCache);
 
         // Aggiunge References alle classi per ogni dichiarazione "As [New] ClassName"
-        ResolveClassModuleReferences(project);
+        ResolveClassModuleReferences(project, fileCache);
 
         // Aggiunge References ai valori enum usati (anche senza prefisso)
         ResolveEnumValueReferences(project, fileCache);

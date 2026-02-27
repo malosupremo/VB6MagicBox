@@ -347,7 +347,7 @@ public static partial class VbParser
 
                 if (category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
                 {
-                    AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex, stringRanges);
+                    AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex, startChar, stringRanges);
                     continue;
                 }
 
@@ -355,13 +355,37 @@ public static partial class VbParser
                 {
                     var shouldQualify = ShouldQualifyPropertyReference(refModule, lineNum, referenceNewName);
                     var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, refModule, refModuleName, shouldQualify);
-                    AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace, propertyQualifier);
+                    AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, propertyQualifier);
                 }
                 else if (source is VbVariable variable && IsGlobalVariable(project, sourceModule, variable))
                 {
                     var shouldQualify = ShouldQualifyModuleMemberReference(refModule, lineNum, referenceNewName);
                     var qualifier = shouldQualify ? sourceModuleReferenceName : null;
-                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName);
+                    if (startChar >= 0 && startChar < codePart.Length)
+                    {
+                        var length = Math.Min(oldName.Length, codePart.Length - startChar);
+                        var foundText = codePart.Substring(startChar, length);
+                        if (string.Equals(foundText, oldName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (allowStringReplace || !IsInsideStringLiteral(stringRanges, startChar))
+                            {
+                                var replacement = referenceNewName;
+                                if (!IsMemberAccessToken(codePart, startChar) && !string.IsNullOrWhiteSpace(qualifier))
+                                    replacement = $"{qualifier}.{referenceNewName}";
+
+                                refModule.Replaces.AddReplace(
+                                    lineNum,
+                                    startChar,
+                                    startChar + oldName.Length,
+                                    foundText,
+                                    replacement,
+                                    category + "_Reference");
+                                continue;
+                            }
+                        }
+                    }
+
+                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName);
                 }
                 else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
                 {
@@ -384,7 +408,7 @@ public static partial class VbParser
                 }
                 else if (string.Equals(category, "Constant", StringComparison.OrdinalIgnoreCase))
                 {
-                    AddConstantReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, stringRanges, allowStringReplace);
+                    AddConstantReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace);
                 }
                 else
                 {
@@ -443,6 +467,7 @@ public static partial class VbParser
         string qualifiedName,
         string category,
         int occIndex,
+        int startChar,
         List<(int start, int end)> stringRanges)
     {
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
@@ -452,8 +477,16 @@ public static partial class VbParser
             return;
 
         IEnumerable<Match> targetMatches = matches.Cast<Match>();
-        if (occIndex > 0 && occIndex <= matches.Count)
+        if (startChar >= 0)
+        {
+            var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
+            if (preciseMatch != null)
+                targetMatches = new[] { preciseMatch };
+        }
+        else if (occIndex > 0 && occIndex <= matches.Count)
+        {
             targetMatches = new[] { matches[occIndex - 1] };
+        }
 
         foreach (var match in targetMatches)
         {
@@ -534,6 +567,7 @@ public static partial class VbParser
         string newName,
         string category,
         int occIndex,
+        int startChar,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace)
     {
@@ -544,8 +578,16 @@ public static partial class VbParser
             return;
 
         IEnumerable<Match> targetMatches = matches.Cast<Match>();
-        if (occIndex > 0 && occIndex <= matches.Count)
+        if (startChar >= 0)
+        {
+            var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
+            if (preciseMatch != null)
+                targetMatches = new[] { preciseMatch };
+        }
+        else if (occIndex > 0 && occIndex <= matches.Count)
+        {
             targetMatches = new[] { matches[occIndex - 1] };
+        }
 
         foreach (var match in targetMatches)
         {
@@ -768,6 +810,7 @@ public static partial class VbParser
         string newName,
         string category,
         int occIndex,
+        int startChar,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
         string? qualifier)
@@ -779,8 +822,16 @@ public static partial class VbParser
             return;
 
         IEnumerable<Match> targetMatches = matches.Cast<Match>();
-        if (occIndex > 0 && occIndex <= matches.Count)
+        if (startChar >= 0)
+        {
+            var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
+            if (preciseMatch != null)
+                targetMatches = new[] { preciseMatch };
+        }
+        else if (occIndex > 0 && occIndex <= matches.Count)
+        {
             targetMatches = new[] { matches[occIndex - 1] };
+        }
 
         foreach (var match in targetMatches)
         {
@@ -813,6 +864,7 @@ public static partial class VbParser
         string newName,
         string category,
         int occIndex,
+        int startChar,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
         string? qualifier,
@@ -826,8 +878,16 @@ public static partial class VbParser
             return;
 
         IEnumerable<Match> targetMatches = matches.Cast<Match>();
-        if (occIndex > 0 && occIndex <= matches.Count)
+        if (startChar >= 0)
+        {
+            var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
+            if (preciseMatch != null)
+                targetMatches = new[] { preciseMatch };
+        }
+        else if (occIndex > 0 && occIndex <= matches.Count)
+        {
             targetMatches = new[] { matches[occIndex - 1] };
+        }
 
         foreach (var match in targetMatches)
         {

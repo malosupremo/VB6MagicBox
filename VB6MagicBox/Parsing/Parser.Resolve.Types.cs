@@ -230,7 +230,7 @@ public static partial class VbParser
   /// Garantisce che le classi usate solo come tipo (senza chiamate risolte)
   /// compaiano comunque nelle References e nel grafo Mermaid.
   /// </summary>
-  private static void ResolveClassModuleReferences(VbProject project)
+  private static void ResolveClassModuleReferences(VbProject project, Dictionary<string, string[]> fileCache)
   {
     var classIndex = project.Modules
         .Where(m => m.IsClass)
@@ -241,41 +241,64 @@ public static partial class VbParser
 
     foreach (var mod in project.Modules)
     {
+      var fileLines = GetFileLines(fileCache, mod);
       foreach (var v in mod.GlobalVariables)
-        AddClassModuleReference(v.Type, v.LineNumber, mod.Name, string.Empty, classIndex, -1);
+      {
+        var lineText = v.LineNumber > 0 && v.LineNumber <= fileLines.Length
+            ? fileLines[v.LineNumber - 1]
+            : string.Empty;
+        AddClassModuleReference(v.Type, lineText, v.LineNumber, mod.Name, string.Empty, classIndex, -1);
+      }
 
       foreach (var proc in mod.Procedures)
       {
-        AddClassModuleReference(proc.ReturnType, proc.LineNumber, mod.Name, proc.Name, classIndex, -1);
+        var procLineText = proc.LineNumber > 0 && proc.LineNumber <= fileLines.Length
+            ? fileLines[proc.LineNumber - 1]
+            : string.Empty;
+        AddClassModuleReference(proc.ReturnType, procLineText, proc.LineNumber, mod.Name, proc.Name, classIndex, -1);
 
         // Per i parametri, calcola occurrenceIndex
         for (int i = 0; i < proc.Parameters.Count; i++)
         {
           var param = proc.Parameters[i];
+          var paramLineText = param.LineNumber > 0 && param.LineNumber <= fileLines.Length
+              ? fileLines[param.LineNumber - 1]
+              : string.Empty;
           int occurrence = proc.Parameters.Take(i)
               .Count(p => p.LineNumber == param.LineNumber && 
                           p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
 
-          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, proc.Name, classIndex, occurrence);
+          AddClassModuleReference(param.Type, paramLineText, param.LineNumber, mod.Name, proc.Name, classIndex, occurrence);
         }
 
         foreach (var lv in proc.LocalVariables)
-          AddClassModuleReference(lv.Type, lv.LineNumber, mod.Name, proc.Name, classIndex, -1);
+        {
+          var localLineText = lv.LineNumber > 0 && lv.LineNumber <= fileLines.Length
+              ? fileLines[lv.LineNumber - 1]
+              : string.Empty;
+          AddClassModuleReference(lv.Type, localLineText, lv.LineNumber, mod.Name, proc.Name, classIndex, -1);
+        }
       }
 
       foreach (var prop in mod.Properties)
       {
-        AddClassModuleReference(prop.ReturnType, prop.LineNumber, mod.Name, prop.Name, classIndex, -1);
+        var propLineText = prop.LineNumber > 0 && prop.LineNumber <= fileLines.Length
+            ? fileLines[prop.LineNumber - 1]
+            : string.Empty;
+        AddClassModuleReference(prop.ReturnType, propLineText, prop.LineNumber, mod.Name, prop.Name, classIndex, -1);
 
         // Per i parametri, calcola occurrenceIndex
         for (int i = 0; i < prop.Parameters.Count; i++)
         {
           var param = prop.Parameters[i];
+          var paramLineText = param.LineNumber > 0 && param.LineNumber <= fileLines.Length
+              ? fileLines[param.LineNumber - 1]
+              : string.Empty;
           int occurrence = prop.Parameters.Take(i)
               .Count(p => p.LineNumber == param.LineNumber && 
                           p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
 
-          AddClassModuleReference(param.Type, param.LineNumber, mod.Name, prop.Name, classIndex, occurrence);
+          AddClassModuleReference(param.Type, paramLineText, param.LineNumber, mod.Name, prop.Name, classIndex, occurrence);
         }
       }
     }
@@ -283,6 +306,7 @@ public static partial class VbParser
 
   private static void AddClassModuleReference(
       string typeName,
+      string lineText,
       int lineNumber,
       string declaringModule,
       string procedureName,
@@ -302,8 +326,18 @@ public static partial class VbParser
     if (string.Equals(classModule.Name, declaringModule, StringComparison.OrdinalIgnoreCase))
       return;
 
+    var startChar = -1;
+    var effectiveOccurrenceIndex = occurrenceIndex;
+    if (!string.IsNullOrEmpty(lineText))
+    {
+      var noComment = StripInlineComment(lineText);
+      startChar = GetTokenIndex(noComment, baseName, occurrenceIndex);
+      if (effectiveOccurrenceIndex < 0 && startChar >= 0)
+        effectiveOccurrenceIndex = GetOccurrenceIndex(noComment, baseName, startChar, lineNumber);
+    }
+
     classModule.Used = true;
-    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, occurrenceIndex);
+    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, effectiveOccurrenceIndex, startChar);
   }
 
   // ---------------------------------------------------------

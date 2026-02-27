@@ -313,12 +313,38 @@ public static class VbReferenceListExtensions
         {
           while (existing.StartChars.Count < existing.LineNumbers.Count)
             existing.StartChars.Add(-1);
+          while (existing.OccurrenceIndexes.Count < existing.LineNumbers.Count)
+            existing.OccurrenceIndexes.Add(-1);
+
+          if (startChar < 0 && existing.LineNumbers.Any(ln => ln == lineNumber))
+          {
+            for (int i = 0; i < existing.LineNumbers.Count; i++)
+            {
+              if (existing.LineNumbers[i] == lineNumber &&
+                  i < existing.StartChars.Count &&
+                  existing.StartChars[i] >= 0)
+              {
+                return;
+              }
+            }
+          }
 
           // Controlla se questa combinazione lineNumber+occurrenceIndex esiste già
           bool alreadyExists = false;
           for (int i = 0; i < existing.LineNumbers.Count; i++)
           {
             var existingStartChar = i < existing.StartChars.Count ? existing.StartChars[i] : -1;
+            var existingOccurrence = i < existing.OccurrenceIndexes.Count ? existing.OccurrenceIndexes[i] : -1;
+            if (existing.LineNumbers[i] == lineNumber &&
+                existingStartChar == -1 &&
+                startChar >= 0 &&
+                (existingOccurrence == -1 || existingOccurrence == occurrenceIndex))
+            {
+              existing.StartChars[i] = startChar;
+              existing.OccurrenceIndexes[i] = occurrenceIndex;
+              alreadyExists = true;
+              break;
+            }
             if (existing.LineNumbers[i] == lineNumber &&
                 i < existing.OccurrenceIndexes.Count &&
                 existing.OccurrenceIndexes[i] == occurrenceIndex &&

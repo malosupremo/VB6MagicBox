@@ -1348,7 +1348,11 @@ public static partial class VbParser
             if (trackReturn && currentLineNumber != proc.LineNumber &&
                 ContainsStandaloneToken(noComment, proc.Name))
             {
-                proc.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber);
+                foreach (var tokenIndex in EnumerateStandaloneTokenIndexes(noComment, proc.Name))
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, proc.Name, tokenIndex, currentLineNumber);
+                    proc.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, occurrenceIndex, tokenIndex);
+                }
             }
         }
     }
@@ -1399,7 +1403,8 @@ public static partial class VbParser
                 if (parameterIndex.TryGetValue(tokenName, out var parameter))
                 {
                     parameter.Used = true;
-                    parameter.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber);
+                    var tokenOccurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
+                    parameter.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, tokenOccurrenceIndex, m.Index);
                 }
             }
         }
@@ -1436,7 +1441,11 @@ public static partial class VbParser
 
             if (ContainsStandaloneToken(noComment, prop.Name))
             {
-                prop.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber);
+                foreach (var tokenIndex in EnumerateStandaloneTokenIndexes(noComment, prop.Name))
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, prop.Name, tokenIndex, currentLineNumber);
+                    prop.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, occurrenceIndex, tokenIndex);
+                }
             }
         }
     }
@@ -1473,7 +1482,11 @@ public static partial class VbParser
 
             if (ContainsStandaloneToken(noComment, proc.Name))
             {
-                proc.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                foreach (var tokenIndex in EnumerateStandaloneTokenIndexes(noComment, proc.Name))
+                {
+                    var occurrenceIndex = GetOccurrenceIndex(noComment, proc.Name, tokenIndex, i + 1);
+                    proc.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenIndex);
+                }
             }
         }
     }
@@ -1493,6 +1506,38 @@ public static partial class VbParser
         }
 
         return false;
+    }
+
+    private static int GetStandaloneTokenIndex(string line, string token)
+    {
+        if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(token))
+            return -1;
+
+        int index = 0;
+        while ((index = line.IndexOf(token, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            if (IsWordBoundary(line, index, token.Length) && !IsMemberAccessToken(line, index))
+                return index;
+
+            index += token.Length;
+        }
+
+        return -1;
+    }
+
+    private static IEnumerable<int> EnumerateStandaloneTokenIndexes(string line, string token)
+    {
+        if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(token))
+            yield break;
+
+        int index = 0;
+        while ((index = line.IndexOf(token, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            if (IsWordBoundary(line, index, token.Length) && !IsMemberAccessToken(line, index))
+                yield return index;
+
+            index += token.Length;
+        }
     }
 
     private static IEnumerable<(string Text, int Index)> EnumerateParenContents(string line)
@@ -2030,7 +2075,9 @@ public static partial class VbParser
                             if (evt != null)
                             {
                                 evt.Used = true;
-                                evt.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                                var eventNameIndex = noComment.IndexOf(eventName, StringComparison.OrdinalIgnoreCase);
+                                var occurrenceIndex = GetOccurrenceIndex(noComment, eventName, eventNameIndex, i + 1);
+                                evt.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, eventNameIndex);
                             }
                         }
                     }
