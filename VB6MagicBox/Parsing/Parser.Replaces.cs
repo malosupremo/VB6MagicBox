@@ -312,11 +312,13 @@ public static partial class VbParser
 
             var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
             var occurrenceIndexesProp = reference?.GetType().GetProperty("OccurrenceIndexes");
+            var startCharsProp = reference?.GetType().GetProperty("StartChars");
 
             if (lineNumbersProp?.GetValue(reference) is not System.Collections.Generic.List<int> refLineNumbers)
                 continue;
 
             var occurrenceIndexes = occurrenceIndexesProp?.GetValue(reference) as System.Collections.Generic.List<int>;
+            var startChars = startCharsProp?.GetValue(reference) as System.Collections.Generic.List<int>;
 
             for (int idx = 0; idx < refLineNumbers.Count; idx++)
             {
@@ -328,6 +330,7 @@ public static partial class VbParser
                 var (codePart, _) = SplitCodeAndComment(line);
 
                 var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
+                var startChar = (startChars != null && idx < startChars.Count) ? startChars[idx] : -1;
 
                 var sourceModule = GetDefiningModule(project, source!);
                 var sourceModuleInfo = project.Modules.FirstOrDefault(m =>
@@ -394,6 +397,26 @@ public static partial class VbParser
                             Regex.IsMatch(codePart, $@"\b{Regex.Escape(alternateOldName)}\b", RegexOptions.IgnoreCase))
                         {
                             effectiveOldName = alternateOldName;
+                        }
+                    }
+
+                    if (startChar >= 0 && startChar < codePart.Length)
+                    {
+                        var length = Math.Min(effectiveOldName.Length, codePart.Length - startChar);
+                        var foundText = codePart.Substring(startChar, length);
+                        if (string.Equals(foundText, effectiveOldName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (allowStringReplace || !IsInsideStringLiteral(stringRanges, startChar))
+                            {
+                                refModule.Replaces.AddReplace(
+                                    lineNum,
+                                    startChar,
+                                    startChar + effectiveOldName.Length,
+                                    foundText,
+                                    referenceNewName,
+                                    category + "_Reference");
+                            }
+                            continue;
                         }
                     }
 

@@ -233,6 +233,9 @@ public class VbReference
   /// </summary>
   [JsonPropertyOrder(3)]
   public List<int> OccurrenceIndexes { get; set; } = new();
+
+  [JsonPropertyOrder(4)]
+  public List<int> StartChars { get; set; } = new();
 }
 
 /// <summary>
@@ -293,7 +296,8 @@ public static class VbReferenceListExtensions
       string module,
       string procedure,
       int lineNumber,
-      int occurrenceIndex = -1)
+      int occurrenceIndex = -1,
+      int startChar = -1)
   {
     lock (references)
     {
@@ -307,13 +311,18 @@ public static class VbReferenceListExtensions
       {
         if (lineNumber > 0)
         {
+          while (existing.StartChars.Count < existing.LineNumbers.Count)
+            existing.StartChars.Add(-1);
+
           // Controlla se questa combinazione lineNumber+occurrenceIndex esiste già
           bool alreadyExists = false;
           for (int i = 0; i < existing.LineNumbers.Count; i++)
           {
+            var existingStartChar = i < existing.StartChars.Count ? existing.StartChars[i] : -1;
             if (existing.LineNumbers[i] == lineNumber &&
                 i < existing.OccurrenceIndexes.Count &&
-                existing.OccurrenceIndexes[i] == occurrenceIndex)
+                existing.OccurrenceIndexes[i] == occurrenceIndex &&
+                existingStartChar == startChar)
             {
               alreadyExists = true;
               break;
@@ -324,6 +333,7 @@ public static class VbReferenceListExtensions
           {
             existing.LineNumbers.Add(lineNumber);
             existing.OccurrenceIndexes.Add(occurrenceIndex);
+            existing.StartChars.Add(startChar);
           }
         }
       }
@@ -334,6 +344,7 @@ public static class VbReferenceListExtensions
         {
           newRef.LineNumbers.Add(lineNumber);
           newRef.OccurrenceIndexes.Add(occurrenceIndex);
+          newRef.StartChars.Add(startChar);
         }
         references.Add(newRef);
       }

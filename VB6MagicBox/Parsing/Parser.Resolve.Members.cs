@@ -1251,16 +1251,17 @@ public static partial class VbParser
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
+            var raw = fileLines[i];
+            var rawTrimmed = raw.Trim();
             int currentLineNumber = i + 1;
 
             // Fine procedura - controlla SOLO i terminatori specifici della procedura
             // (Non usa "End " generico per evitare match con End If, End With, ecc.)
-            if (i > proc.LineNumber - 1 && IsProcedureEndLine(raw, proc.Kind))
+            if (i > proc.LineNumber - 1 && IsProcedureEndLine(rawTrimmed, proc.Kind))
                 break;
 
             // Rimuovi commenti (ignorando apostrofi dentro stringhe)
-            var noComment = StripInlineComment(raw).Trim();
+            var noComment = StripInlineComment(raw);
 
             // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
             noComment = MaskStringLiterals(noComment);
@@ -1303,12 +1304,13 @@ public static partial class VbParser
 
                 var tokenName = m.Value;
                 var tokenOccurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
+                var tokenStartChar = m.Index;
 
                 // Controlla se � un parametro
                 if (parameterIndex.TryGetValue(tokenName, out var parameter))
                 {
                     parameter.Used = true;
-                    parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex);
+                    parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex, tokenStartChar);
                 }
 
                 // Controlla se � una variabile locale
@@ -1319,7 +1321,7 @@ public static partial class VbParser
                         continue;
 
                     localVar.Used = true;
-                    localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex);
+                    localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex, tokenStartChar);
                 }
 
                 // Controlla se � una variabile globale del modulo (e non � shadowed)
@@ -1328,7 +1330,7 @@ public static partial class VbParser
                     if (globalVariableIndex.TryGetValue(tokenName, out var globalVar))
                     {
                         globalVar.Used = true;
-                        globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex);
+                        globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex, tokenStartChar);
                     }
                 }
 
@@ -1339,7 +1341,7 @@ public static partial class VbParser
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
                     referencedModule.Used = true;
-                    referencedModule.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, occurrenceIndex);
+                    referencedModule.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, occurrenceIndex, m.Index);
                 }
             }
 
@@ -1885,8 +1887,15 @@ public static partial class VbParser
                         if (!enumDefIndex.TryGetValue(typeToken, out var defs))
                             continue;
 
+                        var enumTokenIndex = typeMatch.Groups[1].Index;
+                        var enumOccIndex = GetOccurrenceIndex(noComment, typeToken, enumTokenIndex, i + 1);
+
                         foreach (var def in defs)
+                        {
                             enumTypeDefsInLine.Add(def);
+                            def.Used = true;
+                            def.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumTokenIndex);
+                        }
                     }
 
                     foreach (Match enumMatch in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
@@ -2089,8 +2098,15 @@ public static partial class VbParser
                         if (!enumDefIndex.TryGetValue(typeToken, out var defs))
                             continue;
 
+                        var enumTokenIndex = typeMatch.Groups[1].Index;
+                        var enumOccIndex = GetOccurrenceIndex(noComment, typeToken, enumTokenIndex, i + 1);
+
                         foreach (var def in defs)
+                        {
                             enumTypeDefsInLine.Add(def);
+                            def.Used = true;
+                            def.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumTokenIndex);
+                        }
                     }
 
                     foreach (Match enumMatch in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
@@ -2118,10 +2134,30 @@ public static partial class VbParser
                         if (!enumValueIndex.TryGetValue(token, out var enumValues))
                             continue;
 
-                        foreach (var enumValue in enumValues)
+                        var filteredEnumValues = enumValues;
+                        if (enumTypeDefsInLine.Count > 0)
+                        {
+                            filteredEnumValues = enumValues
+                                .Where(v => enumValueOwners.TryGetValue(v, out var owner) && enumTypeDefsInLine.Contains(owner))
+                                .ToList();
+                        }
+
+                        if (filteredEnumValues.Count == 0 && enumDefsInLine.Count > 0 && enumValues.Count > 1)
+                        {
+                            filteredEnumValues = enumValues
+                                .Where(v => enumValueOwners.TryGetValue(v, out var owner) && enumDefsInLine.Contains(owner))
+                                .ToList();
+                        }
+
+                        if (filteredEnumValues.Count == 0 && enumValues.Count > 1)
+                            continue;
+
+                        var occurrenceIndex = GetOccurrenceIndex(noComment, token, m.Index, i + 1);
+                        var tokenStartChar = m.Index;
+                        foreach (var enumValue in filteredEnumValues)
                         {
                             enumValue.Used = true;
-                            enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                            enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar);
                         }
                     }
 
@@ -2129,17 +2165,25 @@ public static partial class VbParser
                     {
                         if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
                         {
+                            var enumTokenIndex = noComment.IndexOf(enumName, StringComparison.OrdinalIgnoreCase);
+                            var enumOccIndex = GetOccurrenceIndex(noComment, enumName, enumTokenIndex, i + 1);
+                            var enumStartChar = enumTokenIndex;
+
+                            var valueTokenIndex = noComment.IndexOf(valueName, StringComparison.OrdinalIgnoreCase);
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, valueName, valueTokenIndex, i + 1);
+                            var tokenStartChar = valueTokenIndex;
+
                             foreach (var enumDef in enumDefs)
                             {
                                 enumDef.Used = true;
-                                enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                                enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumStartChar);
 
                                 var value = enumDef.Values.FirstOrDefault(v =>
                                     v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
                                 if (value != null)
                                 {
                                     value.Used = true;
-                                    value.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                                    value.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar);
                                 }
                             }
                         }
@@ -2224,10 +2268,11 @@ public static partial class VbParser
                             continue;
 
                         var occurrenceIndex = GetOccurrenceIndex(noComment, token, m.Index, i + 1);
+                        var tokenStartChar = m.Index;
                         foreach (var enumValue in filteredEnumValues)
                         {
                             enumValue.Used = true;
-                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex);
+                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex, tokenStartChar);
                         }
                     }
 
@@ -2235,17 +2280,25 @@ public static partial class VbParser
                     {
                         if (enumDefIndex.TryGetValue(enumName, out var enumDefs))
                         {
+                            var enumTokenIndex = noComment.IndexOf(enumName, StringComparison.OrdinalIgnoreCase);
+                            var enumOccIndex = GetOccurrenceIndex(noComment, enumName, enumTokenIndex, i + 1);
+                            var enumStartChar = enumTokenIndex;
+
+                            var valueTokenIndex = noComment.IndexOf(valueName, StringComparison.OrdinalIgnoreCase);
+                            var occurrenceIndex = GetOccurrenceIndex(noComment, valueName, valueTokenIndex, i + 1);
+                            var tokenStartChar = valueTokenIndex;
+
                             foreach (var enumDef in enumDefs)
                             {
                                 enumDef.Used = true;
-                                enumDef.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                                enumDef.References.AddLineNumber(mod.Name, prop.Name, i + 1, enumOccIndex, enumStartChar);
 
                                 var value = enumDef.Values.FirstOrDefault(v =>
                                     v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
                                 if (value != null)
                                 {
                                     value.Used = true;
-                                    value.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                                    value.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex, tokenStartChar);
                                 }
                             }
                         }
