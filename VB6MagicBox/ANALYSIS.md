@@ -119,6 +119,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **String-aware comment stripping**: comment removal ignores apostrophes inside string literals, preventing truncation of lines with text (e.g., `"E' ..."`).
 - **StartChar-first replaces**: references now carry `StartChar`, so `BuildReplaces` can apply substitutions without re-scanning the line (fallbacks only when missing).
 - **StartChar-targeted replaces**: `BuildReplaces` now uses `StartChar` for all reference categories (module members, properties, constants, enum values) before falling back to occurrence-based matches.
+- **Case-only renames**: replaces now apply even when only casing changes (case-sensitive compare), so `filterMode` → `FilterMode` is not skipped.
 - **Enum reference filtering**: member-access tokens (e.g., `Enum.Value`) are excluded from bare enum-value matches; qualified tokens record both enum/value positions.
 - **Type name normalization**: trailing single-letter `T` is stripped before appending `_T` (e.g., `ParamT` → `Param_T`).
 - **Local multi-declaration parsing**: comma-separated `Dim` declarations are split into multiple locals so all occurrences are tracked and renamed.
@@ -131,12 +132,14 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Self module references**: module references are recorded even inside their own module, so form/module names passed as values are renamed consistently.
 - **Event handler guard for double underscores**: procedures/properties with an extra underscore in the event part are treated as normal routines (PascalCase), not control/WithEvents events.
 - **Function/Property event handler guard**: control event references are only added for `Sub` handlers, avoiding false matches on `Function`/`Property` names that share control prefixes.
+- **Property global references**: global variables referenced inside `Property` blocks are now tracked with `StartChar` even when the property has no parameters.
 - **Local declaration ordering**: procedure headers keep `Attribute` lines attached; local declarations are grouped as comments → constants → static → Dim, without extra blank lines or alphabetic sorting.
 - **Spacing rules tweaks**: no blank after initial file `Attribute` block; pre-procedure comment blocks stay contiguous with a single blank line before them; no blank at the start of a procedure even if the first statement is a comment for a following block.
 - **Single-line If spacing**: single-line `If` statements always add a blank line after; they add a blank line before unless preceded by a comment.
 - **Console output styling**: `[OK]` in green, `[WARN]` in yellow, `[X]` in red, `[i]` in cyan.
 - **Control StartChar precision**: control references now carry exact `StartChar` from raw lines (indent preserved) and overwrite coarse positions when more accurate data arrives.
 - **Reference cleanup**: coarse references without `StartChar`/`OccurrenceIndex` are skipped for replaces, and precise references update earlier `-1`/incorrect entries.
+- **StartChar mismatch report**: `_CHECK_startchars.csv` is emitted when a reference has a valid `StartChar` but no replace is produced (skips `-1`).
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**

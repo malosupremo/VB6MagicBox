@@ -559,7 +559,7 @@ public static partial class VbParser
                     replacement = newName;
                 }
             }
-            if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(match.Value, replacement, StringComparison.Ordinal))
                 continue;
 
             refModule.Replaces.AddReplace(
@@ -898,7 +898,7 @@ public static partial class VbParser
             if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
                 replacement = $"{qualifier}.{newName}";
 
-            if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(match.Value, replacement, StringComparison.Ordinal))
                 continue;
 
             refModule.Replaces.AddReplace(
@@ -964,7 +964,7 @@ public static partial class VbParser
             if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
                 replacement = $"{qualifier}.{newName}";
 
-            if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(match.Value, replacement, StringComparison.Ordinal))
                 continue;
 
             refModule.Replaces.AddReplace(
