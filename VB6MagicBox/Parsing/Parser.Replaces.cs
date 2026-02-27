@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using VB6MagicBox.Models;
 
@@ -5,6 +6,39 @@ namespace VB6MagicBox.Parsing;
 
 public static partial class VbParser
 {
+    private sealed class StartCharCheckEntry
+    {
+        public string? Module { get; set; }
+        public string? Procedure { get; set; }
+        public int LineNumber { get; set; }
+        public int StartChar { get; set; }
+        public int OccurrenceIndex { get; set; }
+        public string? OldName { get; set; }
+        public string? NewName { get; set; }
+        public string? Category { get; set; }
+    }
+
+    public static void ExportStartCharChecks(string outputPath)
+    {
+        if (StartCharChecks == null || StartCharChecks.IsEmpty)
+            return;
+
+        var entries = StartCharChecks.Values
+            .OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(e => e.Procedure, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(e => e.LineNumber)
+            .ThenBy(e => e.StartChar)
+            .ToList();
+
+        using var writer = new StreamWriter(outputPath, false);
+        writer.WriteLine("Module;Procedure;LineNumber;StartChar;OccurrenceIndex;OldName;NewName;Category");
+        foreach (var entry in entries)
+        {
+            writer.WriteLine($"{entry.Module};{entry.Procedure};{entry.LineNumber};{entry.StartChar};{entry.OccurrenceIndex};{entry.OldName};{entry.NewName};{entry.Category}");
+        }
+    }
+
+    private static ConcurrentDictionary<string, StartCharCheckEntry> StartCharChecks = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Costruisce la lista di sostituzioni (Replaces) per ogni modulo basandosi su:
     /// - References già risolte (LineNumbers)
@@ -28,6 +62,7 @@ public static partial class VbParser
         Console.WriteLine();
 
         int totalReplaces = 0;
+        StartCharChecks = new ConcurrentDictionary<string, StartCharCheckEntry>(StringComparer.OrdinalIgnoreCase);
 
         // Cache delle righe dei file per evitare letture multiple
         fileCache ??= new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -311,6 +346,7 @@ public static partial class VbParser
                 continue;
 
             var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
+            var procedureProp = reference?.GetType().GetProperty("Procedure");
             var occurrenceIndexesProp = reference?.GetType().GetProperty("OccurrenceIndexes");
             var startCharsProp = reference?.GetType().GetProperty("StartChars");
 
@@ -332,12 +368,15 @@ public static partial class VbParser
                 var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
                 var startChar = (startChars != null && idx < startChars.Count) ? startChars[idx] : -1;
 
+                if (occIndex < 0 && startChar < 0)
+                    continue;
+
                 var sourceModule = GetDefiningModule(project, source!);
                 var sourceModuleInfo = project.Modules.FirstOrDefault(m =>
                     string.Equals(m.Name, sourceModule, StringComparison.OrdinalIgnoreCase));
                 var sourceModuleReferenceName = sourceModuleInfo?.ConventionalName ?? sourceModule;
 
-                int replacesBefore = isDebugSymbol && lineNum == 3146 ? refModule.Replaces.Count : 0;
+                int replacesBefore = refModule.Replaces.Count;
 
                 var referenceNewName = string.IsNullOrEmpty(referenceNewNameOverride) ? newName : referenceNewNameOverride;
                 var stringRanges = GetStringLiteralRanges(codePart);
@@ -445,6 +484,23 @@ public static partial class VbParser
                     }
 
                     refModule.Replaces.AddReplaceFromLine(codePart, lineNum, effectiveOldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
+                }
+
+                if (startChar >= 0 && refModule.Replaces.Count == replacesBefore)
+                {
+                    var refProcedureName = procedureProp?.GetValue(reference) as string;
+                    var key = $"{refModule.Name}|{refProcedureName}|{lineNum}|{startChar}|{oldName}|{category}";
+                    StartCharChecks.TryAdd(key, new StartCharCheckEntry
+                    {
+                        Module = refModule.Name,
+                        Procedure = refProcedureName,
+                        LineNumber = lineNum,
+                        StartChar = startChar,
+                        OccurrenceIndex = occIndex,
+                        OldName = oldName,
+                        NewName = referenceNewName,
+                        Category = category
+                    });
                 }
 
                 //if (isDebugSymbol && lineNum == 3146)
@@ -838,10 +894,9 @@ public static partial class VbParser
             if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
                 continue;
 
-            if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
-                continue;
-
             var replacement = newName;
+            if (!IsMemberAccessToken(codePart, match.Index) && !string.IsNullOrWhiteSpace(qualifier))
+                replacement = $"{qualifier}.{newName}";
 
             if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
                 continue;

@@ -1,4 +1,4 @@
-﻿# VB6MagicBox - Technical Summary (Copilot)
+﻿# VB6MagicBox - Technical Summary to start a new chat with github Copilot
 
 ## Purpose
 VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (types/calls/fields), build dependencies/usage, apply naming conventions, **build precise replaces**, export outputs, apply refactoring.
@@ -118,6 +118,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Screaming snake to PascalCase**: enum value naming preserves only known acronyms, so `RIC_RUN_CMD_CALLER` -> `RicRunCmdCaller`.
 - **String-aware comment stripping**: comment removal ignores apostrophes inside string literals, preventing truncation of lines with text (e.g., `"E' ..."`).
 - **StartChar-first replaces**: references now carry `StartChar`, so `BuildReplaces` can apply substitutions without re-scanning the line (fallbacks only when missing).
+- **StartChar-targeted replaces**: `BuildReplaces` now uses `StartChar` for all reference categories (module members, properties, constants, enum values) before falling back to occurrence-based matches.
 - **Enum reference filtering**: member-access tokens (e.g., `Enum.Value`) are excluded from bare enum-value matches; qualified tokens record both enum/value positions.
 - **Type name normalization**: trailing single-letter `T` is stripped before appending `_T` (e.g., `ParamT` → `Param_T`).
 - **Local multi-declaration parsing**: comma-separated `Dim` declarations are split into multiple locals so all occurrences are tracked and renamed.
@@ -129,10 +130,13 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Global constant shadowing**: global constant references are skipped when a local variable/parameter shadows the constant name.
 - **Self module references**: module references are recorded even inside their own module, so form/module names passed as values are renamed consistently.
 - **Event handler guard for double underscores**: procedures/properties with an extra underscore in the event part are treated as normal routines (PascalCase), not control/WithEvents events.
+- **Function/Property event handler guard**: control event references are only added for `Sub` handlers, avoiding false matches on `Function`/`Property` names that share control prefixes.
 - **Local declaration ordering**: procedure headers keep `Attribute` lines attached; local declarations are grouped as comments → constants → static → Dim, without extra blank lines or alphabetic sorting.
 - **Spacing rules tweaks**: no blank after initial file `Attribute` block; pre-procedure comment blocks stay contiguous with a single blank line before them; no blank at the start of a procedure even if the first statement is a comment for a following block.
 - **Single-line If spacing**: single-line `If` statements always add a blank line after; they add a blank line before unless preceded by a comment.
 - **Console output styling**: `[OK]` in green, `[WARN]` in yellow, `[X]` in red, `[i]` in cyan.
+- **Control StartChar precision**: control references now carry exact `StartChar` from raw lines (indent preserved) and overwrite coarse positions when more accurate data arrives.
+- **Reference cleanup**: coarse references without `StartChar`/`OccurrenceIndex` are skipped for replaces, and precise references update earlier `-1`/incorrect entries.
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**
@@ -157,6 +161,3 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 6. **Lazy References** - optionally skip reference tracking if not needed
 7. **Streaming parser** - process line-by-line without loading entire file in memory
 
-## IDE Memory Note (2024)
-- Visual Studio memory usage can grow significantly during long analysis/debug sessions.
-- Symptom: RAM grows until VS becomes sluggish; the reliable workaround is restarting Visual Studio and opening a new chat/session.

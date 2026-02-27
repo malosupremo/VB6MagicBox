@@ -327,6 +327,7 @@ public class Program
         var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
         var shadowsCsv = Path.Combine(vbpDir, $"{vbpName}._TODO_shadows.csv");
         var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
+        var startCharCheckCsv = Path.Combine(vbpDir, $"{vbpName}._CHECK_startchars.csv");
         var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
 
         Console.WriteLine();
@@ -337,6 +338,7 @@ public class Program
         VbParser.ExportRenameCsv(project, renameCsv);
         VbParser.ExportShadowsCsv(project, shadowsCsv);
         VbParser.ExportLineReplaceJson(project, lineReplaceJson);
+        VbParser.ExportStartCharChecks(startCharCheckCsv);
         VbParser.ExportMermaid(project, mermaidOut);
 
         Console.WriteLine($"   JSON completo:     {jsonOut}");
@@ -344,6 +346,7 @@ public class Program
         Console.WriteLine($"   CSV rename:        {renameCsv}");
         Console.WriteLine($"   CSV shadows:       {shadowsCsv}");
         Console.WriteLine($"   JSON linereplace:  {lineReplaceJson}");
+        Console.WriteLine($"   CSV startchars:    {startCharCheckCsv}");
         Console.WriteLine($"   Mermaid:           {mermaidOut}");
     }
 }

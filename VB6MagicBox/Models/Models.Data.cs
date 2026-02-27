@@ -346,6 +346,15 @@ public static class VbReferenceListExtensions
               break;
             }
             if (existing.LineNumbers[i] == lineNumber &&
+                startChar >= 0 &&
+                existingOccurrence == occurrenceIndex &&
+                existingStartChar != startChar)
+            {
+              existing.StartChars[i] = startChar;
+              alreadyExists = true;
+              break;
+            }
+            if (existing.LineNumbers[i] == lineNumber &&
                 i < existing.OccurrenceIndexes.Count &&
                 existing.OccurrenceIndexes[i] == occurrenceIndex &&
                 existingStartChar == startChar)

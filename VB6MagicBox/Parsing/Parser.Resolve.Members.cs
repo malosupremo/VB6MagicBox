@@ -66,7 +66,7 @@ public static partial class VbParser
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
+            var raw = fileLines[i];
 
             // Rimuovi commenti (ignorando apostrofi dentro stringhe)
             var noComment = StripInlineComment(raw).Trim();
@@ -385,7 +385,7 @@ public static partial class VbParser
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
+            var raw = fileLines[i];
 
             // Rimuovi commenti (ignorando apostrofi dentro stringhe)
             var noComment = StripInlineComment(raw).Trim();
@@ -675,7 +675,7 @@ public static partial class VbParser
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
+            var raw = fileLines[i];
 
             // Fine procedura - controlla SOLO i terminatori specifici della procedura
             // (Non usa "End " generico per evitare match con End If, End With, ecc.)
@@ -700,7 +700,8 @@ public static partial class VbParser
                         {
                             var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
                             var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
-                            MarkControlAsUsed(meControl, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, withQualified.Right, occurrenceIndex, tokenIndex);
+                            MarkControlAsUsed(meControl, mod.Name, proc.Name, i + 1, occurrenceIndex, startChar);
                         }
                     }
                     else if (TryResolveModule(withQualified.Left, proc, mod, moduleByName, out var targetModule))
@@ -712,7 +713,8 @@ public static partial class VbParser
                         {
                             var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
                             var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
-                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, withQualified.Right, occurrenceIndex, tokenIndex);
+                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex, startChar);
                         }
                     }
                 }
@@ -723,7 +725,8 @@ public static partial class VbParser
                     {
                         var tokenIndex = noComment.IndexOf(token, StringComparison.OrdinalIgnoreCase);
                         var occurrenceIndex = GetOccurrenceIndex(noComment, token, tokenIndex, i + 1);
-                        MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                        var startChar = GetTokenStartChar(raw, token, occurrenceIndex, tokenIndex);
+                        MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex, startChar);
                     }
                 }
                 if (!string.IsNullOrEmpty(withExpr))
@@ -765,7 +768,8 @@ public static partial class VbParser
                         if (controlIndex.TryGetValue(controlName, out var meControl))
                         {
                             var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
-                            MarkControlAsUsed(meControl, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, controlName, occurrenceIndex, controlNameIndex);
+                            MarkControlAsUsed(meControl, mod.Name, proc.Name, i + 1, occurrenceIndex, startChar);
                         }
 
                         continue;
@@ -779,7 +783,8 @@ public static partial class VbParser
                         foreach (var control in controls)
                         {
                             var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
-                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, controlName, occurrenceIndex, controlNameIndex);
+                            MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex, startChar);
                         }
 
                         continue;
@@ -789,7 +794,8 @@ public static partial class VbParser
                 if (controlIndex.TryGetValue(moduleName, out var sameModuleControl))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, moduleName, moduleIndex, i + 1);
-                    MarkControlAsUsed(sameModuleControl, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                    var startChar = GetTokenStartChar(raw, moduleName, occurrenceIndex, moduleIndex);
+                    MarkControlAsUsed(sameModuleControl, mod.Name, proc.Name, i + 1, occurrenceIndex, startChar);
                 }
             }
             foreach (Match match in ReTokens.Matches(noComment))
@@ -804,7 +810,8 @@ public static partial class VbParser
                 if (controlIndex.TryGetValue(token, out var control))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, token, match.Index, i + 1);
-                    MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex);
+                    var startChar = GetTokenStartChar(raw, token, occurrenceIndex, match.Index);
+                    MarkControlAsUsed(control, mod.Name, proc.Name, i + 1, occurrenceIndex, startChar);
                 }
             }
         }
@@ -845,7 +852,7 @@ public static partial class VbParser
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
+            var raw = fileLines[i];
 
             if (i > prop.LineNumber - 1 && IsProcedureEndLine(raw, prop.Kind))
                 break;
@@ -867,7 +874,8 @@ public static partial class VbParser
                         {
                             var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
                             var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
-                            MarkControlAsUsed(meControl, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, withQualified.Right, occurrenceIndex, tokenIndex);
+                            MarkControlAsUsed(meControl, mod.Name, prop.Name, i + 1, occurrenceIndex, startChar);
                         }
                     }
                     else if (TryResolveModule(withQualified.Left, prop, mod, moduleByName, out var targetModule))
@@ -879,7 +887,8 @@ public static partial class VbParser
                         {
                             var tokenIndex = noComment.IndexOf(withQualified.Right, StringComparison.OrdinalIgnoreCase);
                             var occurrenceIndex = GetOccurrenceIndex(noComment, withQualified.Right, tokenIndex, i + 1);
-                            MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, withQualified.Right, occurrenceIndex, tokenIndex);
+                            MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex, startChar);
                         }
                     }
                 }
@@ -890,7 +899,8 @@ public static partial class VbParser
                     {
                         var tokenIndex = noComment.IndexOf(token, StringComparison.OrdinalIgnoreCase);
                         var occurrenceIndex = GetOccurrenceIndex(noComment, token, tokenIndex, i + 1);
-                        MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                        var startChar = GetTokenStartChar(raw, token, occurrenceIndex, tokenIndex);
+                        MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex, startChar);
                     }
                 }
                 if (!string.IsNullOrEmpty(withExpr))
@@ -932,7 +942,8 @@ public static partial class VbParser
                         if (controlIndex.TryGetValue(controlName, out var meControl))
                         {
                             var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
-                            MarkControlAsUsed(meControl, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, controlName, occurrenceIndex, controlNameIndex);
+                            MarkControlAsUsed(meControl, mod.Name, prop.Name, i + 1, occurrenceIndex, startChar);
                         }
 
                         continue;
@@ -946,7 +957,8 @@ public static partial class VbParser
                         foreach (var control in controls)
                         {
                             var occurrenceIndex = GetOccurrenceIndex(noComment, controlName, controlNameIndex, i + 1);
-                            MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                            var startChar = GetTokenStartChar(raw, controlName, occurrenceIndex, controlNameIndex);
+                            MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex, startChar);
                         }
 
                         continue;
@@ -956,7 +968,8 @@ public static partial class VbParser
                 if (controlIndex.TryGetValue(moduleName, out var sameModuleControl))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, moduleName, moduleIndex, i + 1);
-                    MarkControlAsUsed(sameModuleControl, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                    var startChar = GetTokenStartChar(raw, moduleName, occurrenceIndex, moduleIndex);
+                    MarkControlAsUsed(sameModuleControl, mod.Name, prop.Name, i + 1, occurrenceIndex, startChar);
                 }
             }
             foreach (Match match in ReTokens.Matches(noComment))
@@ -971,7 +984,8 @@ public static partial class VbParser
                 if (controlIndex.TryGetValue(token, out var control))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, token, match.Index, i + 1);
-                    MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex);
+                    var startChar = GetTokenStartChar(raw, token, occurrenceIndex, match.Index);
+                    MarkControlAsUsed(control, mod.Name, prop.Name, i + 1, occurrenceIndex, startChar);
                 }
             }
         }
@@ -1362,12 +1376,15 @@ public static partial class VbParser
         VbProperty prop,
         string[] fileLines)
     {
-        if (prop.Parameters == null || prop.Parameters.Count == 0)
-            return;
-
-        var parameterIndex = prop.Parameters.ToDictionary(
+        var parameters = prop.Parameters ?? new List<VbParameter>();
+        var parameterIndex = parameters.ToDictionary(
             p => p.Name,
             p => p,
+            StringComparer.OrdinalIgnoreCase);
+
+        var globalVariableIndex = mod.GlobalVariables.ToDictionary(
+            v => v.Name,
+            v => v,
             StringComparer.OrdinalIgnoreCase);
 
         if (prop.StartLine <= 0)
@@ -1384,11 +1401,11 @@ public static partial class VbParser
 
         for (int i = startIndex; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
+            var raw = fileLines[i];
             int currentLineNumber = i + 1;
 
             // Rimuovi commenti (ignorando apostrofi dentro stringhe)
-            var noComment = StripInlineComment(raw).Trim();
+            var noComment = StripInlineComment(raw);
 
             // Rimuovi stringhe per evitare di catturare nomi dentro stringhe
             noComment = MaskStringLiterals(noComment);
@@ -1405,6 +1422,14 @@ public static partial class VbParser
                     parameter.Used = true;
                     var tokenOccurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
                     parameter.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, tokenOccurrenceIndex, m.Index);
+                }
+
+                if (!parameterIndex.ContainsKey(tokenName) &&
+                    globalVariableIndex.TryGetValue(tokenName, out var globalVar))
+                {
+                    globalVar.Used = true;
+                    var tokenOccurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
+                    globalVar.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, tokenOccurrenceIndex, m.Index);
                 }
             }
         }
@@ -1432,10 +1457,10 @@ public static partial class VbParser
 
         for (int i = startIndex + 1; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
+            var raw = fileLines[i];
             int currentLineNumber = i + 1;
 
-            var noComment = StripInlineComment(raw).Trim();
+            var noComment = StripInlineComment(raw);
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
@@ -1475,8 +1500,8 @@ public static partial class VbParser
 
         for (int i = startIndex + 1; i < endIndex; i++)
         {
-            var raw = fileLines[i].Trim();
-            var noComment = StripInlineComment(raw).Trim();
+            var raw = fileLines[i];
+            var noComment = StripInlineComment(raw);
 
             noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
@@ -1829,6 +1854,39 @@ public static partial class VbParser
             index--;
 
         return index >= 0 && line[index] == '.';
+    }
+
+    private static int GetStartCharFromRaw(string rawLine, string token, int fallbackIndex)
+    {
+        if (string.IsNullOrEmpty(rawLine) || string.IsNullOrEmpty(token))
+            return fallbackIndex;
+
+        var startIndex = Math.Max(0, fallbackIndex);
+        if (startIndex > rawLine.Length)
+            startIndex = rawLine.Length;
+
+        var index = rawLine.IndexOf(token, startIndex, StringComparison.OrdinalIgnoreCase);
+        if (index < 0 && startIndex > 0)
+            index = rawLine.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+
+        return index >= 0 ? index : fallbackIndex;
+    }
+
+    private static int GetTokenStartChar(string rawLine, string token, int occurrenceIndex, int fallbackIndex)
+    {
+        if (string.IsNullOrEmpty(rawLine) || string.IsNullOrEmpty(token))
+            return fallbackIndex;
+
+        var matches = Regex.Matches(rawLine, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+        if (matches.Count > 0)
+        {
+            if (occurrenceIndex > 0 && occurrenceIndex <= matches.Count)
+                return matches[occurrenceIndex - 1].Index;
+
+            return matches[0].Index;
+        }
+
+        return GetStartCharFromRaw(rawLine, token, fallbackIndex);
     }
 
     private static bool TryGetRaiseEventName(string line, out string eventName)

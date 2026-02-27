@@ -31,10 +31,10 @@ public static partial class VbParser
   /// <summary>
   /// Marca un controllo come usato e aggiunge reference con line numbers
   /// </summary>
-  private static void MarkControlAsUsed(VbControl control, string moduleName, string procedureName, int lineNumber, int occurrenceIndex = -1)
+  private static void MarkControlAsUsed(VbControl control, string moduleName, string procedureName, int lineNumber, int occurrenceIndex = -1, int startChar = -1)
   {
     control.Used = true;
-    control.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex);
+    control.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
   }
 
   private static string StripInlineComment(string line)

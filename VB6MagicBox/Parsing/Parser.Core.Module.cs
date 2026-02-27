@@ -288,37 +288,6 @@ public static partial class VbParser
         FixReturnTypeLineNumberForMultilineSignature(currentProc, originalLines, originalLineNumber);
         mod.Procedures.Add(currentProc);
 
-        // Traccia event handler per controlli (es. Command1_Click)
-        foreach (var control in mod.Controls)
-        {
-          var prefix = $"{control.Name}_";
-          if (currentProc.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-          {
-            // Questa procedura è un event handler di questo controllo
-            var existingRef = control.References.FirstOrDefault(r =>
-              string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-              string.Equals(r.Procedure, currentProc.Name, StringComparison.OrdinalIgnoreCase));
-
-            if (existingRef != null)
-            {
-              // Aggiungi il line number se non presente
-              if (!existingRef.LineNumbers.Contains(originalLineNumber))
-                existingRef.LineNumbers.Add(originalLineNumber);
-            }
-            else
-            {
-              // Crea nuova Reference con line number
-              control.References.Add(new VbReference
-              {
-                Module = mod.Name,
-                Procedure = currentProc.Name,
-                LineNumbers = new List<int> { originalLineNumber }
-              });
-            }
-            break; // Un controllo può avere un solo event handler con questo nome
-          }
-        }
-
         continue;
       }
 
@@ -418,37 +387,6 @@ public static partial class VbParser
           StartLine = originalLineNumber
         };
         // NON aggiungere: mod.Procedures.Add(currentProc); ? Questo causava le duplicazioni!
-
-        // Traccia event handler per controlli (es. Command1_Click)
-        foreach (var control in mod.Controls)
-        {
-          var prefix = $"{control.Name}_";
-          if (currentProperty.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-          {
-            // Questa proprietà è un event handler di questo controllo
-            var existingRef = control.References.FirstOrDefault(r =>
-              string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
-              string.Equals(r.Procedure, currentProperty.Name, StringComparison.OrdinalIgnoreCase));
-
-            if (existingRef != null)
-            {
-              // Aggiungi il line number se non presente
-              if (!existingRef.LineNumbers.Contains(originalLineNumber))
-                existingRef.LineNumbers.Add(originalLineNumber);
-            }
-            else
-            {
-              // Crea nuova Reference con line number
-              control.References.Add(new VbReference
-              {
-                Module = mod.Name,
-                Procedure = currentProperty.Name,
-                LineNumbers = new List<int> { originalLineNumber }
-              });
-            }
-            break; // Un controllo può avere un solo event handler con questo nome
-          }
-        }
 
         continue;
       }
