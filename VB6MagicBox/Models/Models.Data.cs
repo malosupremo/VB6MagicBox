@@ -232,7 +232,6 @@ public class VbReference
   /// -1 significa "prima occorrenza" o "tutte le occorrenze sulla riga"
   /// </summary>
   [JsonPropertyOrder(3)]
-  [JsonIgnore]
   public List<int> OccurrenceIndexes { get; set; } = new();
 }
 

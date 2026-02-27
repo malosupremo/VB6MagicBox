@@ -325,7 +325,7 @@ public class Program
         var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
         var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
         var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
-        var shadowsCsv = Path.Combine(vbpDir, $"{vbpName}.shadows.csv");
+        var shadowsCsv = Path.Combine(vbpDir, $"{vbpName}._TODO_shadows.csv");
         var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
         var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
 

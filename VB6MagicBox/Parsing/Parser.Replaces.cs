@@ -438,6 +438,15 @@ public static partial class VbParser
                 continue;
 
             var replacement = IsQualifiedEnumReference(codePart, match.Index) ? newName : qualifiedName;
+            if (!string.Equals(replacement, newName, StringComparison.OrdinalIgnoreCase))
+            {
+                var ownerName = GetEnumOwnerFromQualifiedName(qualifiedName);
+                if (!string.IsNullOrWhiteSpace(ownerName) &&
+                    !ContainsTokenInLine(codePart, ownerName))
+                {
+                    replacement = newName;
+                }
+            }
             if (string.Equals(match.Value, replacement, StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -472,6 +481,26 @@ public static partial class VbParser
             index--;
 
         return end > index;
+    }
+
+    private static string? GetEnumOwnerFromQualifiedName(string qualifiedName)
+    {
+        if (string.IsNullOrWhiteSpace(qualifiedName))
+            return null;
+
+        var dotIndex = qualifiedName.IndexOf('.');
+        if (dotIndex <= 0)
+            return null;
+
+        return qualifiedName.Substring(0, dotIndex);
+    }
+
+    private static bool ContainsTokenInLine(string line, string token)
+    {
+        if (string.IsNullOrWhiteSpace(line) || string.IsNullOrWhiteSpace(token))
+            return false;
+
+        return Regex.IsMatch(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
     }
 
     private static void AddConstantReferenceReplaces(

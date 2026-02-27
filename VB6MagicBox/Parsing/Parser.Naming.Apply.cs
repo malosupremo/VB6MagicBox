@@ -34,6 +34,7 @@ public static partial class VbParser
               : rawName;
           pascalName = "Frm" + ToPascalCase(baseName);
         }
+
         else if (mod.Kind.Equals("cls", StringComparison.OrdinalIgnoreCase))
         {
           var baseName = rawName.StartsWith("cls", StringComparison.OrdinalIgnoreCase)
@@ -576,6 +577,33 @@ public static partial class VbParser
             localScopeNamesUsed.Add(c.ConventionalName);
 
           }
+        }
+
+        var procedureNameSet = new HashSet<string>(
+            mod.Procedures.Select(p => p.ConventionalName).Where(n => !string.IsNullOrWhiteSpace(n)),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var e in mod.Enums)
+        {
+          if (string.IsNullOrWhiteSpace(e.ConventionalName))
+            continue;
+
+          if (!procedureNameSet.Contains(e.ConventionalName))
+            continue;
+
+          globalNamesUsed.Remove(e.ConventionalName);
+          var adjustedName = ResolveNameConflict(e.ConventionalName + "Enum", globalNamesUsed);
+
+          if (IsReservedWord(adjustedName))
+          {
+            e.ConventionalName = e.Name;
+          }
+          else
+          {
+            e.ConventionalName = adjustedName;
+          }
+
+          globalNamesUsed.Add(e.ConventionalName);
         }
 
         // Properties - con conflict resolution (separata dalle procedure)

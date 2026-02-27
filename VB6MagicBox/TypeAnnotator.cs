@@ -129,7 +129,7 @@ public static class TypeAnnotator
             totalChanges += changes;
         }
 
-        var missingTypesPath = Path.Combine(vbpDir, $"{vbpName}.missingTypes.csv");
+        var missingTypesPath = Path.Combine(vbpDir, $"{vbpName}._TODO_missingTypes.csv");
         ExportMissingTypesCsv(missingTypesPath, missingTypes);
 
         Console.WriteLine();

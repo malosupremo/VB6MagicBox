@@ -556,7 +556,7 @@ public static partial class VbParser
 
                     if (classIndex.TryGetValue(baseTypeName, out var classModule))
                     {
-                        // Cerca prima nelle propriet� della classe
+                        // Cerca prima nelle proprietà della classe
                         var classProp = classModule.Properties.FirstOrDefault(p =>
                             MatchesName(p.Name, p.ConventionalName, fieldName));
                         if (classProp != null)
@@ -1815,6 +1815,31 @@ public static partial class VbParser
 
     private static void MarkUsedEnumValues(VbProject project, Dictionary<string, string[]> fileCache = null)
     {
+        var enumValueOwners = project.Modules
+            .SelectMany(m => m.Enums.SelectMany(e => e.Values.Select(v => new { Enum = e, Value = v })))
+            .ToDictionary(x => x.Value, x => x.Enum);
+
+        var enumDefIndex = new Dictionary<string, List<VbEnumDef>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var enumDef in project.Modules.SelectMany(m => m.Enums))
+        {
+            if (!enumDefIndex.TryGetValue(enumDef.Name, out var nameList))
+            {
+                nameList = new List<VbEnumDef>();
+                enumDefIndex[enumDef.Name] = nameList;
+            }
+            nameList.Add(enumDef);
+
+            if (!string.IsNullOrWhiteSpace(enumDef.ConventionalName))
+            {
+                if (!enumDefIndex.TryGetValue(enumDef.ConventionalName, out var convList))
+                {
+                    convList = new List<VbEnumDef>();
+                    enumDefIndex[enumDef.ConventionalName] = convList;
+                }
+                convList.Add(enumDef);
+            }
+        }
+
         // Indicizza tutti i valori enum per nome
         var allEnumValues = new Dictionary<string, List<VbEnumValue>>(StringComparer.OrdinalIgnoreCase);
 
@@ -1852,6 +1877,28 @@ public static partial class VbParser
                     var noComment = StripInlineComment(line);
                     noComment = MaskStringLiterals(noComment);
 
+                    var enumDefsInLine = new HashSet<VbEnumDef>();
+                    var enumTypeDefsInLine = new HashSet<VbEnumDef>();
+                    foreach (Match typeMatch in Regex.Matches(noComment, @"\bAs\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase))
+                    {
+                        var typeToken = typeMatch.Groups[1].Value;
+                        if (!enumDefIndex.TryGetValue(typeToken, out var defs))
+                            continue;
+
+                        foreach (var def in defs)
+                            enumTypeDefsInLine.Add(def);
+                    }
+
+                    foreach (Match enumMatch in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
+                    {
+                        var enumToken = enumMatch.Groups[1].Value;
+                        if (!enumDefIndex.TryGetValue(enumToken, out var defs))
+                            continue;
+
+                        foreach (var def in defs)
+                            enumDefsInLine.Add(def);
+                    }
+
                     // Cerca ogni valore enum nel codice
                     foreach (var kvp in allEnumValues)
                     {
@@ -1861,11 +1908,48 @@ public static partial class VbParser
                         // Usa word boundary per evitare match parziali
                         if (ContainsToken(noComment, enumValueName))
                         {
-                            // Marca tutti i valori enum con questo nome (potrebbero esserci duplicati in enum diversi)
-                            foreach (var enumValue in enumValues)
+                            var filteredEnumValues = enumValues;
+                            if (enumTypeDefsInLine.Count > 0)
+                            {
+                                filteredEnumValues = enumValues
+                                    .Where(v => enumValueOwners.TryGetValue(v, out var owner) && enumTypeDefsInLine.Contains(owner))
+                                    .ToList();
+                            }
+
+                            if (filteredEnumValues.Count == 0 && enumDefsInLine.Count > 0 && enumValues.Count > 1)
+                            {
+                                filteredEnumValues = enumValues
+                                    .Where(v => enumValueOwners.TryGetValue(v, out var owner) && enumDefsInLine.Contains(owner))
+                                    .ToList();
+                            }
+
+                            if (filteredEnumValues.Count == 0 && enumValues.Count > 1)
+                                continue;
+
+                            foreach (var enumValue in filteredEnumValues)
                             {
                                 enumValue.Used = true;
                                 enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+                            }
+                        }
+                    }
+
+                    foreach (var (enumName, valueName) in EnumerateQualifiedTokens(noComment))
+                    {
+                        if (!enumDefIndex.TryGetValue(enumName, out var enumDefs))
+                            continue;
+
+                        foreach (var enumDef in enumDefs)
+                        {
+                            enumDef.Used = true;
+                            enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1);
+
+                            var value = enumDef.Values.FirstOrDefault(v =>
+                                v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
+                            if (value != null)
+                            {
+                                value.Used = true;
+                                value.References.AddLineNumber(mod.Name, proc.Name, i + 1);
                             }
                         }
                     }
@@ -1932,15 +2016,35 @@ public static partial class VbParser
 
     private static void ResolveEnumValueReferences(VbProject project, Dictionary<string, string[]> fileCache)
     {
+        var enumValueOwners = project.Modules
+            .SelectMany(m => m.Enums.SelectMany(e => e.Values.Select(v => new { Enum = e, Value = v })))
+            .ToDictionary(x => x.Value, x => x.Enum);
+
         var enumValueIndex = project.Modules
             .SelectMany(m => m.Enums.SelectMany(e => e.Values))
             .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
-        var enumDefIndex = project.Modules
-            .SelectMany(m => m.Enums)
-            .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+        var enumDefIndex = new Dictionary<string, List<VbEnumDef>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var enumDef in project.Modules.SelectMany(m => m.Enums))
+        {
+            if (!enumDefIndex.TryGetValue(enumDef.Name, out var nameList))
+            {
+                nameList = new List<VbEnumDef>();
+                enumDefIndex[enumDef.Name] = nameList;
+            }
+            nameList.Add(enumDef);
+
+            if (!string.IsNullOrWhiteSpace(enumDef.ConventionalName))
+            {
+                if (!enumDefIndex.TryGetValue(enumDef.ConventionalName, out var convList))
+                {
+                    convList = new List<VbEnumDef>();
+                    enumDefIndex[enumDef.ConventionalName] = convList;
+                }
+                convList.Add(enumDef);
+            }
+        }
 
         foreach (var mod in project.Modules)
         {
@@ -1977,10 +2081,38 @@ public static partial class VbParser
 
                     noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
+                    var enumDefsInLine = new HashSet<VbEnumDef>();
+                    var enumTypeDefsInLine = new HashSet<VbEnumDef>();
+                    foreach (Match typeMatch in Regex.Matches(noComment, @"\bAs\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase))
+                    {
+                        var typeToken = typeMatch.Groups[1].Value;
+                        if (!enumDefIndex.TryGetValue(typeToken, out var defs))
+                            continue;
+
+                        foreach (var def in defs)
+                            enumTypeDefsInLine.Add(def);
+                    }
+
+                    foreach (Match enumMatch in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
+                    {
+                        var enumToken = enumMatch.Groups[1].Value;
+                        if (!enumDefIndex.TryGetValue(enumToken, out var defs))
+                            continue;
+
+                        foreach (var def in defs)
+                            enumDefsInLine.Add(def);
+                    }
+
                     foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
                     {
                         var token = m.Groups[1].Value;
                         if (shadowedNames.Contains(token))
+                            continue;
+
+                        if (IsMemberAccessToken(noComment, m.Index))
+                            continue;
+
+                        if (IsMemberAccessToken(noComment, m.Index))
                             continue;
 
                         if (!enumValueIndex.TryGetValue(token, out var enumValues))
@@ -2042,6 +2174,28 @@ public static partial class VbParser
 
                     noComment = Regex.Replace(noComment, @"""[^""]*""", "\"\"");
 
+                    var enumDefsInLine = new HashSet<VbEnumDef>();
+                    var enumTypeDefsInLine = new HashSet<VbEnumDef>();
+                    foreach (Match typeMatch in Regex.Matches(noComment, @"\bAs\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase))
+                    {
+                        var typeToken = typeMatch.Groups[1].Value;
+                        if (!enumDefIndex.TryGetValue(typeToken, out var defs))
+                            continue;
+
+                        foreach (var def in defs)
+                            enumTypeDefsInLine.Add(def);
+                    }
+
+                    foreach (Match enumMatch in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
+                    {
+                        var enumToken = enumMatch.Groups[1].Value;
+                        if (!enumDefIndex.TryGetValue(enumToken, out var defs))
+                            continue;
+
+                        foreach (var def in defs)
+                            enumDefsInLine.Add(def);
+                    }
+
                     foreach (Match m in Regex.Matches(noComment, @"\b([A-Za-z_]\w*)\b"))
                     {
                         var token = m.Groups[1].Value;
@@ -2051,10 +2205,29 @@ public static partial class VbParser
                         if (!enumValueIndex.TryGetValue(token, out var enumValues))
                             continue;
 
-                        foreach (var enumValue in enumValues)
+                        var filteredEnumValues = enumValues;
+                        if (enumTypeDefsInLine.Count > 0)
+                        {
+                            filteredEnumValues = enumValues
+                                .Where(v => enumValueOwners.TryGetValue(v, out var owner) && enumTypeDefsInLine.Contains(owner))
+                                .ToList();
+                        }
+
+                        if (filteredEnumValues.Count == 0 && enumDefsInLine.Count > 0 && enumValues.Count > 1)
+                        {
+                            filteredEnumValues = enumValues
+                                .Where(v => enumValueOwners.TryGetValue(v, out var owner) && enumDefsInLine.Contains(owner))
+                                .ToList();
+                        }
+
+                        if (filteredEnumValues.Count == 0 && enumValues.Count > 1)
+                            continue;
+
+                        var occurrenceIndex = GetOccurrenceIndex(noComment, token, m.Index, i + 1);
+                        foreach (var enumValue in filteredEnumValues)
                         {
                             enumValue.Used = true;
-                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1);
+                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex);
                         }
                     }
 

@@ -639,6 +639,42 @@ public static partial class VbParser
     var json = JsonSerializer.Serialize(replaceData, options);
     File.WriteAllText(outputPath, json);
   }
+  // ---------------------------------------------------------
+  // ESPORTAZIONE CSV TODO ENUM PREFIX
+  // ---------------------------------------------------------
+
+  public static void ExportEnumPrefixTodoCsv(VbProject project, string outputPath)
+  {
+    var csvLines = new List<string>
+    {
+      "Module,Path,LineNumber,OldText,NewText,Category"
+    };
+
+    foreach (var mod in project.Modules)
+    {
+      foreach (var replace in mod.Replaces)
+      {
+        if (!string.Equals(replace.Category, "EnumValue_Reference", StringComparison.OrdinalIgnoreCase))
+          continue;
+
+        if (string.IsNullOrEmpty(replace.NewText) || !replace.NewText.Contains('.'))
+          continue;
+
+        if (!string.IsNullOrEmpty(replace.OldText) && replace.OldText.Contains('.'))
+          continue;
+
+        csvLines.Add(
+          $"\"{EscapeCsv(mod.Name)}\"," +
+          $"\"{EscapeCsv(mod.Path ?? string.Empty)}\"," +
+          $"{replace.LineNumber}," +
+          $"\"{EscapeCsv(replace.OldText ?? string.Empty)}\"," +
+          $"\"{EscapeCsv(replace.NewText ?? string.Empty)}\"," +
+          $"\"{EscapeCsv(replace.Category ?? string.Empty)}\"");
+      }
+    }
+
+    File.WriteAllText(outputPath, string.Join(Environment.NewLine, csvLines));
+  }
 
   // ---------------------------------------------------------
   // ESPORTAZIONE MERMAID
