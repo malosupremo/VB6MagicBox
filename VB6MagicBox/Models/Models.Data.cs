@@ -286,6 +286,52 @@ public class DependencyEdge
 /// </summary>
 public static class VbReferenceListExtensions
 {
+  private sealed class ReferenceDebugEntry
+  {
+    public string? Module { get; set; }
+    public string? Procedure { get; set; }
+    public int LineNumber { get; set; }
+    public int OccurrenceIndex { get; set; }
+    public int StartChar { get; set; }
+    public List<VbReference>? ReferenceList { get; set; }
+    public string? SymbolKind { get; set; }
+    public string? SymbolName { get; set; }
+    public string? SourceMember { get; set; }
+    public string? SourceFile { get; set; }
+    public int SourceLine { get; set; }
+  }
+
+  private static System.Collections.Concurrent.ConcurrentBag<ReferenceDebugEntry> ReferenceDebugEntries = new();
+
+  public static void ResetReferenceDebugEntries()
+  {
+    ReferenceDebugEntries = new System.Collections.Concurrent.ConcurrentBag<ReferenceDebugEntry>();
+  }
+
+  public static void ExportReferenceDebugCsv(string outputPath, VbProject? project = null)
+  {
+    if (ReferenceDebugEntries.IsEmpty)
+      return;
+
+    var lines = new List<string>
+    {
+      "SymbolKind,SymbolName,Module,Procedure,LineNumber,OccurrenceIndex,StartChar,SourceMember,SourceFile,SourceLine"
+    };
+
+    foreach (var entry in ReferenceDebugEntries.OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
+                                               .ThenBy(e => e.Procedure, StringComparer.OrdinalIgnoreCase)
+                                               .ThenBy(e => e.LineNumber)
+                                               .ThenBy(e => e.StartChar))
+    {
+      var symbolKind = entry.SymbolKind ?? string.Empty;
+      var symbolName = entry.SymbolName ?? string.Empty;
+
+      lines.Add($"\"{symbolKind}\",\"{symbolName}\",\"{entry.Module}\",\"{entry.Procedure}\",{entry.LineNumber},{entry.OccurrenceIndex},{entry.StartChar},\"{entry.SourceMember}\",\"{entry.SourceFile}\",{entry.SourceLine}");
+    }
+
+    File.WriteAllText(outputPath, string.Join(Environment.NewLine, lines));
+  }
+
   /// <summary>
   /// Adds <paramref name="lineNumber"/> to an existing reference entry keyed by
   /// Module+Procedure, or creates a new entry when none exists.
@@ -297,7 +343,11 @@ public static class VbReferenceListExtensions
       string procedure,
       int lineNumber,
       int occurrenceIndex = -1,
-      int startChar = -1)
+      int startChar = -1,
+      object? owner = null,
+      [System.Runtime.CompilerServices.CallerMemberName] string sourceMember = "",
+      [System.Runtime.CompilerServices.CallerFilePath] string sourceFile = "",
+      [System.Runtime.CompilerServices.CallerLineNumber] int sourceLine = 0)
   {
     lock (references)
     {
@@ -383,7 +433,61 @@ public static class VbReferenceListExtensions
         }
         references.Add(newRef);
       }
+
+      if (lineNumber > 0 && (occurrenceIndex < 0 || startChar < 0))
+      {
+        var symbolKind = string.Empty;
+        var symbolName = string.Empty;
+        if (owner != null)
+        {
+          (symbolKind, symbolName) = GetOwnerInfo(owner);
+        }
+
+        ReferenceDebugEntries.Add(new ReferenceDebugEntry
+        {
+          Module = module,
+          Procedure = normalizedProcedure,
+          LineNumber = lineNumber,
+          OccurrenceIndex = occurrenceIndex,
+          StartChar = startChar,
+          ReferenceList = references,
+          SymbolKind = symbolKind,
+          SymbolName = symbolName,
+          SourceMember = sourceMember,
+          SourceFile = string.IsNullOrWhiteSpace(sourceFile) ? string.Empty : Path.GetFileName(sourceFile),
+          SourceLine = sourceLine
+        });
+      }
     }
+  }
+
+  private sealed class ReferenceListComparer : IEqualityComparer<List<VbReference>>
+  {
+    public bool Equals(List<VbReference>? x, List<VbReference>? y)
+      => ReferenceEquals(x, y);
+
+    public int GetHashCode(List<VbReference> obj)
+      => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
+  }
+
+  private static (string Kind, string Name) GetOwnerInfo(object owner)
+  {
+    return owner switch
+    {
+      VbModule m => ("Module", m.Name),
+      VbVariable v => ("Variable", v.Name),
+      VbConstant c => ("Constant", c.Name ?? string.Empty),
+      VbTypeDef t => ("Type", t.Name ?? string.Empty),
+      VbField f => ("Field", f.Name ?? string.Empty),
+      VbEnumDef e => ("Enum", e.Name ?? string.Empty),
+      VbEnumValue ev => ("EnumValue", ev.Name ?? string.Empty),
+      VbControl c => ("Control", c.Name ?? string.Empty),
+      VbProperty p => ($"Property{p.Kind}", p.Name ?? string.Empty),
+      VbParameter p => ("Parameter", p.Name ?? string.Empty),
+      VbProcedure p => (p.Kind ?? "Procedure", p.Name ?? string.Empty),
+      VbEvent e => ("Event", e.Name ?? string.Empty),
+      _ => (string.Empty, string.Empty)
+    };
   }
 }
 

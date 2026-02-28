@@ -34,7 +34,7 @@ public static partial class VbParser
   private static void MarkControlAsUsed(VbControl control, string moduleName, string procedureName, int lineNumber, int occurrenceIndex = -1, int startChar = -1)
   {
     control.Used = true;
-    control.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
+    control.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar, owner: control);
   }
 
   private static string StripInlineComment(string line)

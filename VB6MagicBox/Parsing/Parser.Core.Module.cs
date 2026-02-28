@@ -70,12 +70,7 @@ public static partial class VbParser
         mod.Name = mvbName.Groups[1].Value;
 
         //introduco la primissima reference
-        mod.References.Add(new VbReference()
-        {
-          Module = mod.Name,
-          Procedure = string.Empty,
-          LineNumbers = new List<int> { originalLineNumber }
-        });
+        mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber);
         continue;
       }
 
@@ -90,12 +85,7 @@ public static partial class VbParser
           mod.Name = mFormBegin.Groups[1].Value;
 
           //introduco la primissima reference
-          mod.References.Add(new VbReference()
-          {
-            Module = mod.Name,
-            Procedure = string.Empty,
-            LineNumbers = new List<int> { originalLineNumber }
-          });
+          mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber);
           continue;
         }
       }
@@ -328,17 +318,12 @@ public static partial class VbParser
             {
               // Aggiungi il line number se non presente
               if (!existingRef.LineNumbers.Contains(originalLineNumber))
-                existingRef.LineNumbers.Add(originalLineNumber);
+                control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber);
             }
             else
             {
               // Crea nuova Reference con line number
-              control.References.Add(new VbReference
-              {
-                Module = mod.Name,
-                Procedure = currentProc.Name,
-                LineNumbers = new List<int> { originalLineNumber }
-              });
+              control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber);
             }
             break; // Un controllo può avere un solo event handler con questo nome
           }
@@ -371,6 +356,43 @@ public static partial class VbParser
         FixParameterTypeLineNumbersForMultilineSignature(currentProperty, originalLines, originalLineNumber);
         FixReturnTypeLineNumberForMultilineSignature(currentProperty, originalLines, originalLineNumber);
         mod.Properties.Add(currentProperty);
+
+        var propertyStartChar = raw.IndexOf(currentProperty.Name, StringComparison.OrdinalIgnoreCase);
+        if (propertyStartChar < 0)
+            propertyStartChar = line.IndexOf(currentProperty.Name, StringComparison.OrdinalIgnoreCase);
+        if (propertyStartChar < 0)
+        {
+            var match = Regex.Match(raw, $@"\b{Regex.Escape(currentProperty.Name)}\b", RegexOptions.IgnoreCase);
+            if (match.Success)
+                propertyStartChar = match.Index;
+        }
+
+        currentProperty.References.AddLineNumber(
+            mod.Name,
+            currentProperty.Name,
+            originalLineNumber,
+            1,
+            propertyStartChar);
+
+        if (propertyStartChar >= 0)
+        {
+          foreach (var otherProperty in mod.Properties)
+          {
+            if (otherProperty == currentProperty ||
+                !string.Equals(otherProperty.Name, currentProperty.Name, StringComparison.OrdinalIgnoreCase))
+              continue;
+
+            if (otherProperty.References.Any(r => r.LineNumbers.Contains(originalLineNumber)))
+            {
+              otherProperty.References.AddLineNumber(
+                  mod.Name,
+                  otherProperty.Name,
+                  originalLineNumber,
+                  1,
+                  propertyStartChar);
+            }
+          }
+        }
 
         // Imposta currentProc SOLO per tracciare la fine della Property (NON aggiungere a mod.Procedures)
         // Questo è un oggetto temporaneo usato solo per il parsing interno

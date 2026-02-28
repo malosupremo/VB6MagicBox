@@ -406,11 +406,7 @@ public static partial class VbParser
                   continue;
 
                 ctrl.Used = true;
-                ctrl.References.Add(new VbReference
-                {
-                  Module = mod.Name,
-                  Procedure = proc.Name
-                });
+                ctrl.References.AddLineNumber(mod.Name, proc.Name, proc.LineNumber);
 
                 conventionalName = ctrl.ConventionalName + "_" + ToPascalCase(eventPart); // Use ConventionalName of Control!
                 isEvent = true;

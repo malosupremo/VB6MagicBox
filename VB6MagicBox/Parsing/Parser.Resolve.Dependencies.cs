@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -135,6 +136,7 @@ public static partial class VbParser
                         lineNum++;
                         if (line.IndexOf(v.Name, StringComparison.OrdinalIgnoreCase) >= 0)
                         {
+                            var nameMatches = Regex.Matches(line, $@"\b{Regex.Escape(v.Name)}\b", RegexOptions.IgnoreCase);
                             v.Used = true;
                             // Trova la procedura corretta che contiene questa riga
                             var procAtLine = searchMod.GetProcedureAtLine(lineNum);
@@ -153,7 +155,14 @@ public static partial class VbParser
                                     continue;
                                 }
 
-                                v.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
+                                if (nameMatches.Count > 0)
+                                {
+                                    for (int matchIndex = 0; matchIndex < nameMatches.Count; matchIndex++)
+                                    {
+                                        var match = nameMatches[matchIndex];
+                                        v.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum, matchIndex + 1, match.Index, owner: v);
+                                    }
+                                }
                             }
                             else
                             {
@@ -166,7 +175,14 @@ public static partial class VbParser
                                     if (hasParamWithSameName)
                                         continue;
 
-                                    v.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
+                                    if (nameMatches.Count > 0)
+                                    {
+                                        for (int matchIndex = 0; matchIndex < nameMatches.Count; matchIndex++)
+                                        {
+                                            var match = nameMatches[matchIndex];
+                                            v.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum, matchIndex + 1, match.Index, owner: v);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -202,6 +218,7 @@ public static partial class VbParser
                         lineNum++;
                         if (line.IndexOf(c.Name, StringComparison.OrdinalIgnoreCase) >= 0)
                         {
+                            var nameMatches = Regex.Matches(line, $@"\b{Regex.Escape(c.Name)}\b", RegexOptions.IgnoreCase);
                             c.Used = true;
                             // Trova la procedura corretta che contiene questa riga
                             var procAtLine = searchMod.GetProcedureAtLine(lineNum);
@@ -222,7 +239,14 @@ public static partial class VbParser
                                     continue;
                                 }
 
-                                c.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
+                                if (nameMatches.Count > 0)
+                                {
+                                    for (int matchIndex = 0; matchIndex < nameMatches.Count; matchIndex++)
+                                    {
+                                        var match = nameMatches[matchIndex];
+                                        c.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum, matchIndex + 1, match.Index, owner: c);
+                                    }
+                                }
                             }
                             else
                             {
@@ -235,11 +259,25 @@ public static partial class VbParser
                                     if (hasParamWithSameName)
                                         continue;
 
-                                    c.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
+                                    if (nameMatches.Count > 0)
+                                    {
+                                        for (int matchIndex = 0; matchIndex < nameMatches.Count; matchIndex++)
+                                        {
+                                            var match = nameMatches[matchIndex];
+                                            c.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum, matchIndex + 1, match.Index, owner: c);
+                                        }
+                                    }
                                 }
                                 else
                                 {
-                                    c.References.AddLineNumber(searchMod.Name, string.Empty, lineNum);
+                                    if (nameMatches.Count > 0)
+                                    {
+                                        for (int matchIndex = 0; matchIndex < nameMatches.Count; matchIndex++)
+                                        {
+                                            var match = nameMatches[matchIndex];
+                                            c.References.AddLineNumber(searchMod.Name, string.Empty, lineNum, matchIndex + 1, match.Index, owner: c);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -272,7 +310,16 @@ public static partial class VbParser
                         lineNum++;
                         if (line.IndexOf(prop.Name, StringComparison.OrdinalIgnoreCase) >= 0)
                         {
+                            var propDeclMatch = Regex.Match(line, @"^\s*(Public|Private|Friend)?\s*(Static\s+)?Property\s+(Get|Let|Set)\s+(\w+)", RegexOptions.IgnoreCase);
+                            if (propDeclMatch.Success &&
+                                propDeclMatch.Groups[4].Value.Equals(prop.Name, StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(prop.Kind, propDeclMatch.Groups[3].Value, StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+
                             prop.Used = true;
+                            var nameMatches = Regex.Matches(line, $@"\b{Regex.Escape(prop.Name)}\b", RegexOptions.IgnoreCase);
                             var procAtLine = searchMod.GetProcedureAtLine(lineNum);
                             if (procAtLine != null)
                             {
@@ -284,20 +331,45 @@ public static partial class VbParser
                                 if (hasLocalWithSameName)
                                     continue;
 
-                                prop.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum);
+                                if (propDeclMatch.Success)
+                                {
+                                    prop.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum, 1, propDeclMatch.Groups[4].Index, owner: prop);
+                                }
+                                else if (nameMatches.Count > 0)
+                                {
+                                    for (int matchIndex = 0; matchIndex < nameMatches.Count; matchIndex++)
+                                    {
+                                        var match = nameMatches[matchIndex];
+                                        prop.References.AddLineNumber(searchMod.Name, procAtLine.Name, lineNum, matchIndex + 1, match.Index, owner: prop);
+                                    }
+                                }
                             }
                             else
                             {
                                 var propAtLine = searchMod.Properties.FirstOrDefault(p => p.ContainsLine(lineNum));
                                 if (propAtLine != null)
                                 {
+                                    if (!string.Equals(propAtLine.Kind, prop.Kind, StringComparison.OrdinalIgnoreCase))
+                                        continue;
+
                                     var hasParamWithSameName = propAtLine.Parameters.Any(p =>
                                         p.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase));
 
                                     if (hasParamWithSameName)
                                         continue;
 
-                                    prop.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum);
+                                    if (propDeclMatch.Success)
+                                    {
+                                        prop.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum, 1, propDeclMatch.Groups[4].Index, owner: prop);
+                                    }
+                                    else if (nameMatches.Count > 0)
+                                    {
+                                        for (int matchIndex = 0; matchIndex < nameMatches.Count; matchIndex++)
+                                        {
+                                            var match = nameMatches[matchIndex];
+                                            prop.References.AddLineNumber(searchMod.Name, propAtLine.Name, lineNum, matchIndex + 1, match.Index, owner: prop);
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -202,7 +202,7 @@ public static partial class VbParser
     }
 
     referencedType.Used = true;
-    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, effectiveOccurrenceIndex, startChar);
+    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, effectiveOccurrenceIndex, startChar, owner: referencedType);
   }
 
   private static int GetTokenIndex(string line, string token, int occurrenceIndex)
@@ -337,7 +337,7 @@ public static partial class VbParser
     }
 
     classModule.Used = true;
-    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, effectiveOccurrenceIndex, startChar);
+    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, effectiveOccurrenceIndex, startChar, owner: classModule);
   }
 
   // ---------------------------------------------------------
@@ -419,14 +419,14 @@ public static partial class VbParser
       {
         t.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        t.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
+        t.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar, owner: t);
       }
 
       if (allEnums.TryGetValue(clean, out var e))
       {
         e.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        e.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
+        e.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar, owner: e);
       }
 
       // Traccia anche le classi usate come tipo
@@ -434,7 +434,7 @@ public static partial class VbParser
       {
         cls.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        cls.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar);
+        cls.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar, owner: cls);
       }
     }
 

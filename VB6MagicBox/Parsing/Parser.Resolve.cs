@@ -763,8 +763,8 @@ public static partial class VbParser
 
                     // PASS 1.5b: Generico - cerca object.method dove object è in env (è una variabile nota)
                     // Pattern: qualsiasi IDENTIFIER.IDENTIFIER OVUNQUE nella riga
-                    var trimmedLineForMethods = noCommentLine.Trim();
-                    foreach (Match genericMethodMatch in ReObjectMethod.Matches(trimmedLineForMethods))
+                    var methodLine = noCommentLine;
+                    foreach (Match genericMethodMatch in ReObjectMethod.Matches(methodLine))
                     {
                         var objName = genericMethodMatch.Groups[1].Value;
                         var methodName = genericMethodMatch.Groups[2].Value;
@@ -781,7 +781,7 @@ public static partial class VbParser
                         {
                             referencedModule.Used = true;
                             var moduleOccurrenceIndex = GetOccurrenceIndex(noCommentLine, objName, genericMethodMatch.Groups[1].Index, li + 1);
-                            referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1, moduleOccurrenceIndex, genericMethodMatch.Groups[1].Index);
+                            referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1, moduleOccurrenceIndex, genericMethodMatch.Groups[1].Index, owner: referencedModule);
 
                             var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1);
                             var moduleProc = referencedModule.Procedures.FirstOrDefault(p =>
@@ -789,7 +789,7 @@ public static partial class VbParser
                             if (moduleProc != null)
                             {
                                 moduleProc.Used = true;
-                                moduleProc.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index);
+                                moduleProc.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index, owner: moduleProc);
                             }
                             else
                             {
@@ -798,7 +798,7 @@ public static partial class VbParser
                                 if (moduleProp != null)
                                 {
                                     moduleProp.Used = true;
-                                    moduleProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index);
+                                    moduleProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index, owner: moduleProp);
                                 }
                             }
                         }
@@ -826,7 +826,7 @@ public static partial class VbParser
                                 classProp.Used = true;
 
                                 var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1);
-                                classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index);
+                                classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index, owner: classProp);
 
                                 if (!alreadyInCalls)
                                 {
@@ -905,6 +905,8 @@ public static partial class VbParser
                 ResolveParameterReferences(mod, prop, fileLines);
                 ResolvePropertyReturnReferences(mod, prop, fileLines);
             }
+
+            PrunePropertyReferenceOverlaps(mod, fileLines);
         });
 
         Console.WriteLine(); // Vai a capo dopo il progress del parsing

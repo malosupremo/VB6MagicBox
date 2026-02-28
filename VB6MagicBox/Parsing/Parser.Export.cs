@@ -482,6 +482,92 @@ public static partial class VbParser
   }
 
   // ---------------------------------------------------------
+  // ESPORTAZIONE CSV REFERENCES CON -1 (diagnostica)
+  // ---------------------------------------------------------
+
+  public static void ExportReferenceIssuesCsv(VbProject project, string outputPath)
+  {
+    var csvLines = new List<string>
+    {
+      "SymbolKind,SymbolName,ReferenceModule,ReferenceProcedure,LineNumber,OccurrenceIndex,StartChar"
+    };
+
+    static void AddReferenceIssues(List<string> lines, string kind, string? name, IEnumerable<VbReference> references)
+    {
+      foreach (var reference in references)
+      {
+        for (int i = 0; i < reference.LineNumbers.Count; i++)
+        {
+          var lineNumber = reference.LineNumbers[i];
+          var occurrenceIndex = i < reference.OccurrenceIndexes.Count ? reference.OccurrenceIndexes[i] : -1;
+          var startChar = i < reference.StartChars.Count ? reference.StartChars[i] : -1;
+
+          if (occurrenceIndex >= 0 && startChar >= 0)
+            continue;
+
+          lines.Add(
+            $"\"{EscapeCsv(kind)}\",\"{EscapeCsv(name ?? string.Empty)}\",\"{EscapeCsv(reference.Module ?? string.Empty)}\",\"{EscapeCsv(reference.Procedure ?? string.Empty)}\",{lineNumber},{occurrenceIndex},{startChar}");
+        }
+      }
+    }
+
+    foreach (var mod in project.Modules)
+    {
+      AddReferenceIssues(csvLines, "Module", mod.Name, mod.References);
+
+      foreach (var v in mod.GlobalVariables)
+        AddReferenceIssues(csvLines, "GlobalVariable", v.Name, v.References);
+
+      foreach (var c in mod.Constants)
+        AddReferenceIssues(csvLines, "Constant", c.Name, c.References);
+
+      foreach (var t in mod.Types)
+      {
+        AddReferenceIssues(csvLines, "Type", t.Name, t.References);
+        foreach (var f in t.Fields)
+          AddReferenceIssues(csvLines, "Field", f.Name, f.References);
+      }
+
+      foreach (var e in mod.Enums)
+      {
+        AddReferenceIssues(csvLines, "Enum", e.Name, e.References);
+        foreach (var v in e.Values)
+          AddReferenceIssues(csvLines, "EnumValue", v.Name, v.References);
+      }
+
+      foreach (var ctrl in mod.Controls)
+        AddReferenceIssues(csvLines, "Control", ctrl.Name, ctrl.References);
+
+      foreach (var prop in mod.Properties)
+      {
+        AddReferenceIssues(csvLines, $"Property{prop.Kind}", prop.Name, prop.References);
+        foreach (var param in prop.Parameters)
+          AddReferenceIssues(csvLines, "PropertyParameter", param.Name, param.References);
+      }
+
+      foreach (var proc in mod.Procedures)
+      {
+        AddReferenceIssues(csvLines, proc.Kind ?? "Procedure", proc.Name, proc.References);
+        foreach (var param in proc.Parameters)
+          AddReferenceIssues(csvLines, "Parameter", param.Name, param.References);
+        foreach (var localVar in proc.LocalVariables)
+          AddReferenceIssues(csvLines, "LocalVariable", localVar.Name, localVar.References);
+        foreach (var localConst in proc.Constants)
+          AddReferenceIssues(csvLines, "LocalConstant", localConst.Name, localConst.References);
+      }
+
+      foreach (var ev in mod.Events)
+      {
+        AddReferenceIssues(csvLines, "Event", ev.Name, ev.References);
+        foreach (var param in ev.Parameters)
+          AddReferenceIssues(csvLines, "EventParameter", param.Name, param.References);
+      }
+    }
+
+    File.WriteAllText(outputPath, string.Join(Environment.NewLine, csvLines));
+  }
+
+  // ---------------------------------------------------------
   // ESPORTAZIONE CSV SHADOWS (locali che nascondono oggetti esterni)
   // ---------------------------------------------------------
 

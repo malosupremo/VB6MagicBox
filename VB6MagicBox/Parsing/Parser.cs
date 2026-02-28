@@ -23,6 +23,8 @@ public static partial class VbParser
         if (string.IsNullOrWhiteSpace(vbpPath))
             throw new ArgumentException("Percorso VBP non valido.", nameof(vbpPath));
 
+        VbReferenceListExtensions.ResetReferenceDebugEntries();
+
         var stopwatch = Stopwatch.StartNew();
 
         Console.WriteLine();
