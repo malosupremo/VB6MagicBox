@@ -533,6 +533,31 @@ public static class CodeFormatter
                 continue;
             }
 
+            if (inProcedure && !inProcHeaderGroup)
+            {
+                var prevNonBlank = PrevNonBlank(result);
+                if (!string.IsNullOrEmpty(prevNonBlank) &&
+                    (IsDimOrStatic(prevNonBlank) || IsConst(prevNonBlank)) &&
+                    !IsDimOrStatic(trimmed) && !IsConst(trimmed) &&
+                    !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
+                    !IsCommentLine(trimmed))
+                {
+                    result.Add(string.Empty);
+                }
+            }
+
+            if (IsLoopStart(trimmed))
+            {
+                var prevNonBlank = PrevNonBlank(result);
+                if (!string.IsNullOrEmpty(prevNonBlank) &&
+                    !IsBlockStart(prevNonBlank) &&
+                    !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
+                    !IsCommentLine(prevNonBlank))
+                {
+                    result.Add(string.Empty);
+                }
+            }
+
             result.Add(normalized);
 
             if (IsCommentLine(trimmed) && result.Count > 0)
@@ -562,6 +587,13 @@ public static class CodeFormatter
                         result.Add(string.Empty);
                 }
                 else if (IsNextLine(trimmed))
+                {
+                    var nextNonBlank = NextNonBlank(lines, i + 1);
+                    if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank) &&
+                        !IsClosingComment(nextNonBlank))
+                        result.Add(string.Empty);
+                }
+                else if (IsEndWith(trimmed))
                 {
                     var nextNonBlank = NextNonBlank(lines, i + 1);
                     if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank) &&
@@ -707,6 +739,11 @@ public static class CodeFormatter
         return trimmed.StartsWith("Next", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsEndWith(string line)
+    {
+        return line.TrimStart().StartsWith("End With", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool RequiresBlankAfterEnd(string line)
     {
         var trimmed = line.TrimStart();
@@ -726,6 +763,13 @@ public static class CodeFormatter
     private static bool IsSelectCaseEnd(string line) => line.TrimStart().StartsWith("End Select", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsCaseLine(string line) => line.TrimStart().StartsWith("Case ", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLoopStart(string line)
+    {
+        var trimmed = line.TrimStart();
+        return trimmed.StartsWith("For ", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Do", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool IsSingleLineIf(string line)
     {

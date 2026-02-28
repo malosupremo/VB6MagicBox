@@ -72,6 +72,26 @@ Form e classi ricevono un prefisso fisso (`Frm` / `Cls`) **prima** di applicare 
 Un segmento (parte separata da `_`) viene convertito in PascalCase se **tutte le sue lettere sono maiuscole** (le cifre non partecipano al controllo). La conversione applica una regex che processa ogni _run di lettere_ separatamente, lasciando le cifre invariate nella loro posizione:
 
 ```
+
+---
+
+## 20. Output diagnostici (CSV)
+
+| File | Contenuto | Note |
+|------|-----------|------|
+| `*.disambiguations.csv` | Solo righe dove è stato applicato un prefisso di disambiguazione | Ordinato per `Module` e `LineNumber` |
+| `*.shadows.csv` | Conflitti locali vs simboli esterni | Include `LineNumber`, `LocalType`, `ShadowedType` |
+
+---
+
+## 21. Spacing rules (formatter)
+
+| Regola | Dettaglio |
+|--------|-----------|
+| Property Get/Let/Set | Blocchi con stesso nome restano adiacenti, senza riga vuota |
+| Post dichiarazioni | Dopo l’ultimo `Dim/Static/Const` va sempre una riga vuota |
+| Prima dei loop | `For/Do` hanno riga vuota se preceduti da istruzioni non‑blocco |
+| `End With` | Inserisce riga vuota se non seguito da un altro `End ...` |
 "SQM242HND" → run "SQM" → "Sqm", cifre "242" invariate, run "HND" → "Hnd" → "Sqm242Hnd"
 "EXEC1"     → run "EXEC" → "Exec", cifra "1" invariata                → "Exec1"
 "MAX"       → run "MAX" → "Max"                                        → "Max"

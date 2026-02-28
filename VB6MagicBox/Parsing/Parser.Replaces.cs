@@ -138,6 +138,7 @@ public static partial class VbParser
         var allSymbols = new List<(string? oldName, string? newName, string category, object source, string? definingModule, VbEnumDef? enumOwner, bool qualifyEnumValueRefs, bool forceQualification)>();
 
         var constantConflicts = project.Modules
+            .Where(m => !m.IsClass)
             .SelectMany(m => m.Constants.Select(c => new { Module = m, Constant = c }))
             .Where(x => !string.IsNullOrWhiteSpace(x.Constant.ConventionalName) && IsPublicVisibility(x.Constant.Visibility))
             .GroupBy(x => x.Constant.ConventionalName, StringComparer.OrdinalIgnoreCase)
@@ -146,6 +147,7 @@ public static partial class VbParser
             .ToHashSet();
 
         var procedureConflicts = project.Modules
+            .Where(m => !m.IsClass)
             .SelectMany(m => m.Procedures.Select(p => new { Module = m, Proc = p }))
             .Where(x => !string.IsNullOrWhiteSpace(x.Proc.ConventionalName) && IsPublicVisibility(x.Proc.Visibility))
             .GroupBy(x => x.Proc.ConventionalName, StringComparer.OrdinalIgnoreCase)
@@ -154,6 +156,7 @@ public static partial class VbParser
             .ToHashSet();
 
         var propertyConflicts = project.Modules
+            .Where(m => !m.IsClass)
             .SelectMany(m => m.Properties.Select(p => new { Module = m, Prop = p }))
             .Where(x => !string.IsNullOrWhiteSpace(x.Prop.ConventionalName) && IsPublicVisibility(x.Prop.Visibility))
             .GroupBy(x => x.Prop.ConventionalName, StringComparer.OrdinalIgnoreCase)
@@ -450,19 +453,42 @@ public static partial class VbParser
 
         if (entry.ForceQualification && string.Equals(entry.Category, "Procedure", StringComparison.OrdinalIgnoreCase))
         {
+            var isSameModule = string.Equals(entry.RefModule.Name, sourceModule, StringComparison.OrdinalIgnoreCase);
+            var isAttributeLine = codePart.TrimStart().StartsWith("Attribute ", StringComparison.OrdinalIgnoreCase);
+            if (isSameModule || isAttributeLine)
+            {
+                AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
+                    entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier: null, sourceModule, sourceModuleReferenceName,
+                    forceQualification: false, qualifiedName: referenceNewName);
+                return;
+            }
+
+            var procAtLine = entry.RefModule.GetProcedureAtLine(entry.LineNumber);
+            if (procAtLine != null && MatchesName(procAtLine.Name, procAtLine.ConventionalName, entry.OldName))
+            {
+                AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
+                    entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier: null, sourceModule, sourceModuleReferenceName,
+                    forceQualification: false, qualifiedName: referenceNewName);
+                return;
+            }
+
             AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, qualifiedReferenceName,
                 entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, sourceModuleReferenceName, sourceModule, sourceModuleReferenceName,
                 entry.ForceQualification, qualifiedReferenceName);
             return;
         }
 
-        if (entry.Source is VbProperty)
+        if (entry.Source is VbProperty prop)
         {
-            var shouldQualify = entry.ForceQualification || ShouldQualifyPropertyReference(entry.RefModule, entry.LineNumber, referenceNewName);
+            var isPropertyScope = entry.RefModule.Properties.Any(p => p.ContainsLine(entry.LineNumber)) ||
+                                  IsInsidePropertyBlock(fileLines, entry.LineNumber);
+            var shouldQualify = !isPropertyScope &&
+                                (entry.ForceQualification || ShouldQualifyPropertyReference(entry.RefModule, entry.LineNumber, referenceNewName));
             var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, entry.RefModule, entry.RefModule.Name, shouldQualify);
+            var recordDisambiguation = !isPropertyScope;
             AddPropertyReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
                 entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, propertyQualifier,
-                entry.ForceQualification, qualifiedReferenceName);
+                entry.ForceQualification, qualifiedReferenceName, recordDisambiguation);
             return;
         }
 
@@ -726,7 +752,7 @@ public static partial class VbParser
                     var shouldQualify = ShouldQualifyPropertyReference(refModule, lineNum, referenceNewName);
                     var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, refModule, refModuleName, shouldQualify);
                     AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, propertyQualifier,
-                        forceQualification: false, qualifiedName: referenceNewName);
+                        forceQualification: false, qualifiedName: referenceNewName, recordDisambiguation: true);
                 }
                 else if (source is VbVariable variable && IsGlobalVariable(project, sourceModule, variable))
                 {
@@ -1234,7 +1260,8 @@ public static partial class VbParser
         bool allowStringReplace,
         string? qualifier,
         bool forceQualification,
-        string qualifiedName)
+        string qualifiedName,
+        bool recordDisambiguation)
     {
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
         var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
@@ -1266,7 +1293,7 @@ public static partial class VbParser
             if (string.Equals(match.Value, replacement, StringComparison.Ordinal))
                 continue;
 
-            if (forceQualification &&
+            if (recordDisambiguation && forceQualification &&
                 string.Equals(replacement, qualifiedName, StringComparison.OrdinalIgnoreCase) &&
                 !IsMemberAccessToken(codePart, match.Index))
             {
@@ -1380,6 +1407,27 @@ public static partial class VbParser
             QualifiedName = qualifiedName,
             LineNumber = lineNumber
         });
+    }
+
+    private static bool IsInsidePropertyBlock(string[]? lines, int lineNumber)
+    {
+        if (lines == null || lineNumber <= 0 || lineNumber > lines.Length)
+            return false;
+
+        for (int i = lineNumber - 1; i >= 0; i--)
+        {
+            var trimmed = StripInlineComment(lines[i]).TrimStart();
+            if (string.IsNullOrWhiteSpace(trimmed))
+                continue;
+
+            if (trimmed.StartsWith("End Property", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (Regex.IsMatch(trimmed, @"^(Public|Private|Friend)?\s*(Static\s+)?Property\s+(Get|Let|Set)\b", RegexOptions.IgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool ShouldSkipEnumQualification(
