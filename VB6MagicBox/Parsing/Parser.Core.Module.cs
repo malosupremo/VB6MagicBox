@@ -70,7 +70,8 @@ public static partial class VbParser
         mod.Name = mvbName.Groups[1].Value;
 
         //introduco la primissima reference
-        mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, owner: mod);
+        var moduleStartChar = line.IndexOf(mod.Name, StringComparison.OrdinalIgnoreCase);
+        mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, 1, moduleStartChar, owner: mod);
         continue;
       }
 
@@ -85,7 +86,8 @@ public static partial class VbParser
           mod.Name = mFormBegin.Groups[1].Value;
 
           //introduco la primissima reference
-          mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, owner: mod);
+          var formStartChar = line.IndexOf(mod.Name, StringComparison.OrdinalIgnoreCase);
+          mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, 1, formStartChar, owner: mod);
           continue;
         }
       }

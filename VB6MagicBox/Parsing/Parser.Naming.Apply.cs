@@ -199,7 +199,7 @@ public static partial class VbParser
           // Constants: intelligentemente converte PascalCase ? SCREAMING_SNAKE_CASE
           // ItemUAObjListener ? ITEM_UA_OBJ_LISTENER
           // RIC_AL_PDxI1_LOWVOLTAGE ? RIC_AL_PDXI1_LOWVOLTAGE (preserva underscore)
-          var conventionalName = ToScreamingSnakeCase(c.Name);
+          var conventionalName = ToScreamingSnakeCase(NormalizeConstantName(c.Name));
           c.ConventionalName = ResolveNameConflict(conventionalName, globalNamesUsed);
           globalNamesUsed.Add(c.ConventionalName);
 
@@ -568,7 +568,7 @@ public static partial class VbParser
           // Costanti locali
           foreach (var c in proc.Constants)
           {
-            var constantConventionalName = ToScreamingSnakeCase(c.Name);
+            var constantConventionalName = ToScreamingSnakeCase(NormalizeConstantName(c.Name));
             c.ConventionalName = ResolveNameConflict(constantConventionalName, localScopeNamesUsed);
             localScopeNamesUsed.Add(c.ConventionalName);
 

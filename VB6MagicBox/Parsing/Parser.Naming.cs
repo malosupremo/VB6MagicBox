@@ -267,6 +267,16 @@ public static partial class VbParser
             return expectedPrefix + nameToFix;
         }
 
+        private static string NormalizeConstantName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+
+            if (name.Length > 1 && name[0] == 'c' && char.IsUpper(name[1]))
+                return name.Substring(1);
+
+            return name;
+        }
+
         private static bool IsHungarianM(string name)
         {
             if (string.IsNullOrEmpty(name)) return false;

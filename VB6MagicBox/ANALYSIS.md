@@ -140,6 +140,11 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Control StartChar precision**: control references now carry exact `StartChar` from raw lines (indent preserved) and overwrite coarse positions when more accurate data arrives.
 - **Reference cleanup**: coarse references without `StartChar`/`OccurrenceIndex` are skipped for replaces, and precise references update earlier `-1`/incorrect entries.
 - **StartChar mismatch report**: `_CHECK_startchars.csv` is emitted when a reference has a valid `StartChar` but no replace is produced (skips `-1`).
+- **Reference debug export**: `*.refdebug.csv` now includes `SymbolKind/SymbolName` captured at insertion time (no post-search), plus caller source location for any `-1` entries.
+- **Reference issues export**: `*.refissues.csv` lists every reference still containing `-1` to drive cleanup.
+- **Dependencies scan precision**: variables/constants/properties found by `BuildDependenciesAndUsage` now record `OccurrenceIndex` + `StartChar` and owner info.
+- **Qualified enum references**: `Enum.Value` matches use a pair regex to avoid false hits like `AdvancedFeatures` and capture correct positions.
+- **Frame control prefix**: `Frame` controls starting with `frX` preserve the `fr` prefix (e.g., `frVariable` -> `fraFrVariable`).
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**
