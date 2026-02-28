@@ -15,7 +15,8 @@ public static partial class VbParser
         string NewName,
         string Category,
         object Source,
-        string? ReferenceNewNameOverride);
+        string? ReferenceNewNameOverride,
+        bool ForceQualification);
     private sealed class StartCharCheckEntry
     {
         public string? Module { get; set; }
@@ -26,6 +27,16 @@ public static partial class VbParser
         public string? OldName { get; set; }
         public string? NewName { get; set; }
         public string? Category { get; set; }
+    }
+
+    private sealed class DisambiguationEntry
+    {
+        public string? Module { get; set; }
+        public string? SymbolKind { get; set; }
+        public string? Name { get; set; }
+        public string? ConventionalName { get; set; }
+        public string? QualifiedName { get; set; }
+        public int LineNumber { get; set; }
     }
 
     public static void ExportStartCharChecks(string outputPath)
@@ -45,7 +56,26 @@ public static partial class VbParser
         }
     }
 
+    public static void ExportDisambiguations(string outputPath)
+    {
+        var entries = DisambiguationEntries
+            .OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(e => e.LineNumber)
+            .ThenBy(e => e.SymbolKind, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        using var writer = new StreamWriter(outputPath, false);
+        writer.WriteLine("Module;LineNumber;SymbolKind;Name;ConventionalName;QualifiedName");
+        foreach (var entry in entries)
+        {
+            writer.WriteLine($"{entry.Module};{entry.LineNumber};{entry.SymbolKind};{entry.Name};{entry.ConventionalName};{entry.QualifiedName}");
+        }
+    }
+
     private static ConcurrentDictionary<string, StartCharCheckEntry> StartCharChecks = new(StringComparer.OrdinalIgnoreCase);
+    private static ConcurrentBag<DisambiguationEntry> DisambiguationEntries = new();
+    private static ConcurrentDictionary<string, byte> DisambiguationKeys = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Costruisce la lista di sostituzioni (Replaces) per ogni modulo basandosi su:
     /// - References già risolte (LineNumbers)
@@ -70,6 +100,8 @@ public static partial class VbParser
 
         int totalReplaces = 0;
         StartCharChecks = new ConcurrentDictionary<string, StartCharCheckEntry>(StringComparer.OrdinalIgnoreCase);
+        DisambiguationEntries = new ConcurrentBag<DisambiguationEntry>();
+        DisambiguationKeys = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
 
         // Cache delle righe dei file per evitare letture multiple
         fileCache ??= new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -89,7 +121,7 @@ public static partial class VbParser
         var enumValueConflicts = new HashSet<VbEnumValue>();
 
         var enumValueGroups = project.Modules
-            .SelectMany(m => m.Enums.SelectMany(e => e.Values.Select(v => new { Enum = e, Value = v })))
+            .SelectMany(m => m.Enums.SelectMany(e => e.Values.Select(v => new { Module = m, Enum = e, Value = v })))
             .GroupBy(x => x.Value.ConventionalName, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Select(x => x.Enum.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
             .ToList();
@@ -103,7 +135,35 @@ public static partial class VbParser
             }
         }
 
-        var allSymbols = new List<(string? oldName, string? newName, string category, object source, string? definingModule, VbEnumDef? enumOwner, bool qualifyEnumValueRefs)>();
+        var allSymbols = new List<(string? oldName, string? newName, string category, object source, string? definingModule, VbEnumDef? enumOwner, bool qualifyEnumValueRefs, bool forceQualification)>();
+
+        var constantConflicts = project.Modules
+            .SelectMany(m => m.Constants.Select(c => new { Module = m, Constant = c }))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Constant.ConventionalName) && IsPublicVisibility(x.Constant.Visibility))
+            .GroupBy(x => x.Constant.ConventionalName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Select(x => x.Module.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+            .SelectMany(g => g.Select(x => x.Constant))
+            .ToHashSet();
+
+        var procedureConflicts = project.Modules
+            .SelectMany(m => m.Procedures.Select(p => new { Module = m, Proc = p }))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Proc.ConventionalName) && IsPublicVisibility(x.Proc.Visibility))
+            .GroupBy(x => x.Proc.ConventionalName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Select(x => x.Module.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+            .SelectMany(g => g.Select(x => x.Proc))
+            .ToHashSet();
+
+        var propertyConflicts = project.Modules
+            .SelectMany(m => m.Properties.Select(p => new { Module = m, Prop = p }))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Prop.ConventionalName) && IsPublicVisibility(x.Prop.Visibility))
+            .GroupBy(x => x.Prop.ConventionalName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Select(x => x.Module.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+            .SelectMany(g => g.Select(x => x.Prop))
+            .ToHashSet();
+
+        var disambiguationKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // DisambiguationEntries are populated only when a qualified replacement is actually applied.
+
 
         foreach (var module in project.Modules)
         {
@@ -111,72 +171,72 @@ public static partial class VbParser
                 continue;
 
             if (!module.IsConventional)
-                allSymbols.Add((module.Name, module.ConventionalName, "Module", module, module.Name, null, false));
+                allSymbols.Add((module.Name, module.ConventionalName, "Module", module, module.Name, null, false, false));
 
             foreach (var v in module.GlobalVariables)
             {
                 if (!v.IsConventional || v.References.Count > 0)
-                    allSymbols.Add((v.Name, v.ConventionalName, "GlobalVariable", v, module.Name, null, false));
+                    allSymbols.Add((v.Name, v.ConventionalName, "GlobalVariable", v, module.Name, null, false, false));
             }
 
             foreach (var c in module.Constants)
             {
                 if (!c.IsConventional || c.References.Count > 0)
-                    allSymbols.Add((c.Name, c.ConventionalName, "Constant", c, module.Name, null, false));
+                    allSymbols.Add((c.Name, c.ConventionalName, "Constant", c, module.Name, null, false, constantConflicts.Contains(c)));
             }
 
             foreach (var t in module.Types)
             {
                 if (!t.IsConventional || t.References.Count > 0)
-                    allSymbols.Add((t.Name, t.ConventionalName, "Type", t, module.Name, null, false));
+                    allSymbols.Add((t.Name, t.ConventionalName, "Type", t, module.Name, null, false, false));
                 foreach (var f in t.Fields)
                 {
                     if (!f.IsConventional || f.References.Count > 0)
-                        allSymbols.Add((f.Name, f.ConventionalName, "Field", f, module.Name, null, false));
+                        allSymbols.Add((f.Name, f.ConventionalName, "Field", f, module.Name, null, false, false));
                 }
             }
 
             foreach (var e in module.Enums)
             {
                 if (!e.IsConventional || e.References.Count > 0)
-                    allSymbols.Add((e.Name, e.ConventionalName, "Enum", e, module.Name, null, false));
+                    allSymbols.Add((e.Name, e.ConventionalName, "Enum", e, module.Name, null, false, false));
                 foreach (var v in e.Values)
                 {
                     if (!v.IsConventional || v.References.Count > 0)
-                        allSymbols.Add((v.Name, v.ConventionalName, "EnumValue", v, module.Name, e, enumValueConflicts.Contains(v)));
+                        allSymbols.Add((v.Name, v.ConventionalName, "EnumValue", v, module.Name, e, enumValueConflicts.Contains(v), false));
                 }
             }
 
             foreach (var c in module.Controls)
             {
                 if (!c.IsConventional || c.References.Count > 0)
-                    allSymbols.Add((c.Name, c.ConventionalName, "Control", c, module.Name, null, false));
+                    allSymbols.Add((c.Name, c.ConventionalName, "Control", c, module.Name, null, false, false));
             }
 
             foreach (var p in module.Procedures)
             {
                 if (!p.IsConventional || p.References.Count > 0)
-                    allSymbols.Add((p.Name, p.ConventionalName, "Procedure", p, module.Name, null, false));
+                    allSymbols.Add((p.Name, p.ConventionalName, "Procedure", p, module.Name, null, false, procedureConflicts.Contains(p)));
                 foreach (var param in p.Parameters)
                 {
                     if (!param.IsConventional || param.References.Count > 0)
-                        allSymbols.Add((param.Name, param.ConventionalName, "Parameter", param, module.Name, null, false));
+                        allSymbols.Add((param.Name, param.ConventionalName, "Parameter", param, module.Name, null, false, false));
                 }
                 foreach (var lv in p.LocalVariables)
                 {
                     if (!lv.IsConventional || lv.References.Count > 0)
-                        allSymbols.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name, null, false));
+                        allSymbols.Add((lv.Name, lv.ConventionalName, "LocalVariable", lv, module.Name, null, false, false));
                 }
             }
 
             foreach (var prop in module.Properties)
             {
                 if (!prop.IsConventional || prop.References.Count > 0)
-                    allSymbols.Add((prop.Name, prop.ConventionalName, "Property", prop, module.Name, null, false));
+                    allSymbols.Add((prop.Name, prop.ConventionalName, "Property", prop, module.Name, null, false, propertyConflicts.Contains(prop)));
                 foreach (var param in prop.Parameters)
                 {
                     if (!param.IsConventional || param.References.Count > 0)
-                        allSymbols.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name, null, false));
+                        allSymbols.Add((param.Name, param.ConventionalName, "PropertyParameter", param, module.Name, null, false, false));
                 }
             }
         }
@@ -191,7 +251,7 @@ public static partial class VbParser
 
         Parallel.ForEach(allSymbols, parallelOptions, item =>
         {
-            var (oldName, newName, category, source, definingModule, enumOwner, qualifyEnumValueRefs) = item;
+            var (oldName, newName, category, source, definingModule, enumOwner, qualifyEnumValueRefs, forceQualification) = item;
             var currentIndex = Interlocked.Increment(ref symbolIndex);
             if (oldName == newName && !qualifyEnumValueRefs && !string.Equals(category, "Type", StringComparison.OrdinalIgnoreCase))
                 return;
@@ -256,7 +316,7 @@ public static partial class VbParser
                     if (occIndex < 0 && startChar < 0)
                         continue;
 
-                    var entryKey = $"{refModule.Name}|{lineNum}|{startChar}|{occIndex}|{oldName}|{newName}|{category}";
+                    var entryKey = $"{refModule.Name}|{lineNum}|{startChar}|{occIndex}|{oldName}|{newName}|{category}|{forceQualification}";
                     if (replaceEntryKeys.TryAdd(entryKey, 0))
                     {
                         replaceEntries.Add(new ReferenceReplaceEntry(
@@ -268,7 +328,8 @@ public static partial class VbParser
                             newName!,
                             category,
                             source!,
-                            referenceNewName));
+                            referenceNewName,
+                            forceQualification));
                     }
                 }
             }
@@ -332,7 +393,7 @@ public static partial class VbParser
                 lineCache[cacheKey] = cacheEntry;
             }
 
-            ApplyReferenceReplace(project, entry, cacheEntry.CodePart, cacheEntry.StringRanges, cacheEntry.AllowStringReplace, sourceModuleCache);
+            ApplyReferenceReplace(project, entry, cacheEntry.CodePart, cacheEntry.StringRanges, cacheEntry.AllowStringReplace, sourceModuleCache, lines);
             processedEntries++;
         }
 
@@ -361,7 +422,8 @@ public static partial class VbParser
         string codePart,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
-        Dictionary<object, string> sourceModuleCache)
+        Dictionary<object, string> sourceModuleCache,
+        string[]? fileLines)
     {
         if (!sourceModuleCache.TryGetValue(entry.Source, out var sourceModule))
         {
@@ -375,26 +437,38 @@ public static partial class VbParser
         var referenceNewName = string.IsNullOrEmpty(entry.ReferenceNewNameOverride)
             ? entry.NewName
             : entry.ReferenceNewNameOverride;
+        var qualifiedReferenceName = entry.ForceQualification
+            ? $"{sourceModuleReferenceName}.{referenceNewName}"
+            : referenceNewName;
 
         if (entry.Category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
         {
             AddEnumValueReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, entry.NewName, referenceNewName,
-                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges);
+                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, forceQualification: true, fileLines: fileLines, project: project);
+            return;
+        }
+
+        if (entry.ForceQualification && string.Equals(entry.Category, "Procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, qualifiedReferenceName,
+                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, sourceModuleReferenceName, sourceModule, sourceModuleReferenceName,
+                entry.ForceQualification, qualifiedReferenceName);
             return;
         }
 
         if (entry.Source is VbProperty)
         {
-            var shouldQualify = ShouldQualifyPropertyReference(entry.RefModule, entry.LineNumber, referenceNewName);
+            var shouldQualify = entry.ForceQualification || ShouldQualifyPropertyReference(entry.RefModule, entry.LineNumber, referenceNewName);
             var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, entry.RefModule, entry.RefModule.Name, shouldQualify);
             AddPropertyReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
-                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, propertyQualifier);
+                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, propertyQualifier,
+                entry.ForceQualification, qualifiedReferenceName);
             return;
         }
 
         if (entry.Source is VbVariable variable && IsGlobalVariable(project, sourceModule, variable))
         {
-            var shouldQualify = ShouldQualifyModuleMemberReference(entry.RefModule, entry.LineNumber, referenceNewName);
+            var shouldQualify = entry.ForceQualification || ShouldQualifyModuleMemberReference(entry.RefModule, entry.LineNumber, referenceNewName);
             var qualifier = shouldQualify ? sourceModuleReferenceName : null;
             if (entry.StartChar >= 0 && entry.StartChar < codePart.Length)
             {
@@ -421,7 +495,8 @@ public static partial class VbParser
             }
 
             AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
-                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName);
+                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName,
+                entry.ForceQualification, qualifiedReferenceName);
             return;
         }
 
@@ -449,7 +524,7 @@ public static partial class VbParser
         if (string.Equals(entry.Category, "Constant", StringComparison.OrdinalIgnoreCase))
         {
             AddConstantReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName, entry.Category,
-                entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace);
+                entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifiedReferenceName, entry.ForceQualification);
             return;
         }
 
@@ -478,14 +553,14 @@ public static partial class VbParser
                         entry.StartChar,
                         entry.StartChar + effectiveOldName.Length,
                         foundText,
-                        referenceNewName,
+                        qualifiedReferenceName,
                         entry.Category + "_Reference");
                 }
                 return;
             }
         }
 
-        entry.RefModule.Replaces.AddReplaceFromLine(codePart, entry.LineNumber, effectiveOldName, referenceNewName,
+        entry.RefModule.Replaces.AddReplaceFromLine(codePart, entry.LineNumber, effectiveOldName, qualifiedReferenceName,
             entry.Category + "_Reference", entry.OccurrenceIndex, skipStringLiterals: !allowStringReplace);
     }
 
@@ -642,7 +717,7 @@ public static partial class VbParser
 
                 if (category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
                 {
-                    AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex, startChar, stringRanges);
+                    AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex, startChar, stringRanges, forceQualification: true, fileLines: null, project: project);
                     continue;
                 }
 
@@ -650,7 +725,8 @@ public static partial class VbParser
                 {
                     var shouldQualify = ShouldQualifyPropertyReference(refModule, lineNum, referenceNewName);
                     var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, refModule, refModuleName, shouldQualify);
-                    AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, propertyQualifier);
+                    AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, propertyQualifier,
+                        forceQualification: false, qualifiedName: referenceNewName);
                 }
                 else if (source is VbVariable variable && IsGlobalVariable(project, sourceModule, variable))
                 {
@@ -680,7 +756,8 @@ public static partial class VbParser
                         }
                     }
 
-                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName);
+                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName,
+                        forceQualification: false, qualifiedName: referenceNewName);
                 }
                 else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
                 {
@@ -703,7 +780,7 @@ public static partial class VbParser
                 }
                 else if (string.Equals(category, "Constant", StringComparison.OrdinalIgnoreCase))
                 {
-                    AddConstantReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace);
+                    AddConstantReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, referenceNewName, false);
                 }
                 else
                 {
@@ -780,7 +857,10 @@ public static partial class VbParser
         string category,
         int occIndex,
         int startChar,
-        List<(int start, int end)> stringRanges)
+        List<(int start, int end)> stringRanges,
+        bool forceQualification,
+        string[]? fileLines,
+        VbProject project)
     {
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
         var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
@@ -806,7 +886,14 @@ public static partial class VbParser
                 continue;
 
             var replacement = IsQualifiedEnumReference(codePart, match.Index) ? newName : qualifiedName;
-            if (!string.Equals(replacement, newName, StringComparison.OrdinalIgnoreCase))
+            if (forceQualification &&
+                !IsQualifiedEnumReference(codePart, match.Index) &&
+                ShouldSkipEnumQualification(project, refModule, lineNum, codePart, qualifiedName, match.Index, fileLines))
+            {
+                replacement = newName;
+            }
+
+            if (!forceQualification && !string.Equals(replacement, newName, StringComparison.OrdinalIgnoreCase))
             {
                 var ownerName = GetEnumOwnerFromQualifiedName(qualifiedName);
                 if (!string.IsNullOrWhiteSpace(ownerName) &&
@@ -817,6 +904,20 @@ public static partial class VbParser
             }
             if (string.Equals(match.Value, replacement, StringComparison.Ordinal))
                 continue;
+
+            if (forceQualification &&
+                string.Equals(replacement, qualifiedName, StringComparison.OrdinalIgnoreCase) &&
+                !IsQualifiedEnumReference(codePart, match.Index))
+            {
+                RecordDisambiguation(refModule.Name, lineNum, category, oldName, newName, qualifiedName);
+            }
+
+            if (forceQualification &&
+                string.Equals(replacement, qualifiedName, StringComparison.OrdinalIgnoreCase) &&
+                !IsMemberAccessToken(codePart, match.Index))
+            {
+                RecordDisambiguation(refModule.Name, lineNum, category, oldName, newName, qualifiedName);
+            }
 
             refModule.Replaces.AddReplace(
                 lineNum,
@@ -881,7 +982,9 @@ public static partial class VbParser
         int occIndex,
         int startChar,
         List<(int start, int end)> stringRanges,
-        bool allowStringReplace)
+        bool allowStringReplace,
+        string qualifiedName,
+        bool forceQualification)
     {
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
         var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
@@ -912,12 +1015,16 @@ public static partial class VbParser
             if (IsTypeFieldDeclaration(codePart, match.Index, oldName))
                 continue;
 
+            var replacement = newName;
+            if (forceQualification && !IsMemberAccessToken(codePart, match.Index))
+                replacement = qualifiedName;
+
             refModule.Replaces.AddReplace(
                 lineNum,
                 match.Index,
                 match.Index + match.Length,
                 match.Value,
-                newName,
+                replacement,
                 category + "_Reference");
         }
     }
@@ -1125,7 +1232,9 @@ public static partial class VbParser
         int startChar,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
-        string? qualifier)
+        string? qualifier,
+        bool forceQualification,
+        string qualifiedName)
     {
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
         var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
@@ -1157,6 +1266,13 @@ public static partial class VbParser
             if (string.Equals(match.Value, replacement, StringComparison.Ordinal))
                 continue;
 
+            if (forceQualification &&
+                string.Equals(replacement, qualifiedName, StringComparison.OrdinalIgnoreCase) &&
+                !IsMemberAccessToken(codePart, match.Index))
+            {
+                RecordDisambiguation(refModule.Name, lineNum, category, oldName, newName, qualifiedName);
+            }
+
             refModule.Replaces.AddReplace(
                 lineNum,
                 match.Index,
@@ -1180,7 +1296,9 @@ public static partial class VbParser
         bool allowStringReplace,
         string? qualifier,
         string? sourceModuleName,
-        string? sourceModuleReferenceName)
+        string? sourceModuleReferenceName,
+        bool forceQualification,
+        string qualifiedName)
     {
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
         var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
@@ -1223,6 +1341,13 @@ public static partial class VbParser
             if (string.Equals(match.Value, replacement, StringComparison.Ordinal))
                 continue;
 
+            if (forceQualification &&
+                string.Equals(replacement, qualifiedName, StringComparison.OrdinalIgnoreCase) &&
+                !IsMemberAccessToken(codePart, match.Index))
+            {
+                RecordDisambiguation(refModule.Name, lineNum, category, oldName, newName, qualifiedName);
+            }
+
             refModule.Replaces.AddReplace(
                 lineNum,
                 match.Index,
@@ -1231,6 +1356,141 @@ public static partial class VbParser
                 replacement,
                 category + "_Reference");
         }
+
+    }
+
+    private static void RecordDisambiguation(
+        string module,
+        int lineNumber,
+        string symbolKind,
+        string name,
+        string conventionalName,
+        string qualifiedName)
+    {
+        var key = $"{module}|{lineNumber}|{symbolKind}|{name}|{qualifiedName}";
+        if (!DisambiguationKeys.TryAdd(key, 0))
+            return;
+
+        DisambiguationEntries.Add(new DisambiguationEntry
+        {
+            Module = module,
+            SymbolKind = symbolKind,
+            Name = name,
+            ConventionalName = conventionalName,
+            QualifiedName = qualifiedName,
+            LineNumber = lineNumber
+        });
+    }
+
+    private static bool ShouldSkipEnumQualification(
+        VbProject project,
+        VbModule module,
+        int lineNumber,
+        string codePart,
+        string qualifiedName,
+        int tokenIndex,
+        string[]? fileLines)
+    {
+        var enumTypeName = GetEnumOwnerFromQualifiedName(qualifiedName);
+        if (string.IsNullOrWhiteSpace(enumTypeName))
+            return false;
+
+        var equalsIndex = codePart.IndexOf('=');
+        if (equalsIndex < 0 || tokenIndex <= equalsIndex)
+            return false;
+
+        var leftPart = codePart.Substring(0, equalsIndex);
+        var leftMatch = Regex.Match(leftPart, @"([A-Za-z_]\w*)\s*(\([^)]*\))?\s*$");
+        if (!leftMatch.Success)
+            return false;
+
+        var leftName = leftMatch.Groups[1].Value;
+        if (IsEnumTypedName(project, module, lineNumber, enumTypeName, leftName))
+            return true;
+
+        if (fileLines == null || lineNumber <= 1 || lineNumber > fileLines.Length)
+            return false;
+
+        var currentLine = SplitCodeAndComment(fileLines[lineNumber - 1]).code;
+        if (!currentLine.TrimStart().StartsWith("Case ", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        for (int i = lineNumber - 2; i >= 0; i--)
+        {
+            var prevLine = SplitCodeAndComment(fileLines[i]).code;
+            var trimmed = prevLine.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+                continue;
+
+            if (trimmed.StartsWith("Case ", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!trimmed.StartsWith("Select Case ", StringComparison.OrdinalIgnoreCase))
+                break;
+
+            var expr = trimmed.Substring("Select Case ".Length);
+            var exprMatch = Regex.Match(expr, @"([A-Za-z_]\w*)\s*(\([^)]*\))?\s*$");
+            if (!exprMatch.Success)
+                return false;
+
+            var exprName = exprMatch.Groups[1].Value;
+            return IsEnumTypedName(project, module, i + 1, enumTypeName, exprName);
+        }
+
+        return false;
+    }
+
+    private static bool IsEnumTypedName(
+        VbProject project,
+        VbModule module,
+        int lineNumber,
+        string enumTypeName,
+        string leftName)
+    {
+        var proc = module.GetProcedureAtLine(lineNumber);
+
+        string? typeName = null;
+        if (proc != null)
+        {
+            typeName = proc.Parameters.FirstOrDefault(p =>
+                MatchesName(p.Name, p.ConventionalName, leftName))?.Type;
+
+            typeName ??= proc.LocalVariables.FirstOrDefault(v =>
+                MatchesName(v.Name, v.ConventionalName, leftName))?.Type;
+        }
+
+        typeName ??= module.GlobalVariables.FirstOrDefault(v =>
+            MatchesName(v.Name, v.ConventionalName, leftName))?.Type;
+
+        if (!string.IsNullOrWhiteSpace(typeName))
+            return IsEnumTypeNameMatch(typeName, enumTypeName);
+
+        foreach (var globalVar in project.Modules.SelectMany(m => m.GlobalVariables))
+        {
+            if (!MatchesName(globalVar.Name, globalVar.ConventionalName, leftName))
+                continue;
+
+            if (string.IsNullOrWhiteSpace(globalVar.Type))
+                continue;
+
+            if (IsEnumTypeNameMatch(globalVar.Type, enumTypeName))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsEnumTypeNameMatch(string typeName, string enumTypeName)
+    {
+        var normalized = typeName.Contains('.')
+            ? typeName.Split('.').Last()
+            : typeName;
+
+        if (normalized.Equals(enumTypeName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return normalized.Replace("_", string.Empty)
+            .Equals(enumTypeName.Replace("_", string.Empty), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? GetMemberAccessQualifier(string line, int tokenIndex)
@@ -1314,6 +1574,14 @@ public static partial class VbParser
         }
 
         return string.Empty;
+    }
+
+    private static bool IsPublicVisibility(string? visibility)
+    {
+        return string.IsNullOrWhiteSpace(visibility) ||
+               visibility.Equals("Public", StringComparison.OrdinalIgnoreCase) ||
+               visibility.Equals("Global", StringComparison.OrdinalIgnoreCase) ||
+               visibility.Equals("Friend", StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class ReferenceEqualityComparer : IEqualityComparer<object>

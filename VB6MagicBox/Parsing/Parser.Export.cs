@@ -575,8 +575,10 @@ public static partial class VbParser
   {
     var csvLines = new List<string>
     {
-      "Module,Procedure,LocalKind,LocalName,ShadowedKind,ShadowedName,ShadowedModule"
+      "Module,LineNumber,Procedure,LocalKind,LocalName,ShadowedKind,ShadowedName,ShadowedModule"
     };
+
+    var shadowEntries = new List<(string Module, int LineNumber, string Procedure, string LocalKind, string LocalName, string ShadowKind, string ShadowName, string ShadowModule)>();
 
     static bool IsPrivateVisibility(string? visibility)
     {
@@ -629,7 +631,7 @@ public static partial class VbParser
     {
       foreach (var proc in mod.Procedures)
       {
-        var locals = new List<(string Kind, string Name)>
+        var locals = new List<(string Kind, string Name, int LineNumber)>
         {
           // Parameters
         };
@@ -637,22 +639,22 @@ public static partial class VbParser
         foreach (var param in proc.Parameters)
         {
           foreach (var name in GetNameCandidates(param.Name, param.ConventionalName))
-            locals.Add(("Parameter", name));
+            locals.Add(("Parameter", name, param.LineNumber > 0 ? param.LineNumber : proc.LineNumber));
         }
 
         foreach (var localVar in proc.LocalVariables)
         {
           foreach (var name in GetNameCandidates(localVar.Name, localVar.ConventionalName))
-            locals.Add(("LocalVariable", name));
+            locals.Add(("LocalVariable", name, localVar.LineNumber > 0 ? localVar.LineNumber : proc.LineNumber));
         }
 
         foreach (var localConst in proc.Constants)
         {
           foreach (var name in GetNameCandidates(localConst.Name, localConst.ConventionalName))
-            locals.Add(("LocalConstant", name));
+            locals.Add(("LocalConstant", name, localConst.LineNumber > 0 ? localConst.LineNumber : proc.LineNumber));
         }
 
-        foreach (var (localKind, localName) in locals)
+        foreach (var (localKind, localName, localLineNumber) in locals)
         {
           foreach (var (shadowModule, shadowKind, shadowName) in externalSymbols)
           {
@@ -662,15 +664,33 @@ public static partial class VbParser
             if (!string.Equals(localName, shadowName, StringComparison.OrdinalIgnoreCase))
               continue;
 
-            var key = $"{mod.Name}|{proc.Name}|{localKind}|{localName}|{shadowKind}|{shadowName}|{shadowModule}";
+            var key = $"{mod.Name}|{localLineNumber}|{proc.Name}|{localKind}|{localName}|{shadowKind}|{shadowName}|{shadowModule}";
             if (!rowKeys.Add(key))
               continue;
 
-            csvLines.Add(
-              $"\"{EscapeCsv(mod.Name)}\",\"{EscapeCsv(proc.Name)}\",\"{EscapeCsv(localKind)}\",\"{EscapeCsv(localName)}\",\"{EscapeCsv(shadowKind)}\",\"{EscapeCsv(shadowName)}\",\"{EscapeCsv(shadowModule)}\"");
+            shadowEntries.Add((
+              mod.Name,
+              localLineNumber,
+              proc.Name,
+              localKind,
+              localName,
+              shadowKind,
+              shadowName,
+              shadowModule));
           }
         }
       }
+    }
+
+    foreach (var entry in shadowEntries
+        .OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(e => e.LineNumber)
+        .ThenBy(e => e.Procedure, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(e => e.LocalKind, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(e => e.LocalName, StringComparer.OrdinalIgnoreCase))
+    {
+      csvLines.Add(
+        $"\"{EscapeCsv(entry.Module)}\",{entry.LineNumber},\"{EscapeCsv(entry.Procedure)}\",\"{EscapeCsv(entry.LocalKind)}\",\"{EscapeCsv(entry.LocalName)}\",\"{EscapeCsv(entry.ShadowKind)}\",\"{EscapeCsv(entry.ShadowName)}\",\"{EscapeCsv(entry.ShadowModule)}\"");
     }
 
     File.WriteAllText(outputPath, string.Join(Environment.NewLine, csvLines));

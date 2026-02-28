@@ -73,6 +73,7 @@ public class Program
                     break;
 
                 case "0":
+                case "":
                     Console.WriteLine();
                     Console.WriteLine("Arrivederci!");
                     return;
@@ -327,6 +328,7 @@ public class Program
         var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
         var shadowsCsv = Path.Combine(vbpDir, $"{vbpName}._TODO_shadows.csv");
         var refDebugCsv = Path.Combine(vbpDir, $"{vbpName}.refdebug.csv");
+        var disambiguationCsv = Path.Combine(vbpDir, $"{vbpName}.disambiguations.csv");
         var refIssuesCsv = Path.Combine(vbpDir, $"{vbpName}.refissues.csv");
         var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
         var startCharCheckCsv = Path.Combine(vbpDir, $"{vbpName}._CHECK_startchars.csv");
@@ -340,6 +342,7 @@ public class Program
         VbParser.ExportRenameCsv(project, renameCsv);
         VbParser.ExportShadowsCsv(project, shadowsCsv);
         VbReferenceListExtensions.ExportReferenceDebugCsv(refDebugCsv, project);
+        VbParser.ExportDisambiguations(disambiguationCsv);
         VbParser.ExportReferenceIssuesCsv(project, refIssuesCsv);
         VbParser.ExportLineReplaceJson(project, lineReplaceJson);
         VbParser.ExportStartCharChecks(startCharCheckCsv);
@@ -350,6 +353,7 @@ public class Program
         Console.WriteLine($"   CSV rename:        {renameCsv}");
         Console.WriteLine($"   CSV shadows:       {shadowsCsv}");
         Console.WriteLine($"   CSV refdebug:      {refDebugCsv}");
+        Console.WriteLine($"   CSV disambiguate:  {disambiguationCsv}");
         Console.WriteLine($"   CSV refissues:     {refIssuesCsv}");
         Console.WriteLine($"   JSON linereplace:  {lineReplaceJson}");
         Console.WriteLine($"   CSV startchars:    {startCharCheckCsv}");
