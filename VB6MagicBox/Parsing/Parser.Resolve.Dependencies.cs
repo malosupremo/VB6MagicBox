@@ -95,11 +95,19 @@ public static partial class VbParser
                         var moduleLines = GetFileLines(fileCache, mod);
                         var lineText = lineNum > 0 && lineNum <= moduleLines.Length ? moduleLines[lineNum - 1] : string.Empty;
                         var methodToken = call.MethodName ?? call.ResolvedProcedure ?? call.ResolvedKind ?? string.Empty;
-                        var startChar = string.IsNullOrEmpty(methodToken)
-                            ? -1
-                            : lineText.IndexOf(methodToken, StringComparison.OrdinalIgnoreCase);
-                        var occurrenceIndex = GetOccurrenceIndex(lineText, methodToken, startChar, lineNum);
-                        targetProc.References.AddLineNumber(mod.Name, proc.Name, lineNum, occurrenceIndex, startChar, owner: targetProc);
+                        var matches = string.IsNullOrEmpty(methodToken)
+                            ? Array.Empty<Match>()
+                            : Regex.Matches(lineText, $@"\b{Regex.Escape(methodToken)}\b", RegexOptions.IgnoreCase).Cast<Match>().ToArray();
+
+                        if (matches.Length > 0)
+                        {
+                            for (int matchIndex = 0; matchIndex < matches.Length; matchIndex++)
+                            {
+                                var match = matches[matchIndex];
+                                var occurrenceIndex = matchIndex + 1;
+                                targetProc.References.AddLineNumber(mod.Name, proc.Name, lineNum, occurrenceIndex, match.Index, owner: targetProc);
+                            }
+                        }
                     }
 
                     // Marca classi usate
