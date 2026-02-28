@@ -136,6 +136,7 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Local declaration ordering**: procedure headers keep `Attribute` lines attached; local declarations are grouped as comments → constants → static → Dim, without extra blank lines or alphabetic sorting.
 - **Spacing rules tweaks**: no blank after initial file `Attribute` block; pre-procedure comment blocks stay contiguous with a single blank line before them; no blank at the start of a procedure even if the first statement is a comment for a following block.
 - **Single-line If spacing**: single-line `If` statements always add a blank line after; they add a blank line before unless preceded by a comment.
+- **Property spacing**: paired `Property Get/Let/Set` blocks with the same name stay adjacent (no blank line inserted before/after the pair).
 - **Console output styling**: `[OK]` in green, `[WARN]` in yellow, `[X]` in red, `[i]` in cyan.
 - **Control StartChar precision**: control references now carry exact `StartChar` from raw lines (indent preserved) and overwrite coarse positions when more accurate data arrives.
 - **Reference cleanup**: coarse references without `StartChar`/`OccurrenceIndex` are skipped for replaces, and precise references update earlier `-1`/incorrect entries.

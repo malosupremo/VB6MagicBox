@@ -367,6 +367,7 @@ public static class CodeFormatter
         bool inProcHeaderGroup = false;
         HeaderGroupKind? currentGroup = null;
         string? currentPropertyName = null;
+        string? lastEndedPropertyName = null;
         bool lastWasLabel = false;
 
         for (int i = startIdx; i < lines.Count; i++)
@@ -392,11 +393,27 @@ public static class CodeFormatter
                 if (!string.IsNullOrEmpty(prevNonBlank) && IsAttributeLine(prevNonBlank))
                     continue;
 
+                if (!string.IsNullOrEmpty(prevNonBlank) &&
+                    prevNonBlank.TrimStart().StartsWith("End Property", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(lastEndedPropertyName))
+                {
+                    var nextNonBlankLine = NextNonBlank(lines, i + 1);
+                    if (TryGetPropertyName(nextNonBlankLine, out var nextPropertyName) &&
+                        TryGetPreviousPropertyName(result, out var prevPropertyName) &&
+                        string.Equals(nextPropertyName, prevPropertyName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(prevNonBlank) && IsBlockStart(prevNonBlank) &&
                     !string.IsNullOrEmpty(nextNonBlank) && IsCommentLine(nextNonBlank))
                     continue;
 
                 if (!string.IsNullOrEmpty(nextNonBlank) && IsBlockEnd(nextNonBlank))
+                    continue;
+
+                if (TryGetPropertyName(nextNonBlank, out _))
                     continue;
 
 
@@ -433,6 +450,7 @@ public static class CodeFormatter
                 inProcHeaderGroup = true;
                 currentGroup = null;
                 currentPropertyName = procPropertyName;
+                lastEndedPropertyName = null;
             }
 
             if (insideEnum && IsEnumEnd(trimmed))
@@ -533,6 +551,7 @@ public static class CodeFormatter
             {
                 if (IsEndProperty(trimmed, currentPropertyName, lines, i + 1))
                 {
+                    lastEndedPropertyName = currentPropertyName;
                     currentPropertyName = null;
                 }
                 else if (IsEndIf(trimmed))
@@ -643,7 +662,10 @@ public static class CodeFormatter
             return false;
 
         if (match.Groups[3].Value.Equals("Property", StringComparison.OrdinalIgnoreCase))
-            propertyName = match.Groups[4].Value;
+        {
+            if (!TryGetPropertyName(line, out propertyName))
+                propertyName = null;
+        }
 
         return true;
     }
@@ -783,6 +805,22 @@ public static class CodeFormatter
         return false;
     }
 
+    private static bool TryGetNextPropertyName(List<string> lines, int startIndex, int maxLines, out string? propertyName)
+    {
+        propertyName = null;
+        var endIndex = Math.Min(lines.Count - 1, startIndex + Math.Max(0, maxLines));
+        for (int i = startIndex; i <= endIndex; i++)
+        {
+            var line = StripInlineComment(lines[i]);
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            return TryGetPropertyName(line, out propertyName);
+        }
+
+        return false;
+    }
+
     private static bool TryGetPropertyName(string line, out string? propertyName)
     {
         propertyName = null;
@@ -792,6 +830,19 @@ public static class CodeFormatter
 
         propertyName = match.Groups[4].Value;
         return true;
+    }
+
+    private static bool TryGetPreviousPropertyName(List<string> lines, out string? propertyName)
+    {
+        propertyName = null;
+        for (int i = lines.Count - 1; i >= 0; i--)
+        {
+            var line = StripInlineComment(lines[i]);
+            if (TryGetPropertyName(line, out propertyName))
+                return true;
+        }
+
+        return false;
     }
 
     private enum DeclarationKind
