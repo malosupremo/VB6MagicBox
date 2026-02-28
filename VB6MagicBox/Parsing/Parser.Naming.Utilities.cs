@@ -36,6 +36,16 @@ public static partial class VbParser
           return name;
       }
 
+      // Caso speciale: g + prefisso ungherese (es: glngLanguage) -> Language
+      if (name.StartsWith("g", StringComparison.OrdinalIgnoreCase) &&
+          name.Length > 4 &&
+          !name.StartsWith("gobj", StringComparison.OrdinalIgnoreCase))
+      {
+        var typePrefix = name.Substring(1, 3);
+        if (HungarianPrefixes.Contains(typePrefix) && char.IsUpper(name[4]))
+          return name.Substring(4);
+      }
+
       // Caso speciale: mCamelCase (es: mLogger) -> Logger
       // Riconosce pattern m + maiuscola diretta (convenzione member variable)
       if (name.Length > 1 &&
