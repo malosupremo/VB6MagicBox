@@ -43,6 +43,7 @@ public static partial class VbParser
     {
         var procByModuleAndName = new Dictionary<(string Module, string Name), VbProcedure>();
 
+
         foreach (var mod in project.Modules)
             foreach (var proc in mod.Procedures)
                 procByModuleAndName[(mod.Name, proc.Name)] = proc;
@@ -70,7 +71,7 @@ public static partial class VbParser
             foreach (var proc in mod.Procedures)
             {
                 // Progress inline per il parsing
-                Console.Write($"\r      [Procedure {counter++}/{mod.Procedures.Count}] {proc.Name}...".PadRight(Console.WindowWidth - 1));
+                Console.Write($"\r      [Procedure {++counter}/{mod.Procedures.Count}] {proc.Name}...".PadRight(Console.WindowWidth - 1));
 
                 foreach (var call in proc.Calls.DistinctBy(c => $"{c.Raw}|{c.ResolvedModule}|{c.ResolvedProcedure}|{c.LineNumber}"))
                 {
@@ -204,7 +205,7 @@ public static partial class VbParser
             foreach (var c in mod.Constants)
             {
                 // Progress inline per il parsing
-                Console.Write($"\r      [Costant {counter++}/{mod.Constants.Count}] {c.Name}...".PadRight(Console.WindowWidth - 1));
+                Console.Write($"\r      [Costant {++counter}/{mod.Constants.Count}] {c.Name}...".PadRight(Console.WindowWidth - 1));
 
                 bool isPublic = string.IsNullOrEmpty(c.Visibility) ||
                                c.Visibility.Equals("Public", StringComparison.OrdinalIgnoreCase) ||
@@ -297,7 +298,7 @@ public static partial class VbParser
             foreach (var prop in mod.Properties)
             {
                 // Progress inline per il parsing
-                Console.Write($"\r      [Property {counter++}/{mod.Properties.Count}] {prop.Name}...".PadRight(Console.WindowWidth - 1));
+                Console.Write($"\r      [Property {++counter}/{mod.Properties.Count}] {prop.Name}...".PadRight(Console.WindowWidth - 1));
 
                 bool isPublic = string.IsNullOrEmpty(prop.Visibility) ||
                                prop.Visibility.Equals("Public", StringComparison.OrdinalIgnoreCase) ||

@@ -6,6 +6,16 @@ namespace VB6MagicBox.Parsing;
 
 public static partial class VbParser
 {
+    private sealed record ReferenceReplaceEntry(
+        VbModule RefModule,
+        int LineNumber,
+        int OccurrenceIndex,
+        int StartChar,
+        string OldName,
+        string NewName,
+        string Category,
+        object Source,
+        string? ReferenceNewNameOverride);
     private sealed class StartCharCheckEntry
     {
         public string? Module { get; set; }
@@ -174,7 +184,10 @@ public static partial class VbParser
             }
         }
 
-        // STEP 2: Per ogni simbolo, elabora le sue References e costruisci i LineReplace
+        // STEP 2: Raccogli tutte le references in una lista per elaborazione per riga
+        var replaceEntries = new ConcurrentBag<ReferenceReplaceEntry>();
+        var replaceEntryKeys = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
         int symbolIndex = 0;
         var consoleLock = new object();
         var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
@@ -186,22 +199,17 @@ public static partial class VbParser
             if (oldName == newName && !qualifyEnumValueRefs && !string.Equals(category, "Type", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            bool isDebugSymbol = oldName?.Equals("Dsp_h", StringComparison.OrdinalIgnoreCase) == true
-                          || oldName?.Equals("Msg_h", StringComparison.OrdinalIgnoreCase) == true;
-
             lock (consoleLock)
             {
-                Console.Write($"\r   Processando simboli: [{currentIndex}/{allSymbols.Count}] {category}: {oldName}...".PadRight(Console.WindowWidth - 1));
+                Console.Write($"\r   Processando simboli: [{currentIndex + 1}/{allSymbols.Count}] {category}: {oldName}...".PadRight(Console.WindowWidth - 1));
             }
 
-            // Trova il modulo che definisce il simbolo
             var ownerModule = project.Modules.FirstOrDefault(m =>
-            string.Equals(m.Name, definingModule, StringComparison.OrdinalIgnoreCase));
+                string.Equals(m.Name, definingModule, StringComparison.OrdinalIgnoreCase));
 
             if (ownerModule == null)
                 return;
 
-            // DICHIARAZIONE: Aggiungi replace per la dichiarazione del simbolo (solo nel modulo che lo definisce)
             if (oldName != newName)
                 AddDeclarationReplace(ownerModule, source, oldName, newName, category, fileCache);
 
@@ -209,13 +217,130 @@ public static partial class VbParser
             if (qualifyEnumValueRefs && enumOwner != null)
                 referenceNewName = $"{enumOwner.ConventionalName}.{newName}";
 
-            // REFERENCES: Aggiungi replace per tutti i riferimenti
-            AddReferencesReplaces(project, source, oldName!, newName!, category, fileCache, isDebugSymbol, referenceNewName);
+            var referencesProp = source?.GetType().GetProperty("References");
+            if (referencesProp?.GetValue(source) is not System.Collections.IEnumerable references)
+                return;
 
-            // ATTRIBUTI VB6: Gestione speciale per "Attribute VB_Name" e "Attribute VarName."
+            foreach (var reference in references)
+            {
+                var moduleProp = reference?.GetType().GetProperty("Module");
+                var refModuleName = moduleProp?.GetValue(reference) as string;
+                if (string.IsNullOrEmpty(refModuleName))
+                    continue;
+
+                var refModule = project.Modules.FirstOrDefault(m =>
+                    string.Equals(m.Name, refModuleName, StringComparison.OrdinalIgnoreCase));
+
+                if (refModule == null || refModule.IsSharedExternal)
+                    continue;
+
+                if (!fileCache.TryGetValue(refModule.FullPath!, out var lines))
+                    continue;
+
+                var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
+                var occurrenceIndexesProp = reference?.GetType().GetProperty("OccurrenceIndexes");
+                var startCharsProp = reference?.GetType().GetProperty("StartChars");
+
+                if (lineNumbersProp?.GetValue(reference) is not System.Collections.Generic.List<int> refLineNumbers)
+                    continue;
+
+                var occurrenceIndexes = occurrenceIndexesProp?.GetValue(reference) as System.Collections.Generic.List<int>;
+                var startChars = startCharsProp?.GetValue(reference) as System.Collections.Generic.List<int>;
+
+                for (int idx = 0; idx < refLineNumbers.Count; idx++)
+                {
+                    var lineNum = refLineNumbers[idx];
+                    if (lineNum <= 0 || lineNum > lines.Length)
+                        continue;
+
+                    var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
+                    var startChar = (startChars != null && idx < startChars.Count) ? startChars[idx] : -1;
+
+                    if (occIndex < 0 && startChar < 0)
+                        continue;
+
+                    var entryKey = $"{refModule.Name}|{lineNum}|{startChar}|{occIndex}|{oldName}|{newName}|{category}";
+                    if (replaceEntryKeys.TryAdd(entryKey, 0))
+                    {
+                        replaceEntries.Add(new ReferenceReplaceEntry(
+                            refModule,
+                            lineNum,
+                            occIndex,
+                            startChar,
+                            oldName!,
+                            newName!,
+                            category,
+                            source!,
+                            referenceNewName));
+                    }
+                }
+            }
+
             if (oldName != newName)
                 AddAttributeReplaces(ownerModule, source, oldName!, newName!, category, fileCache);
         });
+
+        Console.WriteLine();
+        ConsoleX.WriteLineColor("   [i] Raccolta references completata. Inizio applicazione replaces...", ConsoleColor.Cyan);
+
+        var lineCache = new Dictionary<(string Module, int Line), (string CodePart, List<(int start, int end)> StringRanges, bool AllowStringReplace)>();
+        var sourceModuleCache = new Dictionary<object, string>(ReferenceEqualityComparer.Instance);
+
+        var moduleOrder = project.Modules
+            .Select((m, index) => new { m.Name, index })
+            .ToDictionary(x => x.Name, x => x.index, StringComparer.OrdinalIgnoreCase);
+
+        var replaceEntryList = replaceEntries.ToList();
+        replaceEntryList.Sort((a, b) =>
+        {
+            var moduleCompare = moduleOrder[a.RefModule.Name].CompareTo(moduleOrder[b.RefModule.Name]);
+            if (moduleCompare != 0)
+                return moduleCompare;
+
+            var lineCompare = a.LineNumber.CompareTo(b.LineNumber);
+            if (lineCompare != 0)
+                return lineCompare;
+
+            return b.StartChar.CompareTo(a.StartChar);
+        });
+
+        string? currentModuleName = null;
+        int processedEntries = 0;
+        int totalEntries = replaceEntryList.Count;
+
+        foreach (var entry in replaceEntryList)
+        {
+            if (!string.Equals(currentModuleName, entry.RefModule.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                currentModuleName = entry.RefModule.Name;
+                Console.Write($"\r   [i] Applying replaces ({processedEntries + 1}/{totalEntries}): {currentModuleName}...".PadRight(Console.WindowWidth - 1));
+            }
+
+            if (!fileCache.TryGetValue(entry.RefModule.FullPath!, out var lines))
+                continue;
+
+            if (entry.LineNumber <= 0 || entry.LineNumber > lines.Length)
+                continue;
+
+            var cacheKey = (entry.RefModule.Name, entry.LineNumber);
+            if (!lineCache.TryGetValue(cacheKey, out var cacheEntry))
+            {
+                var line = lines[entry.LineNumber - 1];
+                var (codePart, _) = SplitCodeAndComment(line);
+                var stringRanges = GetStringLiteralRanges(codePart);
+                var trimmedCodePart = codePart.TrimStart();
+                var allowStringReplace = trimmedCodePart.StartsWith("Attribute VB_Name", StringComparison.OrdinalIgnoreCase) ||
+                                         trimmedCodePart.StartsWith("Attribute ", StringComparison.OrdinalIgnoreCase);
+                cacheEntry = (codePart, stringRanges, allowStringReplace);
+                lineCache[cacheKey] = cacheEntry;
+            }
+
+            ApplyReferenceReplace(project, entry, cacheEntry.CodePart, cacheEntry.StringRanges, cacheEntry.AllowStringReplace, sourceModuleCache);
+            processedEntries++;
+        }
+
+        Console.WriteLine();
+        ConsoleX.WriteLineColor($"   [OK] Ordinamento in corso...", ConsoleColor.Green);
 
         // STEP 3: Conta i replace totali
         foreach (var module in project.Modules)
@@ -230,7 +355,141 @@ public static partial class VbParser
         }
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor($"   [OK] {totalReplaces} sostituzioni preparate per {project.Modules.Count} moduli", ConsoleColor.Green);
+        ConsoleX.WriteLineColor($"   [OK] {totalReplaces} sostituzioni ordinate e preparate per {project.Modules.Count} moduli", ConsoleColor.Green);
+    }
+
+    private static void ApplyReferenceReplace(
+        VbProject project,
+        ReferenceReplaceEntry entry,
+        string codePart,
+        List<(int start, int end)> stringRanges,
+        bool allowStringReplace,
+        Dictionary<object, string> sourceModuleCache)
+    {
+        if (!sourceModuleCache.TryGetValue(entry.Source, out var sourceModule))
+        {
+            sourceModule = GetDefiningModule(project, entry.Source);
+            sourceModuleCache[entry.Source] = sourceModule;
+        }
+        var sourceModuleInfo = project.Modules.FirstOrDefault(m =>
+            string.Equals(m.Name, sourceModule, StringComparison.OrdinalIgnoreCase));
+        var sourceModuleReferenceName = sourceModuleInfo?.ConventionalName ?? sourceModule;
+
+        var referenceNewName = string.IsNullOrEmpty(entry.ReferenceNewNameOverride)
+            ? entry.NewName
+            : entry.ReferenceNewNameOverride;
+
+        if (entry.Category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
+        {
+            AddEnumValueReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, entry.NewName, referenceNewName,
+                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges);
+            return;
+        }
+
+        if (entry.Source is VbProperty)
+        {
+            var shouldQualify = ShouldQualifyPropertyReference(entry.RefModule, entry.LineNumber, referenceNewName);
+            var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, entry.RefModule, entry.RefModule.Name, shouldQualify);
+            AddPropertyReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
+                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, propertyQualifier);
+            return;
+        }
+
+        if (entry.Source is VbVariable variable && IsGlobalVariable(project, sourceModule, variable))
+        {
+            var shouldQualify = ShouldQualifyModuleMemberReference(entry.RefModule, entry.LineNumber, referenceNewName);
+            var qualifier = shouldQualify ? sourceModuleReferenceName : null;
+            if (entry.StartChar >= 0 && entry.StartChar < codePart.Length)
+            {
+                var length = Math.Min(entry.OldName.Length, codePart.Length - entry.StartChar);
+                var foundText = codePart.Substring(entry.StartChar, length);
+                if (string.Equals(foundText, entry.OldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (allowStringReplace || !IsInsideStringLiteral(stringRanges, entry.StartChar))
+                    {
+                        var replacement = referenceNewName;
+                        if (!IsMemberAccessToken(codePart, entry.StartChar) && !string.IsNullOrWhiteSpace(qualifier))
+                            replacement = $"{qualifier}.{referenceNewName}";
+
+                        entry.RefModule.Replaces.AddReplace(
+                            entry.LineNumber,
+                            entry.StartChar,
+                            entry.StartChar + entry.OldName.Length,
+                            foundText,
+                            replacement,
+                            entry.Category + "_Reference");
+                        return;
+                    }
+                }
+            }
+
+            AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
+                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName);
+            return;
+        }
+
+        if (entry.Source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
+        {
+            var pattern = $@"(?<=^.*Begin\s+\S+\s+){Regex.Escape(entry.OldName)}\b";
+            var matches = Regex.Matches(codePart, pattern, RegexOptions.IgnoreCase);
+
+            foreach (Match match in matches)
+            {
+                if (!allowStringReplace && IsInsideStringLiteral(stringRanges, match.Index))
+                    continue;
+
+                entry.RefModule.Replaces.AddReplace(
+                    entry.LineNumber,
+                    match.Index,
+                    match.Index + match.Length,
+                    match.Value,
+                    referenceNewName,
+                    entry.Category + "_Reference");
+            }
+            return;
+        }
+
+        if (string.Equals(entry.Category, "Constant", StringComparison.OrdinalIgnoreCase))
+        {
+            AddConstantReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName, entry.Category,
+                entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace);
+            return;
+        }
+
+        var effectiveOldName = entry.OldName;
+        if (string.Equals(entry.Category, "Type", StringComparison.OrdinalIgnoreCase))
+        {
+            var alternateOldName = GetTypeAlternateName(entry.OldName);
+            if (!string.IsNullOrEmpty(alternateOldName) &&
+                !Regex.IsMatch(codePart, $@"\b{Regex.Escape(entry.OldName)}\b", RegexOptions.IgnoreCase) &&
+                Regex.IsMatch(codePart, $@"\b{Regex.Escape(alternateOldName)}\b", RegexOptions.IgnoreCase))
+            {
+                effectiveOldName = alternateOldName;
+            }
+        }
+
+        if (entry.StartChar >= 0 && entry.StartChar < codePart.Length)
+        {
+            var length = Math.Min(effectiveOldName.Length, codePart.Length - entry.StartChar);
+            var foundText = codePart.Substring(entry.StartChar, length);
+            if (string.Equals(foundText, effectiveOldName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (allowStringReplace || !IsInsideStringLiteral(stringRanges, entry.StartChar))
+                {
+                    entry.RefModule.Replaces.AddReplace(
+                        entry.LineNumber,
+                        entry.StartChar,
+                        entry.StartChar + effectiveOldName.Length,
+                        foundText,
+                        referenceNewName,
+                        entry.Category + "_Reference");
+                }
+                return;
+            }
+        }
+
+        entry.RefModule.Replaces.AddReplaceFromLine(codePart, entry.LineNumber, effectiveOldName, referenceNewName,
+            entry.Category + "_Reference", entry.OccurrenceIndex, skipStringLiterals: !allowStringReplace);
     }
 
     /// <summary>
@@ -1058,6 +1317,17 @@ public static partial class VbParser
         }
 
         return string.Empty;
+    }
+
+    private sealed class ReferenceEqualityComparer : IEqualityComparer<object>
+    {
+        public static readonly ReferenceEqualityComparer Instance = new();
+
+        public new bool Equals(object? x, object? y)
+            => ReferenceEquals(x, y);
+
+        public int GetHashCode(object obj)
+            => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
     }
 
     /// <summary>

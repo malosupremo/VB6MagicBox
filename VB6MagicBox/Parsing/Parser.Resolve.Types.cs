@@ -201,6 +201,9 @@ public static partial class VbParser
         effectiveOccurrenceIndex = GetOccurrenceIndex(noComment, baseTypeName, startChar, lineNumber);
     }
 
+    if (startChar < 0)
+      return;
+
     referencedType.Used = true;
     referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, effectiveOccurrenceIndex, startChar, owner: referencedType);
   }

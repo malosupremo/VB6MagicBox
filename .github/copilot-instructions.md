@@ -5,6 +5,7 @@
 - Second general instruction
 - When fixing issues, add handling unless there's an obvious error, to avoid regressions.
 - Ensure zero references with -1 and include symbol info in refdebug without post-search.
+- Throttle progress logging only for inner counters; module header should always print and counters must remain accurate.
 
 ## Code Style
 - Use specific formatting rules
