@@ -208,7 +208,7 @@ public static partial class VbParser
                 if (frameNameToFix.Length > 0 && char.IsLower(frameNameToFix[0]))
                     frameNameToFix = char.ToUpper(frameNameToFix[0]) + frameNameToFix.Substring(1);
 
-                return expectedPrefix + frameNameToFix;
+                return EnsurePascalCaseControlName(expectedPrefix + frameNameToFix);
             }
 
             // Caso speciale: TextBox con prefissi non standard (tb, tx) ? normalizza a txt
@@ -229,7 +229,7 @@ public static partial class VbParser
                     {
                         // tbSQM o txEmail ? txtSQM, txtEmail (preserva capitalizzazione)
                         var baseName = controlName.Substring(prefixLen);
-                        return "txt" + baseName;
+                        return EnsurePascalCaseControlName("txt" + baseName);
                     }
                 }
             }
@@ -242,7 +242,7 @@ public static partial class VbParser
             {
                 // Ha già il prefisso corretto, preserva la capitalizzazione esistente
                 var baseName = controlName.Substring(expectedPrefix.Length);
-                return expectedPrefix + baseName;
+                return EnsurePascalCaseControlName(expectedPrefix + baseName);
             }
 
             // Controlla se ha un altro prefisso a 3 lettere (es: txt, cmd, lbl)
@@ -254,7 +254,7 @@ public static partial class VbParser
             {
                 // Ha un prefisso diverso, sostituiscilo ma preserva capitalizzazione
                 var baseName = controlName.Substring(3);
-                return expectedPrefix + baseName;
+                return EnsurePascalCaseControlName(expectedPrefix + baseName);
             }
 
             // Non ha prefisso, aggiungilo ma preserva capitalizzazione
@@ -264,7 +264,15 @@ public static partial class VbParser
             {
                 nameToFix = char.ToUpper(nameToFix[0]) + nameToFix.Substring(1);
             }
-            return expectedPrefix + nameToFix;
+            return EnsurePascalCaseControlName(expectedPrefix + nameToFix);
+        }
+
+        private static string EnsurePascalCaseControlName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            if (char.IsLower(name[0]))
+                return char.ToUpperInvariant(name[0]) + name.Substring(1);
+            return name;
         }
 
         private static string NormalizeConstantName(string name)

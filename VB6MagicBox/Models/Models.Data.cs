@@ -310,13 +310,16 @@ public static class VbReferenceListExtensions
 
   public static void ExportReferenceDebugCsv(string outputPath, VbProject? project = null)
   {
-    if (ReferenceDebugEntries.IsEmpty)
-      return;
-
     var lines = new List<string>
     {
       "SymbolKind,SymbolName,Module,Procedure,LineNumber,OccurrenceIndex,StartChar,SourceMember,SourceFile,SourceLine"
     };
+
+    if (ReferenceDebugEntries.IsEmpty)
+    {
+      File.WriteAllText(outputPath, string.Join(Environment.NewLine, lines));
+      return;
+    }
 
     foreach (var entry in ReferenceDebugEntries.OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
                                                .ThenBy(e => e.Procedure, StringComparer.OrdinalIgnoreCase)

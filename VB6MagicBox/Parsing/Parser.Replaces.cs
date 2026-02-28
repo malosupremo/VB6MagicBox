@@ -30,15 +30,12 @@ public static partial class VbParser
 
     public static void ExportStartCharChecks(string outputPath)
     {
-        if (StartCharChecks == null || StartCharChecks.IsEmpty)
-            return;
-
-        var entries = StartCharChecks.Values
+        var entries = StartCharChecks?.Values
             .OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.Procedure, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.LineNumber)
             .ThenBy(e => e.StartChar)
-            .ToList();
+            .ToList() ?? new List<StartCharCheckEntry>();
 
         using var writer = new StreamWriter(outputPath, false);
         writer.WriteLine("Module;Procedure;LineNumber;StartChar;OccurrenceIndex;OldName;NewName;Category");

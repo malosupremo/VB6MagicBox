@@ -320,12 +320,22 @@ public static partial class VbParser
             {
               // Aggiungi il line number se non presente
               if (!existingRef.LineNumbers.Contains(originalLineNumber))
-                control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, owner: control);
+              {
+                var eventStartChar = raw.IndexOf(control.Name, StringComparison.OrdinalIgnoreCase);
+                if (eventStartChar < 0)
+                    eventStartChar = line.IndexOf(control.Name, StringComparison.OrdinalIgnoreCase);
+
+                control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, 1, eventStartChar, owner: control);
+              }
             }
             else
             {
               // Crea nuova Reference con line number
-              control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, owner: control);
+              var eventStartChar = raw.IndexOf(control.Name, StringComparison.OrdinalIgnoreCase);
+              if (eventStartChar < 0)
+                  eventStartChar = line.IndexOf(control.Name, StringComparison.OrdinalIgnoreCase);
+
+              control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, 1, eventStartChar, owner: control);
             }
             break; // Un controllo può avere un solo event handler con questo nome
           }

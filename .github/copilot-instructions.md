@@ -9,7 +9,7 @@
 
 ## Code Style
 - Use specific formatting rules
-- Follow naming conventions
+- Follow naming conventions, ensuring conventional names are in PascalCase (initial uppercase) so event procedures use uppercase initial.
 - When using regex for arrays, ensure proper escaping in parentheses (e.g., use `"\([^)]*\)"` instead of `"\[^)]*\)"`).
 - For `ReFieldAccess`, the correct pattern is `([A-Za-z_]\w*(?:\([^)]*\))?)\s*\.\s*([A-Za-z_]\w+)`.
 - Follow spacing rules: S0 fallback; S14 wins for initial declaration groups; S7 comments before block use blank + comments + block; S8 comments inside block use block start + comments + blank; single-line If statements must always have a blank line after them unless adjacent to If/End If block boundaries.
