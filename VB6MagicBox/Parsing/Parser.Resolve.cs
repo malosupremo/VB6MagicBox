@@ -485,7 +485,7 @@ public static partial class VbParser
                                     {
                                         classProp.Used = true;
                                         var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1);
-                                        classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, callMatch.Groups[2].Index);
+                                        classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, callMatch.Groups[2].Index, owner: classProp);
 
                                         proc.Calls.Add(new VbCall
                                         {
@@ -512,7 +512,9 @@ public static partial class VbParser
                                                 mod.Name,
                                                 proc.Name,
                                                 li + 1,
-                                                GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1));
+                                                GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1),
+                                                callMatch.Groups[2].Index,
+                                                owner: classProc);
                                             if (!alreadyInCalls)
                                             {
                                               proc.Calls.Add(new VbCall
@@ -556,7 +558,8 @@ public static partial class VbParser
                                     proc.Name,
                                     li + 1,
                                     GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1),
-                                    callMatch.Groups[2].Index);
+                                    callMatch.Groups[2].Index,
+                                    owner: selected.TargetProc);
                                 if (!alreadyInCalls)
                                 {
                                   proc.Calls.Add(new VbCall
@@ -623,7 +626,8 @@ public static partial class VbParser
                                         proc.Name,
                                         li + 1,
                                         GetOccurrenceIndex(noCommentLine, tokenName, tokenMatch.Index, li + 1),
-                                        tokenMatch.Index);
+                                        tokenMatch.Index,
+                                        owner: selected.TargetProc);
                                     if (!alreadyInCalls)
                                     {
                                       proc.Calls.Add(new VbCall
@@ -662,7 +666,7 @@ public static partial class VbParser
                                 {
                                     propTarget.Prop.Used = true;
                                     var occurrenceIndex = GetOccurrenceIndex(noCommentLine, tokenName, tokenMatch.Index, li + 1);
-                                    propTarget.Prop.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, tokenMatch.Index);
+                                    propTarget.Prop.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, tokenMatch.Index, owner: propTarget.Prop);
                                     if (!alreadyInCalls)
                                     {
                                       proc.Calls.Add(new VbCall
@@ -710,7 +714,7 @@ public static partial class VbParser
                                 {
                                     classProp.Used = true;
                                     var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, methodAccessMatch.Groups[2].Index, li + 1);
-                                    classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, methodAccessMatch.Groups[2].Index);
+                                    classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, methodAccessMatch.Groups[2].Index, owner: classProp);
 
                                     if (!alreadyInCalls)
                                     {
@@ -740,7 +744,9 @@ public static partial class VbParser
                                             mod.Name,
                                             proc.Name,
                                             li + 1,
-                                            GetOccurrenceIndex(noCommentLine, methodName, methodAccessMatch.Groups[2].Index, li + 1));
+                                            GetOccurrenceIndex(noCommentLine, methodName, methodAccessMatch.Groups[2].Index, li + 1),
+                                            methodAccessMatch.Groups[2].Index,
+                                            owner: classProc);
                                         if (!alreadyInCalls)
                                         {
                                           proc.Calls.Add(new VbCall
@@ -857,7 +863,8 @@ public static partial class VbParser
                                             proc.Name,
                                             li + 1,
                                             GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1),
-                                            genericMethodMatch.Groups[2].Index);
+                                            genericMethodMatch.Groups[2].Index,
+                                            owner: classProc);
                                     if (!alreadyInCalls)
                                     {
                                       proc.Calls.Add(new VbCall

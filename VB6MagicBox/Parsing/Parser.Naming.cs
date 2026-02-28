@@ -199,6 +199,18 @@ public static partial class VbParser
 
             var expectedPrefix = GetControlPrefix(controlType);
 
+            if (expectedPrefix.Equals("fra", StringComparison.OrdinalIgnoreCase) &&
+                controlName.Length > 2 &&
+                controlName.StartsWith("fr", StringComparison.OrdinalIgnoreCase) &&
+                char.IsUpper(controlName[2]))
+            {
+                var frameNameToFix = controlName;
+                if (frameNameToFix.Length > 0 && char.IsLower(frameNameToFix[0]))
+                    frameNameToFix = char.ToUpper(frameNameToFix[0]) + frameNameToFix.Substring(1);
+
+                return expectedPrefix + frameNameToFix;
+            }
+
             // Caso speciale: TextBox con prefissi non standard (tb, tx) ? normalizza a txt
             var cleanType = controlType;
             if (cleanType.StartsWith("VB.", StringComparison.OrdinalIgnoreCase))

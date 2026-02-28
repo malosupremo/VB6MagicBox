@@ -406,7 +406,7 @@ public static partial class VbParser
                   continue;
 
                 ctrl.Used = true;
-                ctrl.References.AddLineNumber(mod.Name, proc.Name, proc.LineNumber);
+                ctrl.References.AddLineNumber(mod.Name, proc.Name, proc.LineNumber, owner: ctrl);
 
                 conventionalName = ctrl.ConventionalName + "_" + ToPascalCase(eventPart); // Use ConventionalName of Control!
                 isEvent = true;

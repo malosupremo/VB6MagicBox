@@ -70,7 +70,7 @@ public static partial class VbParser
         mod.Name = mvbName.Groups[1].Value;
 
         //introduco la primissima reference
-        mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber);
+        mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, owner: mod);
         continue;
       }
 
@@ -85,7 +85,7 @@ public static partial class VbParser
           mod.Name = mFormBegin.Groups[1].Value;
 
           //introduco la primissima reference
-          mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber);
+          mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, owner: mod);
           continue;
         }
       }
@@ -318,12 +318,12 @@ public static partial class VbParser
             {
               // Aggiungi il line number se non presente
               if (!existingRef.LineNumbers.Contains(originalLineNumber))
-                control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber);
+                control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, owner: control);
             }
             else
             {
               // Crea nuova Reference con line number
-              control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber);
+              control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, owner: control);
             }
             break; // Un controllo può avere un solo event handler con questo nome
           }
@@ -372,7 +372,8 @@ public static partial class VbParser
             currentProperty.Name,
             originalLineNumber,
             1,
-            propertyStartChar);
+            propertyStartChar,
+            owner: currentProperty);
 
         if (propertyStartChar >= 0)
         {
@@ -389,7 +390,8 @@ public static partial class VbParser
                   otherProperty.Name,
                   originalLineNumber,
                   1,
-                  propertyStartChar);
+                  propertyStartChar,
+                  owner: otherProperty);
             }
           }
         }

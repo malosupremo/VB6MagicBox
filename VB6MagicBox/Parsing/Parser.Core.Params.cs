@@ -114,7 +114,7 @@ public static partial class VbParser
 
                     // Trovato! Aggiungi una Reference a questa riga specifica
                     // ma solo se non l'ho già segnato
-                    param.References.AddLineNumber(moduleName, procedure.Name, resolvedLineNumber, occurrenceIndex, startChar);
+                    param.References.AddLineNumber(moduleName, procedure.Name, resolvedLineNumber, occurrenceIndex, startChar, owner: param);
 
                     // Un parametro può apparire solo una volta, quindi esci dal loop
                     break;

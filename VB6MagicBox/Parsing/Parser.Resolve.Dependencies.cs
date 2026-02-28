@@ -91,7 +91,14 @@ public static partial class VbParser
                         targetProc.Used = true;
                         // Usa il line number dalla call, se non disponibile usa il line number della procedura
                         var lineNum = call.LineNumber > 0 ? call.LineNumber : proc.LineNumber;
-                        targetProc.References.AddLineNumber(mod.Name, proc.Name, lineNum);
+                        var moduleLines = GetFileLines(fileCache, mod);
+                        var lineText = lineNum > 0 && lineNum <= moduleLines.Length ? moduleLines[lineNum - 1] : string.Empty;
+                        var methodToken = call.MethodName ?? call.ResolvedProcedure ?? call.ResolvedKind ?? string.Empty;
+                        var startChar = string.IsNullOrEmpty(methodToken)
+                            ? -1
+                            : lineText.IndexOf(methodToken, StringComparison.OrdinalIgnoreCase);
+                        var occurrenceIndex = GetOccurrenceIndex(lineText, methodToken, startChar, lineNum);
+                        targetProc.References.AddLineNumber(mod.Name, proc.Name, lineNum, occurrenceIndex, startChar, owner: targetProc);
                     }
 
                     // Marca classi usate
