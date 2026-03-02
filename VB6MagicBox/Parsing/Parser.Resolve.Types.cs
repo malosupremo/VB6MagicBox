@@ -202,6 +202,7 @@ public static partial class VbParser
   /// <summary>
   /// Scans tokens inside parenthesized array dimensions (e.g., "Tvalue(CONST_NAME) As Long")
   /// and records references to constants and enum values found there.
+  /// Handles nested parentheses (e.g., "arr(UBound(other))" ).
   /// </summary>
   private static void ResolveArrayDimensionTokens(
       string lineText,
@@ -214,12 +215,9 @@ public static partial class VbParser
       return;
 
     var noComment = StripInlineComment(lineText);
-    var parenMatches = Regex.Matches(noComment, @"\(([^)]+)\)");
-    foreach (Match pm in parenMatches)
-    {
-      var content = pm.Groups[1].Value;
-      var contentStart = pm.Groups[1].Index;
 
+    foreach (var (content, contentStart) in EnumerateParenContents(noComment))
+    {
       var tokenMatches = ReTokens.Matches(content);
       foreach (Match tm in tokenMatches)
       {

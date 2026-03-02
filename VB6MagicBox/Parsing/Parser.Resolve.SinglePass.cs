@@ -292,26 +292,17 @@ public static partial class VbParser
             var trimmed = noComment.TrimStart();
 
             // --- With stack management ---
+            var isWithLine = false;
             if (trimmed.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
             {
+                isWithLine = true;
                 var withExpr = trimmed.Substring(5).Trim();
                 if (withExpr.StartsWith(".") && withStack.Count > 0)
                     withExpr = withStack.Peek() + withExpr;
 
-                // Add module reference for With target
-                var withFirstToken = EnumerateTokens(withExpr).FirstOrDefault();
-                if (!string.IsNullOrEmpty(withFirstToken.Token) &&
-                    gIdx.ModuleByName.TryGetValue(withFirstToken.Token, out var withTargetMod) &&
-                    !string.Equals(withTargetMod.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    var sc = GetTokenStartChar(raw, withFirstToken.Token, withFirstToken.Index);
-                    withTargetMod.Used = true;
-                    withTargetMod.References.AddLineNumber(mod.Name, memberName, currentLine, sc, owner: withTargetMod);
-                }
-
                 if (!string.IsNullOrEmpty(withExpr))
                     withStack.Push(withExpr);
-                continue;
+                // Fall through to normal chain/token resolution for the With line
             }
 
             if (trimmed.Equals("End With", StringComparison.OrdinalIgnoreCase))
@@ -321,13 +312,14 @@ public static partial class VbParser
             }
 
             // Build effective line for dot-chain resolution (expand With prefix)
+            // Skip expansion for With lines: their expression is already literal in the source
             var effectiveLine = noComment;
-            if (withStack.Count > 0 && trimmed.StartsWith(".", StringComparison.Ordinal))
+            if (!isWithLine && withStack.Count > 0 && trimmed.StartsWith(".", StringComparison.Ordinal))
             {
                 var suffix = trimmed.Substring(1).TrimStart();
                 effectiveLine = withStack.Peek() + "." + suffix;
             }
-            if (withStack.Count > 0)
+            if (!isWithLine && withStack.Count > 0)
             {
                 var withPrefix = withStack.Peek();
                 effectiveLine = ReWithDotReplacement.Replace(effectiveLine,
@@ -600,11 +592,12 @@ public static partial class VbParser
         var parts = SplitChainParts(chainText);
         if (parts.Length < 2) return;
 
-        var tokenPositions = ReTokens.Matches(chainText)
-            .Select(m => (m.Value, chainIndex + m.Index))
-            .ToList();
+        // Only depth-0 tokens: chain-structural identifiers (base, field names after dots).
+        // Tokens inside parenthesized arguments (e.g., UBound, inner variables) are left
+        // unclaimed so the bare-token scan at STEP 2 can resolve them independently.
+        var tokenPositions = GetDepthZeroTokenPositions(chainText, chainIndex);
 
-        // Claim all token positions in this chain
+        // Claim structural token positions in this chain
         foreach (var (_, pos) in tokenPositions)
             chainTokensClaimed.Add(pos);
 

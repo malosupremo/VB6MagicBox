@@ -476,4 +476,38 @@ public static partial class VbParser
 
         return parts.ToArray();
     }
+
+    /// <summary>
+    /// Extracts identifier tokens that are at parenthesis depth 0 in a dot-chain.
+    /// Tokens inside parenthesized arguments (e.g., UBound(x) in arr(UBound(x)).Field)
+    /// are excluded so they can be resolved independently by the bare-token scan.
+    /// </summary>
+    private static List<(string Value, int Position)> GetDepthZeroTokenPositions(string chainText, int chainIndex)
+    {
+        var result = new List<(string, int)>();
+        int depth = 0;
+        for (int i = 0; i < chainText.Length; i++)
+        {
+            if (chainText[i] == '(')
+            {
+                depth++;
+                continue;
+            }
+            if (chainText[i] == ')')
+            {
+                depth = Math.Max(0, depth - 1);
+                continue;
+            }
+            if (depth == 0 && IsIdentifierStart(chainText[i]))
+            {
+                int start = i;
+                i++;
+                while (i < chainText.Length && IsIdentifierChar(chainText[i]))
+                    i++;
+                result.Add((chainText.Substring(start, i - start), chainIndex + start));
+                i--;
+            }
+        }
+        return result;
+    }
 }
