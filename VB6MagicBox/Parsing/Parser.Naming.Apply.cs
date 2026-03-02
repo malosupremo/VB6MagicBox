@@ -25,7 +25,7 @@ public static partial class VbParser
         var rawName = Path.GetFileNameWithoutExtension(mod.Name); // Rimuove .cls/.bas/.frm extension, mantiene nome file
 
         // Per Form e Classi, estrai il nome base (senza prefisso) prima di applicare ToPascalCase
-        // così SQM242.frm ? FrmSqm242 e EXEC1.bas ? Exec1
+        // cosï¿½ SQM242.frm ? FrmSqm242 e EXEC1.bas ? Exec1
         string pascalName;
         if (mod.Kind.Equals("frm", StringComparison.OrdinalIgnoreCase))
         {
@@ -47,7 +47,7 @@ public static partial class VbParser
           pascalName = ToPascalCase(rawName);
         }
 
-        // Se il nome risultante è una keyword C# (es. "With"), aggiungi "Class"
+        // Se il nome risultante ï¿½ una keyword C# (es. "With"), aggiungi "Class"
         if (CSharpKeywords.Contains(pascalName.ToLower())) // Check lowercase against lowercase keywords usually
         {
           pascalName += "Class";
@@ -72,10 +72,10 @@ public static partial class VbParser
           string conventionalName;
           if (v.IsStatic)
           {
-            // Per le variabili static: controlla se inizia già con "s_"
+            // Per le variabili static: controlla se inizia giï¿½ con "s_"
             if (baseName.StartsWith("s_", StringComparison.OrdinalIgnoreCase))
             {
-              // Già nel formato corretto s_Nome, mantieni così com'è
+              // Giï¿½ nel formato corretto s_Nome, mantieni cosï¿½ com'ï¿½
               conventionalName = baseName + (arraySuffix ?? "");
             }
             else
@@ -93,10 +93,10 @@ public static partial class VbParser
           }
           else if (IsPrivate(v.Visibility))
           {
-            // Module Private: controlla se inizia già con "m_"
+            // Module Private: controlla se inizia giï¿½ con "m_"
             if (baseName.StartsWith("m_", StringComparison.OrdinalIgnoreCase))
             {
-              // Già nel formato corretto m_Nome, mantieni così com'è
+              // Giï¿½ nel formato corretto m_Nome, mantieni cosï¿½ com'ï¿½
               conventionalName = baseName + (arraySuffix ?? "");
             }
             else
@@ -135,14 +135,14 @@ public static partial class VbParser
                 if (baseName.StartsWith("g_", StringComparison.OrdinalIgnoreCase))
                 {
                   var tail = baseName.Substring(2);
-                  // Se il tail è già in PascalCase, mantieni il nome originale
+                  // Se il tail ï¿½ giï¿½ in PascalCase, mantieni il nome originale
                   if (IsPascalCase(tail))
                   {
                     conventionalName = baseName + (arraySuffix ?? "");
                   }
                   else
                   {
-                    // Il tail non è PascalCase, applicalo
+                    // Il tail non ï¿½ PascalCase, applicalo
                     conventionalName = "g_" + ToPascalCase(tail) + (arraySuffix ?? "");
                   }
                 }
@@ -163,7 +163,7 @@ public static partial class VbParser
               {
                 // FORM: oggetti pubblici ? objName
                 // Es: UAServerObj ? objUAServerObj
-                // Es: objFM489   ? objFM489 (già OK)
+                // Es: objFM489   ? objFM489 (giï¿½ OK)
                 var tail = baseName;
 
                 // Rimuovi prefisso obj se presente (per evitare objObjName)
@@ -186,7 +186,7 @@ public static partial class VbParser
 
           if (IsReservedWord(v.ConventionalName))
           {
-            // Se è reserved word, torna al nome originale e rimuovi da globalNamesUsed
+            // Se ï¿½ reserved word, torna al nome originale e rimuovi da globalNamesUsed
             globalNamesUsed.Remove(v.ConventionalName);
             v.ConventionalName = v.Name;
             globalNamesUsed.Add(v.ConventionalName);
@@ -211,7 +211,7 @@ public static partial class VbParser
           }
         }
 
-        // Enums - con conflict resolution (usando globalNamesUsed perché sono a livello modulo)
+        // Enums - con conflict resolution (usando globalNamesUsed perchï¿½ sono a livello modulo)
         foreach (var e in mod.Enums)
         {
           // Convert SCREAMING_SNAKE_CASE to PascalCase
@@ -252,7 +252,7 @@ public static partial class VbParser
           }
         }
 
-        // Types - con conflict resolution (usando globalNamesUsed perché sono a livello modulo)
+        // Types - con conflict resolution (usando globalNamesUsed perchï¿½ sono a livello modulo)
         foreach (var t in mod.Types)
         {
           var conventionalName = ToPascalCaseType(t.Name);
@@ -272,7 +272,7 @@ public static partial class VbParser
           {
             var fieldConventionalName = ToPascalCase(f.Name);
 
-            // Caso speciale: se il campo si chiama "Type", è una keyword riservata
+            // Caso speciale: se il campo si chiama "Type", ï¿½ una keyword riservata
             if (fieldConventionalName.Equals("Type", StringComparison.OrdinalIgnoreCase))
             {
               fieldConventionalName = "TypeValue";
@@ -288,7 +288,7 @@ public static partial class VbParser
           }
         }
 
-        // Events - con conflict resolution (usando globalNamesUsed perché sono a livello modulo)
+        // Events - con conflict resolution (usando globalNamesUsed perchï¿½ sono a livello modulo)
         foreach (var ev in mod.Events)
         {
           var conventionalName = ToPascalCase(ev.Name);
@@ -407,7 +407,7 @@ public static partial class VbParser
 
                 ctrl.Used = true;
                 var eventStartChar = proc.Name.IndexOf(ctrl.Name, StringComparison.OrdinalIgnoreCase);
-                ctrl.References.AddLineNumber(mod.Name, proc.Name, proc.LineNumber, 1, eventStartChar, owner: ctrl);
+                ctrl.References.AddLineNumber(mod.Name, proc.Name, proc.LineNumber, eventStartChar, owner: ctrl);
 
                 conventionalName = ctrl.ConventionalName + "_" + ToPascalCase(eventPart); // Use ConventionalName of Control!
                 isEvent = true;
@@ -453,13 +453,13 @@ public static partial class VbParser
           }
 
           // SPECIALE: Property Get/Let/Set con lo stesso nome devono mantenere lo stesso ConventionalName
-          // Verifica se questa è una Property e se esiste già una Property Get/Let/Set con lo stesso nome
+          // Verifica se questa ï¿½ una Property e se esiste giï¿½ una Property Get/Let/Set con lo stesso nome
           if (proc.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
           {
-            // Estrai il nome base della proprietà (senza Get/Let/Set)
+            // Estrai il nome base della proprietï¿½ (senza Get/Let/Set)
             var basePropName = proc.Name;
 
-            // Cerca se esiste già una Property (Get/Let/Set) con lo stesso nome base
+            // Cerca se esiste giï¿½ una Property (Get/Let/Set) con lo stesso nome base
             var existingProperty = mod.Procedures.FirstOrDefault(p =>
                 p != proc &&
                 p.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase) &&
@@ -524,10 +524,10 @@ public static partial class VbParser
 
             if (v.IsStatic)
             {
-              // Per le variabili static: controlla se inizia già con "s_"
+              // Per le variabili static: controlla se inizia giï¿½ con "s_"
               if (baseName.StartsWith("s_", StringComparison.OrdinalIgnoreCase))
               {
-                // Già nel formato corretto s_Nome, mantieni così com'è
+                // Giï¿½ nel formato corretto s_Nome, mantieni cosï¿½ com'ï¿½
                 localConventionalName = baseName;
               }
               else
@@ -626,7 +626,7 @@ public static partial class VbParser
 
             if (isControlEventHandler)
             {
-              // È un event handler di controllo: ObjectName_EventName
+              // ï¿½ un event handler di controllo: ObjectName_EventName
               var parts = prop.Name.Split('_', 2);
               if (parts.Length == 2)
               {
@@ -650,7 +650,7 @@ public static partial class VbParser
           }
 
           // SPECIALE: Property Get/Let/Set con lo stesso nome devono mantenere lo stesso ConventionalName
-          // Cerca se esiste già una Property (Get/Let/Set) con lo stesso nome base
+          // Cerca se esiste giï¿½ una Property (Get/Let/Set) con lo stesso nome base
           var existingProperty = mod.Properties.FirstOrDefault(p =>
               p != prop &&
               p.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase));
@@ -674,7 +674,7 @@ public static partial class VbParser
             procedureNamesUsed.Add(prop.ConventionalName);
           }
 
-          // Per ogni proprietà, gestione conflict resolution di parametri
+          // Per ogni proprietï¿½, gestione conflict resolution di parametri
           var localScopeNamesUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
           // Parametri

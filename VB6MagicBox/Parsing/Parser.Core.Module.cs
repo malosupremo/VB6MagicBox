@@ -71,7 +71,7 @@ public static partial class VbParser
 
         //introduco la primissima reference
         var moduleStartChar = line.IndexOf(mod.Name, StringComparison.OrdinalIgnoreCase);
-        mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, 1, moduleStartChar, owner: mod);
+        mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, moduleStartChar, owner: mod);
         continue;
       }
 
@@ -87,7 +87,7 @@ public static partial class VbParser
 
           //introduco la primissima reference
           var formStartChar = line.IndexOf(mod.Name, StringComparison.OrdinalIgnoreCase);
-          mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, 1, formStartChar, owner: mod);
+          mod.References.AddLineNumber(mod.Name, string.Empty, originalLineNumber, formStartChar, owner: mod);
           continue;
         }
       }
@@ -199,7 +199,7 @@ public static partial class VbParser
           if (mf.Success)
           {
             var fieldName = mf.Groups[1].Value;
-            var arrayPart = mf.Groups[2].Value; // può essere vuoto o "(dimensione)"
+            var arrayPart = mf.Groups[2].Value; // puï¿½ essere vuoto o "(dimensione)"
             var fieldType = mf.Groups[3].Value;
 
             currentType.Fields.Add(new VbField
@@ -311,7 +311,7 @@ public static partial class VbParser
           var prefix = $"{control.Name}_";
           if (currentProc.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
           {
-            // Questa procedura è un event handler di questo controllo
+            // Questa procedura ï¿½ un event handler di questo controllo
             var existingRef = control.References.FirstOrDefault(r =>
               string.Equals(r.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
               string.Equals(r.Procedure, currentProc.Name, StringComparison.OrdinalIgnoreCase));
@@ -325,7 +325,7 @@ public static partial class VbParser
                 if (eventStartChar < 0)
                     eventStartChar = line.IndexOf(control.Name, StringComparison.OrdinalIgnoreCase);
 
-                control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, 1, eventStartChar, owner: control);
+                control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, eventStartChar, owner: control);
               }
             }
             else
@@ -335,9 +335,9 @@ public static partial class VbParser
               if (eventStartChar < 0)
                   eventStartChar = line.IndexOf(control.Name, StringComparison.OrdinalIgnoreCase);
 
-              control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, 1, eventStartChar, owner: control);
+              control.References.AddLineNumber(mod.Name, currentProc.Name, originalLineNumber, eventStartChar, owner: control);
             }
-            break; // Un controllo può avere un solo event handler con questo nome
+            break; // Un controllo puï¿½ avere un solo event handler con questo nome
           }
         }
 
@@ -380,12 +380,7 @@ public static partial class VbParser
         }
 
         currentProperty.References.AddLineNumber(
-            mod.Name,
-            currentProperty.Name,
-            originalLineNumber,
-            1,
-            propertyStartChar,
-            owner: currentProperty);
+            mod.Name, currentProperty.Name, originalLineNumber, propertyStartChar, owner: currentProperty);
 
         if (propertyStartChar >= 0)
         {
@@ -398,18 +393,13 @@ public static partial class VbParser
             if (otherProperty.References.Any(r => r.LineNumbers.Contains(originalLineNumber)))
             {
               otherProperty.References.AddLineNumber(
-                  mod.Name,
-                  otherProperty.Name,
-                  originalLineNumber,
-                  1,
-                  propertyStartChar,
-                  owner: otherProperty);
+                  mod.Name, otherProperty.Name, originalLineNumber, propertyStartChar, owner: otherProperty);
             }
           }
         }
 
         // Imposta currentProc SOLO per tracciare la fine della Property (NON aggiungere a mod.Procedures)
-        // Questo è un oggetto temporaneo usato solo per il parsing interno
+        // Questo ï¿½ un oggetto temporaneo usato solo per il parsing interno
         currentProc = new VbProcedure
         {
           Visibility = string.IsNullOrEmpty(mp.Groups[1].Value) ? "Public" : mp.Groups[1].Value,
@@ -841,7 +831,7 @@ public static partial class VbParser
                         DebugLog(currentProc.Name, originalLineNumber, name, "SKIPPED: Type", "ReBareCall");
                     else if (isSelfRef)
                     {
-                        //MAO, una funzione può richiamare se stessa ricorsivamente anche senza parentesi, ad esempio un avanzamento immediato di tick
+                        //MAO, una funzione puï¿½ richiamare se stessa ricorsivamente anche senza parentesi, ad esempio un avanzamento immediato di tick
                         DebugLog(currentProc.Name, originalLineNumber, name, "ADDED: Self-reference (return value assignment)", "ReBareCall");
                         currentProc.Calls.Add(new VbCall
                         {

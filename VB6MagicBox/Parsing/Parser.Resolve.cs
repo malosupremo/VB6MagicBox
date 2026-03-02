@@ -1,6 +1,4 @@
-﻿using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -11,23 +9,24 @@ public static partial class VbParser
     // REGEX COMPILATE PER HOT-PATH (usate nei loop di risoluzione)
     // ---------------------------------------------------------
 
-    private static readonly Regex ReSetNew = 
+    private static readonly Regex ReSetNew =
         new(@"Set\s+(\w+)\s*=\s*New\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex ReSetAlias = 
+    private static readonly Regex ReSetAlias =
         new(@"Set\s+(\w+)\s*=\s+(\w+(?:\.\w+)?)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex ReWordBoundary = 
+    private static readonly Regex ReWordBoundary =
         new(@"\b([A-Za-z_]\w*)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex ReObjectMethod = 
+    private static readonly Regex ReObjectMethod =
         new(@"(\w+)\.(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // ---------------------------------------------------------
-    // RISOLUZIONE TIPI, CHIAMATE, CAMPI
+    // OLD MULTI-PASS RESOLUTION (replaced by SinglePass)
     // ---------------------------------------------------------
 
-    public static void ResolveTypesAndCalls(VbProject project, Dictionary<string, string[]> fileCache)
+    [Obsolete("Replaced by ResolveTypesAndCalls in Parser.Resolve.SinglePass.cs")]
+    private static void ResolveTypesAndCalls_OLD(VbProject project, Dictionary<string, string[]> fileCache)
     {
         // Indicizzazione procedure per nome (ESCLUSE le proprietà)
         var procIndex = new Dictionary<string, List<(string Module, VbProcedure Proc)>>(
@@ -485,7 +484,7 @@ public static partial class VbParser
                                     {
                                         classProp.Used = true;
                                         var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, callMatch.Groups[2].Index, li + 1);
-                                        classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, callMatch.Groups[2].Index, owner: classProp);
+                                        classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, callMatch.Groups[2].Index, owner: classProp);
 
                                         proc.Calls.Add(new VbCall
                                         {
@@ -517,17 +516,17 @@ public static partial class VbParser
                                                 owner: classProc);
                                             if (!alreadyInCalls)
                                             {
-                                              proc.Calls.Add(new VbCall
-                                              {
-                                                  Raw = objName != null ? $"{objName}.{methodName}" : methodName,
-                                                  ObjectName = objName,
-                                                  MethodName = methodName,
-                                                  ResolvedType = objType,
-                                                  ResolvedModule = classModule.Name,
-                                                  ResolvedProcedure = classProc.Name,
-                                                  ResolvedKind = classProc.Kind,
-                                                  LineNumber = li + 1
-                                              });
+                                                proc.Calls.Add(new VbCall
+                                                {
+                                                    Raw = objName != null ? $"{objName}.{methodName}" : methodName,
+                                                    ObjectName = objName,
+                                                    MethodName = methodName,
+                                                    ResolvedType = objType,
+                                                    ResolvedModule = classModule.Name,
+                                                    ResolvedProcedure = classProc.Name,
+                                                    ResolvedKind = classProc.Kind,
+                                                    LineNumber = li + 1
+                                                });
                                             }
                                         }
                                     }
@@ -562,15 +561,15 @@ public static partial class VbParser
                                     owner: selected.TargetProc);
                                 if (!alreadyInCalls)
                                 {
-                                  proc.Calls.Add(new VbCall
-                                  {
-                                      Raw = methodName,
-                                      MethodName = methodName,
-                                      ResolvedModule = selected.Module,
-                                      ResolvedProcedure = selected.TargetProc.Name,
-                                      ResolvedKind = selected.TargetProc.Kind,
-                                      LineNumber = li + 1
-                                  });
+                                    proc.Calls.Add(new VbCall
+                                    {
+                                        Raw = methodName,
+                                        MethodName = methodName,
+                                        ResolvedModule = selected.Module,
+                                        ResolvedProcedure = selected.TargetProc.Name,
+                                        ResolvedKind = selected.TargetProc.Kind,
+                                        LineNumber = li + 1
+                                    });
                                 }
                             }
                         }
@@ -630,15 +629,15 @@ public static partial class VbParser
                                         owner: selected.TargetProc);
                                     if (!alreadyInCalls)
                                     {
-                                      proc.Calls.Add(new VbCall
-                                      {
-                                          Raw = tokenName,
-                                          MethodName = tokenName,
-                                          ResolvedModule = selected.Module,
-                                          ResolvedProcedure = selected.TargetProc.Name,
-                                          ResolvedKind = selected.TargetProc.Kind,
-                                          LineNumber = li + 1
-                                      });
+                                        proc.Calls.Add(new VbCall
+                                        {
+                                            Raw = tokenName,
+                                            MethodName = tokenName,
+                                            ResolvedModule = selected.Module,
+                                            ResolvedProcedure = selected.TargetProc.Name,
+                                            ResolvedKind = selected.TargetProc.Kind,
+                                            LineNumber = li + 1
+                                        });
                                     }
                                 }
                                 continue;
@@ -651,14 +650,14 @@ public static partial class VbParser
                                 var alreadyInCalls = proc.Calls.Any(c => string.Equals(c.Raw, tokenName, StringComparison.OrdinalIgnoreCase));
 
                                 // Cerca proprietà Get in altri moduli (public properties usabili bare)
-                                var propTarget = propTargets.FirstOrDefault(pt => 
+                                var propTarget = propTargets.FirstOrDefault(pt =>
                                     pt.Prop.Kind.Equals("Get", StringComparison.OrdinalIgnoreCase) &&
                                     !string.Equals(pt.Module, mod.Name, StringComparison.OrdinalIgnoreCase));
 
                                 // Se non trovata in altri moduli, prova nel modulo corrente
                                 if (propTarget.Prop == null)
                                 {
-                                    propTarget = propTargets.FirstOrDefault(pt => 
+                                    propTarget = propTargets.FirstOrDefault(pt =>
                                         pt.Prop.Kind.Equals("Get", StringComparison.OrdinalIgnoreCase));
                                 }
 
@@ -666,18 +665,18 @@ public static partial class VbParser
                                 {
                                     propTarget.Prop.Used = true;
                                     var occurrenceIndex = GetOccurrenceIndex(noCommentLine, tokenName, tokenMatch.Index, li + 1);
-                                    propTarget.Prop.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, tokenMatch.Index, owner: propTarget.Prop);
+                                    propTarget.Prop.References.AddLineNumber(mod.Name, proc.Name, li + 1, tokenMatch.Index, owner: propTarget.Prop);
                                     if (!alreadyInCalls)
                                     {
-                                      proc.Calls.Add(new VbCall
-                                      {
-                                          Raw = tokenName,
-                                          MethodName = tokenName,
-                                          ResolvedModule = propTarget.Module,
-                                          ResolvedProcedure = propTarget.Prop.Name,
-                                          ResolvedKind = $"Property{propTarget.Prop.Kind}",
-                                          LineNumber = li + 1
-                                      });
+                                        proc.Calls.Add(new VbCall
+                                        {
+                                            Raw = tokenName,
+                                            MethodName = tokenName,
+                                            ResolvedModule = propTarget.Module,
+                                            ResolvedProcedure = propTarget.Prop.Name,
+                                            ResolvedKind = $"Property{propTarget.Prop.Kind}",
+                                            LineNumber = li + 1
+                                        });
                                     }
                                 }
                             }
@@ -714,7 +713,7 @@ public static partial class VbParser
                                 {
                                     classProp.Used = true;
                                     var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, methodAccessMatch.Groups[2].Index, li + 1);
-                                    classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, methodAccessMatch.Groups[2].Index, owner: classProp);
+                                    classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, methodAccessMatch.Groups[2].Index, owner: classProp);
 
                                     if (!alreadyInCalls)
                                     {
@@ -749,17 +748,17 @@ public static partial class VbParser
                                             owner: classProc);
                                         if (!alreadyInCalls)
                                         {
-                                          proc.Calls.Add(new VbCall
-                                          {
-                                              Raw = $"{objName}.{methodName}",
-                                              ObjectName = objName,
-                                              MethodName = methodName,
-                                              ResolvedType = classNameToLookup,
-                                              ResolvedModule = classModule.Name,
-                                              ResolvedProcedure = classProc.Name,
-                                              ResolvedKind = classProc.Kind,
-                                              LineNumber = li + 1
-                                          });
+                                            proc.Calls.Add(new VbCall
+                                            {
+                                                Raw = $"{objName}.{methodName}",
+                                                ObjectName = objName,
+                                                MethodName = methodName,
+                                                ResolvedType = classNameToLookup,
+                                                ResolvedModule = classModule.Name,
+                                                ResolvedProcedure = classProc.Name,
+                                                ResolvedKind = classProc.Kind,
+                                                LineNumber = li + 1
+                                            });
                                         }
                                     }
                                 }
@@ -787,7 +786,7 @@ public static partial class VbParser
                         {
                             referencedModule.Used = true;
                             var moduleOccurrenceIndex = GetOccurrenceIndex(noCommentLine, objName, genericMethodMatch.Groups[1].Index, li + 1);
-                            referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1, moduleOccurrenceIndex, genericMethodMatch.Groups[1].Index, owner: referencedModule);
+                            referencedModule.References.AddLineNumber(mod.Name, proc.Name, li + 1, genericMethodMatch.Groups[1].Index, owner: referencedModule);
 
                             var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1);
                             var moduleProc = referencedModule.Procedures.FirstOrDefault(p =>
@@ -795,7 +794,7 @@ public static partial class VbParser
                             if (moduleProc != null)
                             {
                                 moduleProc.Used = true;
-                                moduleProc.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index, owner: moduleProc);
+                                moduleProc.References.AddLineNumber(mod.Name, proc.Name, li + 1, genericMethodMatch.Groups[2].Index, owner: moduleProc);
                             }
                             else
                             {
@@ -804,7 +803,7 @@ public static partial class VbParser
                                 if (moduleProp != null)
                                 {
                                     moduleProp.Used = true;
-                                    moduleProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index, owner: moduleProp);
+                                    moduleProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, genericMethodMatch.Groups[2].Index, owner: moduleProp);
                                 }
                             }
                         }
@@ -832,7 +831,7 @@ public static partial class VbParser
                                 classProp.Used = true;
 
                                 var occurrenceIndex = GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1);
-                                classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, occurrenceIndex, genericMethodMatch.Groups[2].Index, owner: classProp);
+                                classProp.References.AddLineNumber(mod.Name, proc.Name, li + 1, genericMethodMatch.Groups[2].Index, owner: classProp);
 
                                 if (!alreadyInCalls)
                                 {
@@ -858,26 +857,26 @@ public static partial class VbParser
                                 if (classProc != null)
                                 {
                                     classProc.Used = true;
-                                        classProc.References.AddLineNumber(
-                                            mod.Name,
-                                            proc.Name,
-                                            li + 1,
-                                            GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1),
-                                            genericMethodMatch.Groups[2].Index,
-                                            owner: classProc);
+                                    classProc.References.AddLineNumber(
+                                        mod.Name,
+                                        proc.Name,
+                                        li + 1,
+                                        GetOccurrenceIndex(noCommentLine, methodName, genericMethodMatch.Groups[2].Index, li + 1),
+                                        genericMethodMatch.Groups[2].Index,
+                                        owner: classProc);
                                     if (!alreadyInCalls)
                                     {
-                                      proc.Calls.Add(new VbCall
-                                      {
-                                          Raw = $"{objName}.{methodName}",
-                                          ObjectName = objName,
-                                          MethodName = methodName,
-                                          ResolvedType = classNameToLookup,
-                                          ResolvedModule = classModule.Name,
-                                          ResolvedProcedure = classProc.Name,
-                                          ResolvedKind = classProc.Kind,
-                                          LineNumber = li + 1
-                                      });
+                                        proc.Calls.Add(new VbCall
+                                        {
+                                            Raw = $"{objName}.{methodName}",
+                                            ObjectName = objName,
+                                            MethodName = methodName,
+                                            ResolvedType = classNameToLookup,
+                                            ResolvedModule = classModule.Name,
+                                            ResolvedProcedure = classProc.Name,
+                                            ResolvedKind = classProc.Kind,
+                                            LineNumber = li + 1
+                                        });
                                     }
                                 }
                             }

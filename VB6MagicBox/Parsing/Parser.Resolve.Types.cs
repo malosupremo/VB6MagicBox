@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -13,8 +13,7 @@ public static partial class VbParser
   /// Aggiunge References ai VbTypeDef per tutte le posizioni in cui il tipo
   /// appare in una clausola "As TypeName": campi di altri Type, variabili
   /// globali/locali, parametri di procedure e proprietà.
-  /// Senza questo, il refactoring non sa quali righe aggiornare quando
-  /// rinomina un tipo (es. DISPAT_HEADER_T ? DispatHeader_T).
+  /// Calcola lo startChar direttamente cercando il tipo dopo il nome del simbolo.
   /// </summary>
   private static void ResolveTypeReferences(
       VbProject project,
@@ -28,134 +27,146 @@ public static partial class VbParser
       // 1. Campi di altri Type: "FieldName As OTHER_TYPE"
       foreach (var typeDef in mod.Types)
       {
-        for (int i = 0; i < typeDef.Fields.Count; i++)
+        foreach (var field in typeDef.Fields)
         {
-          var field = typeDef.Fields[i];
-          var occurrence = typeDef.Fields.Take(i)
-              .Count(f => f.LineNumber == field.LineNumber &&
-                          f.Type?.Equals(field.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
-
-          var lineText = field.LineNumber > 0 && field.LineNumber <= fileLines.Length
-              ? fileLines[field.LineNumber - 1]
-              : string.Empty;
-          AddTypeReference(field.Type, lineText, field.LineNumber, mod.Name, string.Empty, typeIndex, occurrence);
+          var lineText = GetLineText(fileLines, field.LineNumber);
+          var sc = FindTypeStartChar(lineText, field.Name, field.Type);
+          AddTypeReferenceAt(field.Type, field.LineNumber, sc, lineText, mod.Name, string.Empty, typeIndex);
         }
       }
 
       // 2. Variabili globali: "Public/Dim varName As TYPE"
-      for (int i = 0; i < mod.GlobalVariables.Count; i++)
+      foreach (var variable in mod.GlobalVariables)
       {
-        var variable = mod.GlobalVariables[i];
-        var occurrence = mod.GlobalVariables.Take(i)
-            .Count(v => v.LineNumber == variable.LineNumber &&
-                        v.Type?.Equals(variable.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
-
-        var lineText = variable.LineNumber > 0 && variable.LineNumber <= fileLines.Length
-            ? fileLines[variable.LineNumber - 1]
-            : string.Empty;
-        AddTypeReference(variable.Type, lineText, variable.LineNumber, mod.Name, string.Empty, typeIndex, occurrence);
+        var lineText = GetLineText(fileLines, variable.LineNumber);
+        var sc = FindTypeStartChar(lineText, variable.Name, variable.Type);
+        AddTypeReferenceAt(variable.Type, variable.LineNumber, sc, lineText, mod.Name, string.Empty, typeIndex);
       }
 
       // 3. Parametri e variabili locali delle procedure
       foreach (var proc in mod.Procedures)
       {
-        var procReturnLine = proc.ReturnTypeLineNumber > 0 ? proc.ReturnTypeLineNumber : proc.LineNumber;
-        var procReturnText = procReturnLine > 0 && procReturnLine <= fileLines.Length
-            ? fileLines[procReturnLine - 1]
-            : string.Empty;
-        AddTypeReference(proc.ReturnType, procReturnText, procReturnLine, mod.Name, proc.Name, typeIndex, -1);
+        // Return type: cerca dopo ")" nella riga
+        var retLine = proc.ReturnTypeLineNumber > 0 ? proc.ReturnTypeLineNumber : proc.LineNumber;
+        var retText = GetLineText(fileLines, retLine);
+        var retSc = FindTypeStartChar(retText, null, proc.ReturnType, isReturnType: true);
+        AddTypeReferenceAt(proc.ReturnType, retLine, retSc, retText, mod.Name, proc.Name, typeIndex);
 
-        // Per i parametri, calcola occurrenceIndex per gestire più parametri dello stesso tipo sulla stessa riga
-        for (int i = 0; i < proc.Parameters.Count; i++)
+        // Parametri: cerca il tipo dopo il nome del parametro
+        foreach (var param in proc.Parameters)
         {
-          var param = proc.Parameters[i];
           var paramLine = param.TypeLineNumber > 0 ? param.TypeLineNumber : param.LineNumber;
-          var isMultilineType = param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber;
-          int occurrence = isMultilineType
-            ? -1
-            : proc.Parameters.Take(i)
-                .Count(p => (p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber) == paramLine &&
-                            p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
-
-          var paramLineText = paramLine > 0 && paramLine <= fileLines.Length
-              ? fileLines[paramLine - 1]
-              : string.Empty;
-          AddTypeReference(param.Type, paramLineText, paramLine, mod.Name, proc.Name, typeIndex, occurrence);
+          var paramText = GetLineText(fileLines, paramLine);
+          int sc;
+          if (param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber)
+            sc = FindTypeStartChar(paramText, null, param.Type); // multiline: name on different line
+          else
+            sc = FindTypeStartChar(paramText, param.Name, param.Type);
+          AddTypeReferenceAt(param.Type, paramLine, sc, paramText, mod.Name, proc.Name, typeIndex);
         }
 
-        for (int i = 0; i < proc.LocalVariables.Count; i++)
+        // Variabili locali
+        foreach (var lv in proc.LocalVariables)
         {
-          var localVar = proc.LocalVariables[i];
-          var occurrence = proc.LocalVariables.Take(i)
-              .Count(v => v.LineNumber == localVar.LineNumber &&
-                          v.Type?.Equals(localVar.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
-
-          var localLineText = localVar.LineNumber > 0 && localVar.LineNumber <= fileLines.Length
-              ? fileLines[localVar.LineNumber - 1]
-              : string.Empty;
-          AddTypeReference(localVar.Type, localLineText, localVar.LineNumber, mod.Name, proc.Name, typeIndex, occurrence);
+          var lineText = GetLineText(fileLines, lv.LineNumber);
+          var sc = FindTypeStartChar(lineText, lv.Name, lv.Type);
+          AddTypeReferenceAt(lv.Type, lv.LineNumber, sc, lineText, mod.Name, proc.Name, typeIndex);
         }
       }
 
-      // 4. Parametri delle proprietà
+      // 4. Parametri e return type delle proprietà
       foreach (var prop in mod.Properties)
       {
-        var propReturnLine = prop.ReturnTypeLineNumber > 0 ? prop.ReturnTypeLineNumber : prop.LineNumber;
-        var propReturnText = propReturnLine > 0 && propReturnLine <= fileLines.Length
-            ? fileLines[propReturnLine - 1]
-            : string.Empty;
-        AddTypeReference(prop.ReturnType, propReturnText, propReturnLine, mod.Name, prop.Name, typeIndex, -1);
+        var retLine = prop.ReturnTypeLineNumber > 0 ? prop.ReturnTypeLineNumber : prop.LineNumber;
+        var retText = GetLineText(fileLines, retLine);
+        var retSc = FindTypeStartChar(retText, null, prop.ReturnType, isReturnType: true);
+        AddTypeReferenceAt(prop.ReturnType, retLine, retSc, retText, mod.Name, prop.Name, typeIndex);
 
-        // Per i parametri, calcola occurrenceIndex
-        for (int i = 0; i < prop.Parameters.Count; i++)
+        foreach (var param in prop.Parameters)
         {
-          var param = prop.Parameters[i];
           var paramLine = param.TypeLineNumber > 0 ? param.TypeLineNumber : param.LineNumber;
-          var isMultilineType = param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber;
-          int occurrence = isMultilineType
-            ? -1
-            : prop.Parameters.Take(i)
-                .Count(p => (p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber) == paramLine &&
-                            p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
-
-          var paramLineText = paramLine > 0 && paramLine <= fileLines.Length
-              ? fileLines[paramLine - 1]
-              : string.Empty;
-          AddTypeReference(param.Type, paramLineText, paramLine, mod.Name, prop.Name, typeIndex, occurrence);
+          var paramText = GetLineText(fileLines, paramLine);
+          int sc;
+          if (param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber)
+            sc = FindTypeStartChar(paramText, null, param.Type);
+          else
+            sc = FindTypeStartChar(paramText, param.Name, param.Type);
+          AddTypeReferenceAt(param.Type, paramLine, sc, paramText, mod.Name, prop.Name, typeIndex);
         }
       }
     }
   }
 
   /// <summary>
-  /// Se typeName è un tipo noto nel typeIndex, aggiunge lineNumber alle sue References.
-  /// occurrenceIndex (1-based) specifica quale occorrenza del tipo sulla riga (per parametri multipli).
+  /// Trova lo startChar del tipo nella riga cercando dopo il nome del simbolo.
+  /// Per return type, cerca dopo l'ultima ")".
   /// </summary>
-  private static void AddTypeReference(
-      string typeName,
-      string lineText,
+  private static int FindTypeStartChar(string lineText, string? symbolName, string? typeName, bool isReturnType = false)
+  {
+    if (string.IsNullOrEmpty(lineText) || string.IsNullOrEmpty(typeName))
+      return -1;
+
+    var noComment = StripInlineComment(lineText);
+    var baseTypeName = typeName.Contains('(')
+        ? typeName.Substring(0, typeName.IndexOf('('))
+        : typeName;
+
+    int searchFrom = 0;
+
+    if (isReturnType)
+    {
+      var lastParen = noComment.LastIndexOf(')');
+      if (lastParen >= 0)
+        searchFrom = lastParen + 1;
+    }
+    else if (!string.IsNullOrEmpty(symbolName))
+    {
+      var nameMatch = Regex.Match(noComment, $@"\b{Regex.Escape(symbolName)}\b", RegexOptions.IgnoreCase);
+      if (nameMatch.Success)
+        searchFrom = nameMatch.Index + nameMatch.Length;
+    }
+
+    if (searchFrom >= noComment.Length)
+      return -1;
+
+    var sub = noComment.Substring(searchFrom);
+    var typeMatch = Regex.Match(sub, $@"\b{Regex.Escape(baseTypeName)}\b", RegexOptions.IgnoreCase);
+    if (typeMatch.Success)
+      return searchFrom + typeMatch.Index;
+
+    // Prova con/senza suffisso _T
+    if (!baseTypeName.EndsWith("_T", StringComparison.OrdinalIgnoreCase))
+    {
+      typeMatch = Regex.Match(sub, $@"\b{Regex.Escape(baseTypeName + "_T")}\b", RegexOptions.IgnoreCase);
+      if (typeMatch.Success)
+        return searchFrom + typeMatch.Index;
+    }
+    else
+    {
+      var unsuffixed = baseTypeName.Substring(0, baseTypeName.Length - 2);
+      typeMatch = Regex.Match(sub, $@"\b{Regex.Escape(unsuffixed)}\b", RegexOptions.IgnoreCase);
+      if (typeMatch.Success)
+        return searchFrom + typeMatch.Index;
+    }
+
+    return -1;
+  }
+
+  /// <summary>
+  /// Aggiunge una Reference al tipo usando lo startChar già calcolato.
+  /// </summary>
+  private static void AddTypeReferenceAt(
+      string? typeName,
       int lineNumber,
+      int startChar,
+      string lineText,
       string moduleName,
       string procedureName,
-      Dictionary<string, VbTypeDef> typeIndex,
-      int occurrenceIndex = -1)
+      Dictionary<string, VbTypeDef> typeIndex)
   {
-        // Debug per PLC_POLL_WHAT_CMD_T
-        bool isDebug = false;
-
-    if (isDebug)
-    {
-      Console.WriteLine($"\n[DEBUG AddTypeReference] Type={typeName}, Line={lineNumber}, Module={moduleName}, Proc={procedureName}, Occ={occurrenceIndex}");
-    }
-
-    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0)
-    {
-      if (isDebug)
-        Console.WriteLine($"[DEBUG] SKIPPED: typeName empty or lineNumber <= 0");
+    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0 || startChar < 0)
       return;
-    }
 
-    // Rimuovi eventuali parentesi per tipi array (es. "MY_TYPE()" -> "MY_TYPE")
     var baseTypeName = typeName.Contains('(')
         ? typeName.Substring(0, typeName.IndexOf('('))
         : typeName;
@@ -164,63 +175,31 @@ public static partial class VbParser
     {
       if (!baseTypeName.EndsWith("_T", StringComparison.OrdinalIgnoreCase))
       {
-        var suffixedName = baseTypeName + "_T";
-        if (typeIndex.TryGetValue(suffixedName, out referencedType))
-          baseTypeName = suffixedName;
+        if (typeIndex.TryGetValue(baseTypeName + "_T", out referencedType))
+          baseTypeName = baseTypeName + "_T";
       }
       else
       {
-        var unsuffixedName = baseTypeName.Substring(0, baseTypeName.Length - 2);
-        if (typeIndex.TryGetValue(unsuffixedName, out referencedType))
-          baseTypeName = unsuffixedName;
+        var unsuffixed = baseTypeName.Substring(0, baseTypeName.Length - 2);
+        if (typeIndex.TryGetValue(unsuffixed, out referencedType))
+          baseTypeName = unsuffixed;
       }
 
       if (referencedType == null)
-      {
-        if (isDebug)
-          Console.WriteLine($"[DEBUG] SKIPPED: Type not in typeIndex");
         return;
-      }
     }
 
-    if (isDebug)
-    {
-      Console.WriteLine($"[DEBUG] ✅ Adding Reference to {baseTypeName}");
-    }
-
-    var startChar = -1;
-    var effectiveOccurrenceIndex = occurrenceIndex;
-    if (!string.IsNullOrEmpty(lineText))
-    {
-      var noComment = StripInlineComment(lineText);
-      startChar = GetTokenIndex(noComment, baseTypeName, occurrenceIndex);
-      if (startChar < 0 && !string.Equals(baseTypeName, typeName, StringComparison.OrdinalIgnoreCase))
-        startChar = GetTokenIndex(noComment, typeName, occurrenceIndex);
-
-      if (effectiveOccurrenceIndex < 0 && startChar >= 0)
-        effectiveOccurrenceIndex = GetOccurrenceIndex(noComment, baseTypeName, startChar, lineNumber);
-    }
-
-    if (startChar < 0)
-      return;
-
+    var noComment = StripInlineComment(lineText);
+    var occIdx = GetOccurrenceIndex(noComment, baseTypeName, startChar, lineNumber);
     referencedType.Used = true;
-    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, effectiveOccurrenceIndex, startChar, owner: referencedType);
+    referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, startChar, owner: referencedType);
   }
 
-  private static int GetTokenIndex(string line, string token, int occurrenceIndex)
+  private static string GetLineText(string[] fileLines, int lineNumber)
   {
-    if (string.IsNullOrWhiteSpace(line) || string.IsNullOrWhiteSpace(token))
-      return -1;
-
-    var matches = Regex.Matches(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
-    if (matches.Count == 0)
-      return -1;
-
-    if (occurrenceIndex > 0 && occurrenceIndex <= matches.Count)
-      return matches[occurrenceIndex - 1].Index;
-
-    return matches[0].Index;
+    return lineNumber > 0 && lineNumber <= fileLines.Length
+        ? fileLines[lineNumber - 1]
+        : string.Empty;
   }
 
   // ---------------------------------------------------------
@@ -230,8 +209,7 @@ public static partial class VbParser
   /// <summary>
   /// Aggiunge References alla VbModule classe per ogni dichiarazione
   /// "Dim/Private x As [New] ClassName" dove ClassName è un modulo classe.
-  /// Garantisce che le classi usate solo come tipo (senza chiamate risolte)
-  /// compaiano comunque nelle References e nel grafo Mermaid.
+  /// Calcola lo startChar direttamente cercando la classe dopo il nome del simbolo.
   /// </summary>
   private static void ResolveClassModuleReferences(VbProject project, Dictionary<string, string[]> fileCache)
   {
@@ -245,102 +223,87 @@ public static partial class VbParser
     foreach (var mod in project.Modules)
     {
       var fileLines = GetFileLines(fileCache, mod);
+
       foreach (var v in mod.GlobalVariables)
       {
-        var lineText = v.LineNumber > 0 && v.LineNumber <= fileLines.Length
-            ? fileLines[v.LineNumber - 1]
-            : string.Empty;
-        AddClassModuleReference(v.Type, lineText, v.LineNumber, mod.Name, string.Empty, classIndex, -1);
+        var lineText = GetLineText(fileLines, v.LineNumber);
+        var sc = FindTypeStartChar(lineText, v.Name, v.Type);
+        AddClassReferenceAt(v.Type, v.LineNumber, sc, lineText, mod.Name, string.Empty, classIndex);
       }
 
       foreach (var proc in mod.Procedures)
       {
-        var procLineText = proc.LineNumber > 0 && proc.LineNumber <= fileLines.Length
-            ? fileLines[proc.LineNumber - 1]
-            : string.Empty;
-        AddClassModuleReference(proc.ReturnType, procLineText, proc.LineNumber, mod.Name, proc.Name, classIndex, -1);
+        var retLine = proc.ReturnTypeLineNumber > 0 ? proc.ReturnTypeLineNumber : proc.LineNumber;
+        var retText = GetLineText(fileLines, retLine);
+        var retSc = FindTypeStartChar(retText, null, proc.ReturnType, isReturnType: true);
+        AddClassReferenceAt(proc.ReturnType, retLine, retSc, retText, mod.Name, proc.Name, classIndex);
 
-        // Per i parametri, calcola occurrenceIndex
-        for (int i = 0; i < proc.Parameters.Count; i++)
+        foreach (var param in proc.Parameters)
         {
-          var param = proc.Parameters[i];
-          var paramLineText = param.LineNumber > 0 && param.LineNumber <= fileLines.Length
-              ? fileLines[param.LineNumber - 1]
-              : string.Empty;
-          int occurrence = proc.Parameters.Take(i)
-              .Count(p => p.LineNumber == param.LineNumber && 
-                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
-
-          AddClassModuleReference(param.Type, paramLineText, param.LineNumber, mod.Name, proc.Name, classIndex, occurrence);
+          var paramLine = param.TypeLineNumber > 0 ? param.TypeLineNumber : param.LineNumber;
+          var paramText = GetLineText(fileLines, paramLine);
+          int sc;
+          if (param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber)
+            sc = FindTypeStartChar(paramText, null, param.Type);
+          else
+            sc = FindTypeStartChar(paramText, param.Name, param.Type);
+          AddClassReferenceAt(param.Type, paramLine, sc, paramText, mod.Name, proc.Name, classIndex);
         }
 
         foreach (var lv in proc.LocalVariables)
         {
-          var localLineText = lv.LineNumber > 0 && lv.LineNumber <= fileLines.Length
-              ? fileLines[lv.LineNumber - 1]
-              : string.Empty;
-          AddClassModuleReference(lv.Type, localLineText, lv.LineNumber, mod.Name, proc.Name, classIndex, -1);
+          var lineText = GetLineText(fileLines, lv.LineNumber);
+          var sc = FindTypeStartChar(lineText, lv.Name, lv.Type);
+          AddClassReferenceAt(lv.Type, lv.LineNumber, sc, lineText, mod.Name, proc.Name, classIndex);
         }
       }
 
       foreach (var prop in mod.Properties)
       {
-        var propLineText = prop.LineNumber > 0 && prop.LineNumber <= fileLines.Length
-            ? fileLines[prop.LineNumber - 1]
-            : string.Empty;
-        AddClassModuleReference(prop.ReturnType, propLineText, prop.LineNumber, mod.Name, prop.Name, classIndex, -1);
+        var retLine = prop.ReturnTypeLineNumber > 0 ? prop.ReturnTypeLineNumber : prop.LineNumber;
+        var retText = GetLineText(fileLines, retLine);
+        var retSc = FindTypeStartChar(retText, null, prop.ReturnType, isReturnType: true);
+        AddClassReferenceAt(prop.ReturnType, retLine, retSc, retText, mod.Name, prop.Name, classIndex);
 
-        // Per i parametri, calcola occurrenceIndex
-        for (int i = 0; i < prop.Parameters.Count; i++)
+        foreach (var param in prop.Parameters)
         {
-          var param = prop.Parameters[i];
-          var paramLineText = param.LineNumber > 0 && param.LineNumber <= fileLines.Length
-              ? fileLines[param.LineNumber - 1]
-              : string.Empty;
-          int occurrence = prop.Parameters.Take(i)
-              .Count(p => p.LineNumber == param.LineNumber && 
-                          p.Type?.Equals(param.Type, StringComparison.OrdinalIgnoreCase) == true) + 1;
-
-          AddClassModuleReference(param.Type, paramLineText, param.LineNumber, mod.Name, prop.Name, classIndex, occurrence);
+          var paramLine = param.TypeLineNumber > 0 ? param.TypeLineNumber : param.LineNumber;
+          var paramText = GetLineText(fileLines, paramLine);
+          int sc;
+          if (param.TypeLineNumber > 0 && param.TypeLineNumber != param.LineNumber)
+            sc = FindTypeStartChar(paramText, null, param.Type);
+          else
+            sc = FindTypeStartChar(paramText, param.Name, param.Type);
+          AddClassReferenceAt(param.Type, paramLine, sc, paramText, mod.Name, prop.Name, classIndex);
         }
       }
     }
   }
 
-  private static void AddClassModuleReference(
-      string typeName,
-      string lineText,
+  private static void AddClassReferenceAt(
+      string? typeName,
       int lineNumber,
+      int startChar,
+      string lineText,
       string declaringModule,
       string procedureName,
-      Dictionary<string, VbModule> classIndex,
-      int occurrenceIndex = -1)
+      Dictionary<string, VbModule> classIndex)
   {
-    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0)
+    if (string.IsNullOrEmpty(typeName) || lineNumber <= 0 || startChar < 0)
       return;
 
-    // Prendi solo il nome base ignorando eventuali namespace (es. "PDxI.clsPDxI" -> "clsPDxI")
     var baseName = typeName.Contains('.') ? typeName.Split('.').Last() : typeName;
 
     if (!classIndex.TryGetValue(baseName, out var classModule))
       return;
 
-    // Non aggiungere auto-referenze
     if (string.Equals(classModule.Name, declaringModule, StringComparison.OrdinalIgnoreCase))
       return;
 
-    var startChar = -1;
-    var effectiveOccurrenceIndex = occurrenceIndex;
-    if (!string.IsNullOrEmpty(lineText))
-    {
-      var noComment = StripInlineComment(lineText);
-      startChar = GetTokenIndex(noComment, baseName, occurrenceIndex);
-      if (effectiveOccurrenceIndex < 0 && startChar >= 0)
-        effectiveOccurrenceIndex = GetOccurrenceIndex(noComment, baseName, startChar, lineNumber);
-    }
-
+    var noComment = StripInlineComment(lineText);
+    var occIdx = GetOccurrenceIndex(noComment, baseName, startChar, lineNumber);
     classModule.Used = true;
-    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, effectiveOccurrenceIndex, startChar, owner: classModule);
+    classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, startChar, owner: classModule);
   }
 
   // ---------------------------------------------------------
@@ -359,14 +322,12 @@ public static partial class VbParser
         .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
         .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-    // Indicizza le classi per nome (senza estensione .cls e senza prefisso cls)
     var allClasses = new Dictionary<string, VbModule>(StringComparer.OrdinalIgnoreCase);
     foreach (var mod in project.Modules.Where(m => m.IsClass))
     {
       var className = Path.GetFileNameWithoutExtension(mod.Name);
       allClasses[className] = mod;
 
-      // Aggiungi anche senza prefisso "cls" se presente
       if (className.StartsWith("cls", StringComparison.OrdinalIgnoreCase))
       {
         var withoutPrefix = className.Substring(3);
@@ -375,103 +336,87 @@ public static partial class VbParser
       }
     }
 
-    bool TryGetLineInfo(string moduleName, int lineNumber, out string line)
+    // Raccoglie tutti i simboli con tipo, calcola startChar una volta sola per ciascuno
+    void MarkSymbol(string? typeName, string? symbolName, string moduleName, string procedureName,
+                    int lineNumber, string[] fileLines, bool isReturnType = false)
     {
-      line = null;
-      if (lineNumber <= 0)
-        return false;
-
-      var mod = project.Modules.FirstOrDefault(m =>
-          string.Equals(m.Name, moduleName, StringComparison.OrdinalIgnoreCase));
-      if (mod == null)
-        return false;
-
-      var lines = GetFileLines(fileCache, mod);
-      if (lineNumber > lines.Length)
-        return false;
-
-      line = lines[lineNumber - 1];
-      return true;
-    }
-
-    void Mark(string typeName, string moduleName, string procedureName = null, int lineNumber = 0)
-    {
-      if (string.IsNullOrWhiteSpace(typeName))
+      if (string.IsNullOrWhiteSpace(typeName) || lineNumber <= 0)
         return;
 
       var clean = typeName.Trim();
-
-      // Rimuovi eventuali namespace (es. "PDxI.clsPDxI" -> "clsPDxI")
-      if (clean.Contains("."))
+      if (clean.Contains('.'))
         clean = clean.Split('.').Last();
 
-    var occurrenceIndex = -1;
-    var startChar = -1;
-    if (TryGetLineInfo(moduleName, lineNumber, out var lineText))
-    {
+      var lineText = GetLineText(fileLines, lineNumber);
+      var startChar = FindTypeStartChar(lineText, symbolName, clean, isReturnType);
+      if (startChar < 0)
+        return;
+
       var noComment = StripInlineComment(lineText);
-      startChar = GetTokenIndex(noComment, clean, occurrenceIndex);
-      if (startChar >= 0)
-        occurrenceIndex = GetOccurrenceIndex(noComment, clean, startChar, lineNumber);
-    }
+      var occIdx = GetOccurrenceIndex(noComment, clean, startChar, lineNumber);
 
-    if (startChar < 0)
-      return;
-
-    if (allTypes.TryGetValue(clean, out var t))
+      if (allTypes.TryGetValue(clean, out var t))
       {
         t.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        t.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar, owner: t);
+          t.References.AddLineNumber(moduleName, procedureName, lineNumber, startChar, owner: t);
       }
 
       if (allEnums.TryGetValue(clean, out var e))
       {
         e.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        e.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar, owner: e);
+          e.References.AddLineNumber(moduleName, procedureName, lineNumber, startChar, owner: e);
       }
 
-      // Traccia anche le classi usate come tipo
       if (allClasses.TryGetValue(clean, out var cls))
       {
         cls.Used = true;
         if (!string.IsNullOrEmpty(moduleName))
-        cls.References.AddLineNumber(moduleName, procedureName, lineNumber, occurrenceIndex, startChar, owner: cls);
+          cls.References.AddLineNumber(moduleName, procedureName, lineNumber, startChar, owner: cls);
       }
     }
 
     foreach (var mod in project.Modules)
     {
-      // Variabili globali usano Type/Enum/Class - riferimento a livello di modulo
-      foreach (var v in mod.GlobalVariables)
-        Mark(v.Type, mod.Name, lineNumber: v.LineNumber);
+      var fileLines = GetFileLines(fileCache, mod);
 
-      // Campi dei Type: "Field As ENUM/TYPE"
+      foreach (var v in mod.GlobalVariables)
+        MarkSymbol(v.Type, v.Name, mod.Name, string.Empty, v.LineNumber, fileLines);
+
       foreach (var typeDef in mod.Types)
       {
         foreach (var field in typeDef.Fields)
-          Mark(field.Type, mod.Name, lineNumber: field.LineNumber);
+          MarkSymbol(field.Type, field.Name, mod.Name, string.Empty, field.LineNumber, fileLines);
       }
 
       foreach (var proc in mod.Procedures)
       {
-        // Return type, parametri e variabili locali - riferimento da procedura
-        Mark(proc.ReturnType, mod.Name, proc.Name, proc.LineNumber);
+        var retLine = proc.ReturnTypeLineNumber > 0 ? proc.ReturnTypeLineNumber : proc.LineNumber;
+        MarkSymbol(proc.ReturnType, null, mod.Name, proc.Name, retLine, fileLines, isReturnType: true);
 
         foreach (var p in proc.Parameters)
-          Mark(p.Type, mod.Name, proc.Name, p.LineNumber);
+        {
+          var paramLine = p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber;
+          string? anchor = (p.TypeLineNumber > 0 && p.TypeLineNumber != p.LineNumber) ? null : p.Name;
+          MarkSymbol(p.Type, anchor, mod.Name, proc.Name, paramLine, fileLines);
+        }
 
         foreach (var lv in proc.LocalVariables)
-          Mark(lv.Type, mod.Name, proc.Name, lv.LineNumber);
+          MarkSymbol(lv.Type, lv.Name, mod.Name, proc.Name, lv.LineNumber, fileLines);
       }
 
       foreach (var prop in mod.Properties)
       {
-        Mark(prop.ReturnType, mod.Name, prop.Name, prop.LineNumber);
+        var retLine = prop.ReturnTypeLineNumber > 0 ? prop.ReturnTypeLineNumber : prop.LineNumber;
+        MarkSymbol(prop.ReturnType, null, mod.Name, prop.Name, retLine, fileLines, isReturnType: true);
 
         foreach (var p in prop.Parameters)
-          Mark(p.Type, mod.Name, prop.Name, p.LineNumber);
+        {
+          var paramLine = p.TypeLineNumber > 0 ? p.TypeLineNumber : p.LineNumber;
+          string? anchor = (p.TypeLineNumber > 0 && p.TypeLineNumber != p.LineNumber) ? null : p.Name;
+          MarkSymbol(p.Type, anchor, mod.Name, prop.Name, paramLine, fileLines);
+        }
       }
     }
   }

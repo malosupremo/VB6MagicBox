@@ -154,7 +154,7 @@ public static partial class VbParser
                     if (paramRef != null)
                     {
                         paramRef.Used = true;
-                        paramRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseOccIdx, baseTokenPosition.Item2, owner: paramRef);
+                        paramRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseTokenPosition.Item2, owner: paramRef);
                     }
 
                     var localRef = proc.LocalVariables.FirstOrDefault(v =>
@@ -162,7 +162,7 @@ public static partial class VbParser
                     if (localRef != null && localRef.LineNumber != i + 1)
                     {
                         localRef.Used = true;
-                        localRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseOccIdx, baseTokenPosition.Item2, owner: localRef);
+                        localRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseTokenPosition.Item2, owner: localRef);
                     }
 
                     var globalRef = mod.GlobalVariables.FirstOrDefault(v =>
@@ -170,7 +170,7 @@ public static partial class VbParser
                     if (globalRef != null)
                     {
                         globalRef.Used = true;
-                        globalRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseOccIdx, baseTokenPosition.Item2, owner: globalRef);
+                        globalRef.References.AddLineNumber(mod.Name, proc.Name, i + 1, baseTokenPosition.Item2, owner: globalRef);
                     }
                 }
 
@@ -256,7 +256,7 @@ public static partial class VbParser
                                 var oi = GetOccurrenceIndex(scanLine, fieldName, tp.Item2, i + 1);
 
                                 anyField.Used = true;
-                                anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, oi, tp.Item2, owner: anyField);
+                                anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, tp.Item2, owner: anyField);
                                 typeName = anyField.Type;
                                 chainFallbackFound = true;
                                 break;
@@ -284,7 +284,7 @@ public static partial class VbParser
                             var classPropToken = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                                 t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                             var classPropOccIdx = GetOccurrenceIndex(scanLine, fieldName, classPropToken.Item2, i + 1);
-                            classProp.References.AddLineNumber(mod.Name, proc.Name, i + 1, classPropOccIdx, classPropToken.Item2, owner: classProp);
+                            classProp.References.AddLineNumber(mod.Name, proc.Name, i + 1, classPropToken.Item2, owner: classProp);
                             typeName = classProp.ReturnType;
                             if (string.IsNullOrEmpty(typeName))
                                 break;
@@ -324,7 +324,7 @@ public static partial class VbParser
                                 var fallbackOccIdx = GetOccurrenceIndex(noComment, fieldName, fallbackTokenPos.Item2, i + 1);
 
                                 anyField.Used = true;
-                                anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, fallbackOccIdx, fallbackTokenPos.Item2, owner: anyField);
+                                anyField.References.AddLineNumber(mod.Name, proc.Name, i + 1, fallbackTokenPos.Item2, owner: anyField);
                                 fieldFoundInAnyType = true;
                                 break;
                             }
@@ -349,7 +349,7 @@ public static partial class VbParser
 
 
                     field.Used = true;
-                    field.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenPosition.Item2, owner: field);
+                    field.References.AddLineNumber(mod.Name, proc.Name, i + 1, tokenPosition.Item2, owner: field);
                     typeName = field.Type;
 
                     if (string.IsNullOrEmpty(typeName))
@@ -488,7 +488,7 @@ public static partial class VbParser
                     if (paramRef != null)
                     {
                         paramRef.Used = true;
-                        paramRef.References.AddLineNumber(mod.Name, prop.Name, i + 1, baseOccIdx, baseTokenPosition.Item2, owner: paramRef);
+                        paramRef.References.AddLineNumber(mod.Name, prop.Name, i + 1, baseTokenPosition.Item2, owner: paramRef);
                     }
 
                     var globalRef = mod.GlobalVariables.FirstOrDefault(v =>
@@ -496,7 +496,7 @@ public static partial class VbParser
                     if (globalRef != null)
                     {
                         globalRef.Used = true;
-                        globalRef.References.AddLineNumber(mod.Name, prop.Name, i + 1, baseOccIdx, baseTokenPosition.Item2, owner: globalRef);
+                        globalRef.References.AddLineNumber(mod.Name, prop.Name, i + 1, baseTokenPosition.Item2, owner: globalRef);
                     }
                 }
 
@@ -551,7 +551,7 @@ public static partial class VbParser
                                     t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                                 var oi = GetOccurrenceIndex(scanLine, fieldName, tp.Item2, i + 1);
                                 anyField.Used = true;
-                                anyField.References.AddLineNumber(mod.Name, prop.Name, i + 1, oi, tp.Item2, owner: anyField);
+                                anyField.References.AddLineNumber(mod.Name, prop.Name, i + 1, tp.Item2, owner: anyField);
                                 typeName = anyField.Type;
                                 chainFallbackFound = true;
                                 break;
@@ -579,7 +579,7 @@ public static partial class VbParser
                             var classPropToken = tokenPositions.Skip(partIndex).FirstOrDefault(t =>
                                 t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                             var classPropOccIdx = GetOccurrenceIndex(scanLine, fieldName, classPropToken.Item2, i + 1);
-                            classProp.References.AddLineNumber(mod.Name, prop.Name, i + 1, classPropOccIdx, classPropToken.Item2, owner: classProp);
+                            classProp.References.AddLineNumber(mod.Name, prop.Name, i + 1, classPropToken.Item2, owner: classProp);
                             typeName = classProp.ReturnType;
                             if (string.IsNullOrEmpty(typeName))
                                 break;
@@ -616,7 +616,7 @@ public static partial class VbParser
                                     t.Value.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
                                 var fallbackOccIdx = GetOccurrenceIndex(noComment, fieldName, fallbackTokenPos.Item2, i + 1);
                                 anyField.Used = true;
-                                anyField.References.AddLineNumber(mod.Name, prop.Name, i + 1, fallbackOccIdx, fallbackTokenPos.Item2, owner: anyField);
+                                anyField.References.AddLineNumber(mod.Name, prop.Name, i + 1, fallbackTokenPos.Item2, owner: anyField);
                                 fieldFoundInAnyType = true;
                                 break;
                             }
@@ -639,7 +639,7 @@ public static partial class VbParser
                     var occurrenceIndex = GetOccurrenceIndex(scanLine, fieldName, tokenPosition.Item2, i + 1);
 
                     field.Used = true;
-                    field.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex, tokenPosition.Item2, owner: field);
+                    field.References.AddLineNumber(mod.Name, prop.Name, i + 1, tokenPosition.Item2, owner: field);
                     typeName = field.Type;
 
                     if (string.IsNullOrEmpty(typeName))
@@ -1136,7 +1136,7 @@ public static partial class VbParser
         var baseTokenPosition = tokenPositions.FirstOrDefault();
         var baseOccIdx = GetOccurrenceIndex(scanLine, moduleName, baseTokenPosition.Item2, lineNumber);
         targetModule.Used = true;
-        targetModule.References.AddLineNumber(currentModule.Name, contextName, lineNumber, baseOccIdx, baseTokenPosition.Item2, owner: targetModule);
+        targetModule.References.AddLineNumber(currentModule.Name, contextName, lineNumber, baseTokenPosition.Item2, owner: targetModule);
 
         var memberName = parts[1];
         var parenIndex = memberName.IndexOf('(');
@@ -1155,7 +1155,7 @@ public static partial class VbParser
         if (globalVar != null)
         {
             globalVar.Used = true;
-            globalVar.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberOccIdx, memberTokenPosition.Item2, owner: globalVar);
+            globalVar.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberTokenPosition.Item2, owner: globalVar);
             typeName = globalVar.Type;
             startPartIndex = 2;
             return true;
@@ -1166,7 +1166,7 @@ public static partial class VbParser
         if (property != null)
         {
             property.Used = true;
-            property.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberOccIdx, memberTokenPosition.Item2, owner: property);
+            property.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberTokenPosition.Item2, owner: property);
             typeName = property.ReturnType;
             startPartIndex = 2;
             return true;
@@ -1177,7 +1177,7 @@ public static partial class VbParser
         if (procedure != null)
         {
             procedure.Used = true;
-            procedure.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberOccIdx, memberTokenPosition.Item2, owner: procedure);
+            procedure.References.AddLineNumber(currentModule.Name, contextName, lineNumber, memberTokenPosition.Item2, owner: procedure);
             typeName = procedure.ReturnType;
             startPartIndex = 2;
             return true;
@@ -1200,7 +1200,7 @@ public static partial class VbParser
         if (TryResolveModule(token, proc, currentModule, moduleByName, out var targetModule))
         {
             targetModule.Used = true;
-            targetModule.References.AddLineNumber(currentModule.Name, proc.Name, lineNumber, occurrenceIndex, startChar, owner: targetModule);
+            targetModule.References.AddLineNumber(currentModule.Name, proc.Name, lineNumber, startChar, owner: targetModule);
         }
     }
 
@@ -1218,7 +1218,7 @@ public static partial class VbParser
         if (TryResolveModule(token, prop, currentModule, moduleByName, out var targetModule))
         {
             targetModule.Used = true;
-            targetModule.References.AddLineNumber(currentModule.Name, prop.Name, lineNumber, occurrenceIndex, startChar, owner: targetModule);
+            targetModule.References.AddLineNumber(currentModule.Name, prop.Name, lineNumber, startChar, owner: targetModule);
         }
     }
 
@@ -1356,7 +1356,7 @@ public static partial class VbParser
                 if (parameterIndex.TryGetValue(tokenName, out var parameter))
                 {
                     parameter.Used = true;
-                    parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex, tokenStartChar, owner: parameter);
+                    parameter.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenStartChar, owner: parameter);
                 }
 
                 // Controlla se � una variabile locale
@@ -1367,7 +1367,7 @@ public static partial class VbParser
                         continue;
 
                     localVar.Used = true;
-                        localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex, tokenStartChar, owner: localVar);
+                    localVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenStartChar, owner: localVar);
                 }
 
                 // Controlla se � una variabile globale del modulo (e non � shadowed)
@@ -1376,7 +1376,7 @@ public static partial class VbParser
                     if (globalVariableIndex.TryGetValue(tokenName, out var globalVar))
                     {
                         globalVar.Used = true;
-                        globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenOccurrenceIndex, tokenStartChar, owner: globalVar);
+                        globalVar.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenStartChar, owner: globalVar);
                     }
                 }
 
@@ -1387,7 +1387,7 @@ public static partial class VbParser
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
                     referencedModule.Used = true;
-                    referencedModule.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, occurrenceIndex, m.Index, owner: referencedModule);
+                    referencedModule.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, m.Index, owner: referencedModule);
                 }
             }
 
@@ -1397,7 +1397,7 @@ public static partial class VbParser
                 foreach (var tokenIndex in EnumerateStandaloneTokenIndexes(noComment, proc.Name))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, proc.Name, tokenIndex, currentLineNumber);
-                    proc.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, occurrenceIndex, tokenIndex, owner: proc);
+                    proc.References.AddLineNumber(mod.Name, proc.Name, currentLineNumber, tokenIndex, owner: proc);
                 }
             }
         }
@@ -1455,7 +1455,7 @@ public static partial class VbParser
                 {
                     parameter.Used = true;
                     var tokenOccurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
-                    parameter.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, tokenOccurrenceIndex, m.Index, owner: parameter);
+                    parameter.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, m.Index, owner: parameter);
                 }
 
                 if (!parameterIndex.ContainsKey(tokenName) &&
@@ -1463,7 +1463,7 @@ public static partial class VbParser
                 {
                     globalVar.Used = true;
                     var tokenOccurrenceIndex = GetOccurrenceIndex(noComment, tokenName, m.Index, currentLineNumber);
-                    globalVar.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, tokenOccurrenceIndex, m.Index, owner: globalVar);
+                    globalVar.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, m.Index, owner: globalVar);
                 }
             }
         }
@@ -1505,7 +1505,7 @@ public static partial class VbParser
                 foreach (var tokenIndex in EnumerateStandaloneTokenIndexes(noComment, prop.Name))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, prop.Name, tokenIndex, currentLineNumber);
-                    prop.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, occurrenceIndex, tokenIndex, owner: prop);
+                    prop.References.AddLineNumber(mod.Name, prop.Name, currentLineNumber, tokenIndex, owner: prop);
                 }
             }
         }
@@ -1644,7 +1644,7 @@ public static partial class VbParser
                 foreach (var tokenIndex in EnumerateStandaloneTokenIndexes(noComment, proc.Name))
                 {
                     var occurrenceIndex = GetOccurrenceIndex(noComment, proc.Name, tokenIndex, i + 1);
-                    proc.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenIndex, owner: proc);
+                    proc.References.AddLineNumber(mod.Name, proc.Name, i + 1, tokenIndex, owner: proc);
                 }
             }
         }
@@ -2131,7 +2131,7 @@ public static partial class VbParser
                         {
                             enumTypeDefsInLine.Add(def);
                             def.Used = true;
-                            def.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumTokenIndex, owner: def);
+                            def.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumTokenIndex, owner: def);
                         }
                     }
 
@@ -2182,7 +2182,7 @@ public static partial class VbParser
                                 foreach (var enumValue in filteredEnumValues)
                                 {
                                     enumValue.Used = true;
-                                    enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar, owner: enumValue);
+                                    enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1, tokenStartChar, owner: enumValue);
                                 }
                             }
                         }
@@ -2204,14 +2204,14 @@ public static partial class VbParser
                         foreach (var enumDef in enumDefs)
                         {
                             enumDef.Used = true;
-                            enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumStartChar, owner: enumDef);
+                            enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumStartChar, owner: enumDef);
 
                             var value = enumDef.Values.FirstOrDefault(v =>
                                 v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
                             if (value != null)
                             {
                                 value.Used = true;
-                                value.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar, owner: value);
+                                value.References.AddLineNumber(mod.Name, proc.Name, i + 1, tokenStartChar, owner: value);
                             }
                         }
                     }
@@ -2269,7 +2269,7 @@ public static partial class VbParser
                                 evt.Used = true;
                                 var eventNameIndex = noComment.IndexOf(eventName, StringComparison.OrdinalIgnoreCase);
                                 var occurrenceIndex = GetOccurrenceIndex(noComment, eventName, eventNameIndex, i + 1);
-                            evt.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, eventNameIndex, owner: evt);
+                                evt.References.AddLineNumber(mod.Name, proc.Name, i + 1, eventNameIndex, owner: evt);
                             }
                         }
                     }
@@ -2360,7 +2360,7 @@ public static partial class VbParser
                         {
                             enumTypeDefsInLine.Add(def);
                             def.Used = true;
-                            def.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumTokenIndex, owner: def);
+                            def.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumTokenIndex, owner: def);
                         }
                     }
 
@@ -2412,7 +2412,7 @@ public static partial class VbParser
                         foreach (var enumValue in filteredEnumValues)
                         {
                             enumValue.Used = true;
-                            enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar, owner: enumValue);
+                            enumValue.References.AddLineNumber(mod.Name, proc.Name, i + 1, tokenStartChar, owner: enumValue);
                         }
                     }
 
@@ -2434,14 +2434,14 @@ public static partial class VbParser
                                 foreach (var enumDef in enumDefs)
                                 {
                                     enumDef.Used = true;
-                                    enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumOccIndex, enumStartChar, owner: enumDef);
+                                    enumDef.References.AddLineNumber(mod.Name, proc.Name, i + 1, enumStartChar, owner: enumDef);
 
                                     var value = enumDef.Values.FirstOrDefault(v =>
                                         v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
                                     if (value != null)
                                     {
                                         value.Used = true;
-                                        value.References.AddLineNumber(mod.Name, proc.Name, i + 1, occurrenceIndex, tokenStartChar, owner: value);
+                                        value.References.AddLineNumber(mod.Name, proc.Name, i + 1, tokenStartChar, owner: value);
                                     }
                                 }
                             }
@@ -2531,7 +2531,7 @@ public static partial class VbParser
                         foreach (var enumValue in filteredEnumValues)
                         {
                             enumValue.Used = true;
-                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex, tokenStartChar, owner: enumValue);
+                            enumValue.References.AddLineNumber(mod.Name, prop.Name, i + 1, tokenStartChar, owner: enumValue);
                         }
                     }
 
@@ -2550,14 +2550,14 @@ public static partial class VbParser
                             foreach (var enumDef in enumDefs)
                             {
                                 enumDef.Used = true;
-                                enumDef.References.AddLineNumber(mod.Name, prop.Name, i + 1, enumOccIndex, enumStartChar, owner: enumDef);
+                                enumDef.References.AddLineNumber(mod.Name, prop.Name, i + 1, enumStartChar, owner: enumDef);
 
                                 var value = enumDef.Values.FirstOrDefault(v =>
                                     v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
                                 if (value != null)
                                 {
                                     value.Used = true;
-                                    value.References.AddLineNumber(mod.Name, prop.Name, i + 1, occurrenceIndex, tokenStartChar, owner: value);
+                                    value.References.AddLineNumber(mod.Name, prop.Name, i + 1, tokenStartChar, owner: value);
                                 }
                             }
                         }
