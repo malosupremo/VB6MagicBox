@@ -597,14 +597,24 @@ public static partial class VbParser
         // unclaimed so the bare-token scan at STEP 2 can resolve them independently.
         var tokenPositions = GetDepthZeroTokenPositions(chainText, chainIndex);
 
-        // Claim structural token positions in this chain
+        // Map effective-line positions → raw-line positions.
+        // On With-expanded lines the effective line has a synthetic prefix that shifts
+        // all positions; using effective coords in the shared recorded/chainTokensClaimed
+        // sets would collide with bare-token raw-line coords from STEP 2.
+        for (int tp = 0; tp < tokenPositions.Count; tp++)
+        {
+            var (val, pos) = tokenPositions[tp];
+            tokenPositions[tp] = (val, FindTokenInRawLine(rawLine, val, pos));
+        }
+
+        // Claim structural token positions in this chain (skip phantom With-prefix tokens)
         foreach (var (_, pos) in tokenPositions)
-            chainTokensClaimed.Add(pos);
+            if (pos >= 0) chainTokensClaimed.Add(pos);
 
         // --- Base variable ---
         var baseVarName = parts[0];
         var parenIdx = baseVarName.IndexOf('(');
-        if (parenIdx >= 0) baseVarName = baseVarName.Substring(0, parenIdx);
+        if (parenIdx >= 0) baseVarName = baseVarName.Substring(0, parenIdx).TrimEnd();
 
         var baseTokenPos = tokenPositions.FirstOrDefault();
 
@@ -613,7 +623,7 @@ public static partial class VbParser
         {
             var valueName = parts[1];
             var valueParenIdx = valueName.IndexOf('(');
-            if (valueParenIdx >= 0) valueName = valueName.Substring(0, valueParenIdx);
+            if (valueParenIdx >= 0) valueName = valueName.Substring(0, valueParenIdx).TrimEnd();
 
             foreach (var enumDef in enumDefs)
             {
@@ -662,9 +672,12 @@ public static partial class VbParser
             }
             else if (controlIndex.TryGetValue(baseVarName, out var baseControl) && !localNames.Contains(baseVarName))
             {
-                var sc = GetTokenStartChar(rawLine, baseVarName, baseTokenPos.Item2);
-                MarkControlAsUsed(baseControl, mod.Name, memberName, currentLine, sc);
-                recorded.Add((currentLine, baseTokenPos.Item2));
+                if (baseTokenPos.Item2 >= 0)
+                {
+                    var sc = GetTokenStartChar(rawLine, baseVarName, baseTokenPos.Item2);
+                    MarkControlAsUsed(baseControl, mod.Name, memberName, currentLine, sc);
+                    recorded.Add((currentLine, baseTokenPos.Item2));
+                }
             }
             else if (gIdx.ModuleByName.TryGetValue(baseVarName, out var baseMod))
             {
@@ -689,7 +702,7 @@ public static partial class VbParser
             {
                 var member = parts[1];
                 var memberParen = member.IndexOf('(');
-                if (memberParen >= 0) member = member.Substring(0, memberParen);
+                if (memberParen >= 0) member = member.Substring(0, memberParen).TrimEnd();
 
                 var gVar = moduleMatch.GlobalVariables.FirstOrDefault(v =>
                     v.Name.Equals(member, StringComparison.OrdinalIgnoreCase));
@@ -760,7 +773,7 @@ public static partial class VbParser
         {
             var fieldName = parts[pi];
             var fieldParen = fieldName.IndexOf('(');
-            if (fieldParen >= 0) fieldName = fieldName.Substring(0, fieldParen);
+            if (fieldParen >= 0) fieldName = fieldName.Substring(0, fieldParen).TrimEnd();
             if (string.IsNullOrEmpty(fieldName)) break;
 
             if (string.IsNullOrEmpty(typeName))
