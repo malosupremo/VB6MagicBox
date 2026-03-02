@@ -14,12 +14,15 @@ public static partial class VbParser
   /// appare in una clausola "As TypeName": campi di altri Type, variabili
   /// globali/locali, parametri di procedure e proprietà.
   /// Calcola lo startChar direttamente cercando il tipo dopo il nome del simbolo.
+  /// Risolve anche costanti/enum usate come dimensioni array nelle parentesi.
   /// </summary>
   private static void ResolveTypeReferences(
       VbProject project,
-      Dictionary<string, VbTypeDef> typeIndex,
+      GlobalIndexes gIdx,
       Dictionary<string, string[]> fileCache)
   {
+    var typeIndex = gIdx.TypeIndex;
+
     foreach (var mod in project.Modules)
     {
       var fileLines = GetFileLines(fileCache, mod);
@@ -32,6 +35,7 @@ public static partial class VbParser
           var lineText = GetLineText(fileLines, field.LineNumber);
           var sc = FindTypeStartChar(lineText, field.Name, field.Type);
           AddTypeReferenceAt(field.Type, field.LineNumber, sc, lineText, mod.Name, string.Empty, typeIndex);
+          ResolveArrayDimensionTokens(lineText, field.LineNumber, mod.Name, string.Empty, gIdx);
         }
       }
 
@@ -41,6 +45,7 @@ public static partial class VbParser
         var lineText = GetLineText(fileLines, variable.LineNumber);
         var sc = FindTypeStartChar(lineText, variable.Name, variable.Type);
         AddTypeReferenceAt(variable.Type, variable.LineNumber, sc, lineText, mod.Name, string.Empty, typeIndex);
+        ResolveArrayDimensionTokens(lineText, variable.LineNumber, mod.Name, string.Empty, gIdx);
       }
 
       // 3. Parametri e variabili locali delle procedure
@@ -192,6 +197,62 @@ public static partial class VbParser
     var noComment = StripInlineComment(lineText);
     referencedType.Used = true;
     referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, startChar, owner: referencedType);
+  }
+
+  /// <summary>
+  /// Scans tokens inside parenthesized array dimensions (e.g., "Tvalue(CONST_NAME) As Long")
+  /// and records references to constants and enum values found there.
+  /// </summary>
+  private static void ResolveArrayDimensionTokens(
+      string lineText,
+      int lineNumber,
+      string moduleName,
+      string procedureName,
+      GlobalIndexes gIdx)
+  {
+    if (string.IsNullOrEmpty(lineText) || lineNumber <= 0)
+      return;
+
+    var noComment = StripInlineComment(lineText);
+    var parenMatches = Regex.Matches(noComment, @"\(([^)]+)\)");
+    foreach (Match pm in parenMatches)
+    {
+      var content = pm.Groups[1].Value;
+      var contentStart = pm.Groups[1].Index;
+
+      var tokenMatches = ReTokens.Matches(content);
+      foreach (Match tm in tokenMatches)
+      {
+        var token = tm.Value;
+        var tokenStartInLine = contentStart + tm.Index;
+
+        if (gIdx.ConstantIndex.TryGetValue(token, out var constList))
+        {
+          var c = constList.FirstOrDefault(x =>
+              !string.Equals(x.Module, moduleName, StringComparison.OrdinalIgnoreCase));
+          if (c.Constant == null && constList.Count > 0)
+            c = constList[0];
+          if (c.Constant != null)
+          {
+            c.Constant.Used = true;
+            c.Constant.References.AddLineNumber(moduleName, procedureName, lineNumber, tokenStartInLine, owner: c.Constant);
+            continue;
+          }
+        }
+
+        if (gIdx.EnumValueIndex.TryGetValue(token, out var enumValues))
+        {
+          var filtered = FilterEnumValues(enumValues, noComment, gIdx);
+          if (filtered.Count == 0 && enumValues.Count > 1)
+            continue;
+          foreach (var ev in filtered)
+          {
+            ev.Used = true;
+            ev.References.AddLineNumber(moduleName, procedureName, lineNumber, tokenStartInLine, owner: ev);
+          }
+        }
+      }
+    }
   }
 
   private static string GetLineText(string[] fileLines, int lineNumber)

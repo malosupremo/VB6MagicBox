@@ -331,7 +331,7 @@ public static partial class VbParser
                 if (!Regex.IsMatch(originalLine, $@"\b{Regex.Escape(param.Name)}\b", RegexOptions.IgnoreCase))
                     continue;
 
-                if (Regex.IsMatch(originalLine, $@"\bAs\s+{Regex.Escape(typeName)}(?=\s|\)|$)", RegexOptions.IgnoreCase))
+                if (Regex.IsMatch(originalLine, $@"\bAs\s+{Regex.Escape(typeName)}(?=[\s,\)]|$)", RegexOptions.IgnoreCase))
                 {
                     foundLine = lineIdx;
                     break;
@@ -347,7 +347,7 @@ public static partial class VbParser
                         if (nextCommentIndex >= 0)
                             nextLine = nextLine.Substring(0, nextCommentIndex);
 
-                        if (Regex.IsMatch(nextLine, $@"\b{Regex.Escape(typeName)}(?=\s|\)|$)", RegexOptions.IgnoreCase))
+                        if (Regex.IsMatch(nextLine, $@"\b{Regex.Escape(typeName)}(?=[\s,\)]|$)", RegexOptions.IgnoreCase))
                         {
                             foundLine = nextIdx;
                             break;
@@ -368,7 +368,7 @@ public static partial class VbParser
                     if (commentIndex >= 0)
                         originalLine = originalLine.Substring(0, commentIndex);
 
-                    if (Regex.IsMatch(originalLine, $@"\b{Regex.Escape(typeName)}(?=\s|\)|$)", RegexOptions.IgnoreCase))
+                    if (Regex.IsMatch(originalLine, $@"\b{Regex.Escape(typeName)}(?=[\s,\)]|$)", RegexOptions.IgnoreCase))
                     {
                         foundLine = lineIdx;
                         break;
@@ -422,7 +422,7 @@ public static partial class VbParser
                 if (!Regex.IsMatch(originalLine, $@"\b{Regex.Escape(param.Name)}\b", RegexOptions.IgnoreCase))
                     continue;
 
-                if (Regex.IsMatch(originalLine, $@"\bAs\s+{Regex.Escape(typeName)}(?=\s|\)|$)", RegexOptions.IgnoreCase))
+                if (Regex.IsMatch(originalLine, $@"\bAs\s+{Regex.Escape(typeName)}(?=[\s,\)]|$)", RegexOptions.IgnoreCase))
                 {
                     foundLine = lineIdx;
                     break;
@@ -438,7 +438,7 @@ public static partial class VbParser
                         if (nextCommentIndex >= 0)
                             nextLine = nextLine.Substring(0, nextCommentIndex);
 
-                        if (Regex.IsMatch(nextLine, $@"\b{Regex.Escape(typeName)}(?=\s|\)|$)", RegexOptions.IgnoreCase))
+                        if (Regex.IsMatch(nextLine, $@"\b{Regex.Escape(typeName)}(?=[\s,\)]|$)", RegexOptions.IgnoreCase))
                         {
                             foundLine = nextIdx;
                             break;
@@ -459,7 +459,7 @@ public static partial class VbParser
                     if (commentIndex >= 0)
                         originalLine = originalLine.Substring(0, commentIndex);
 
-                    if (Regex.IsMatch(originalLine, $@"\b{Regex.Escape(typeName)}(?=\s|\)|$)", RegexOptions.IgnoreCase))
+                    if (Regex.IsMatch(originalLine, $@"\b{Regex.Escape(typeName)}(?=[\s,\)]|$)", RegexOptions.IgnoreCase))
                     {
                         foundLine = lineIdx;
                         break;

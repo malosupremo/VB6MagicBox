@@ -72,8 +72,7 @@ public static partial class VbParser
         // --- Post-processing: declaration-level references (model iteration, no re-scan) ---
         // These add References for "As TypeName" in type fields, global vars, params, locals
         // and "As [New] ClassName" for class modules — lines outside procedure bodies.
-        var typeIndex = gIdx.TypeIndex;
-        ResolveTypeReferences(project, typeIndex, fileCache);
+        ResolveTypeReferences(project, gIdx, fileCache);
         ResolveClassModuleReferences(project, fileCache);
 
         // Mark used types from declarations
