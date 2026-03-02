@@ -69,7 +69,7 @@ public static partial class VbParser
             var raw = fileLines[i];
 
             // Rimuovi commenti (ignorando apostrofi dentro stringhe)
-            var noComment = StripInlineComment(raw).Trim();
+            var noComment = StripInlineComment(raw).TrimEnd();
 
             var trimmedNoComment = noComment.TrimStart();
             if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
@@ -402,7 +402,7 @@ public static partial class VbParser
             var raw = fileLines[i];
 
             // Rimuovi commenti (ignorando apostrofi dentro stringhe)
-            var noComment = StripInlineComment(raw).Trim();
+            var noComment = StripInlineComment(raw).TrimEnd();
 
             var trimmedNoComment = noComment.TrimStart();
             if (trimmedNoComment.StartsWith("With ", StringComparison.OrdinalIgnoreCase))
@@ -1298,7 +1298,7 @@ public static partial class VbParser
         for (int i = startIndex; i < endIndex; i++)
         {
             var raw = fileLines[i];
-            var rawTrimmed = raw.Trim();
+            var rawTrimmed = raw.TrimEnd();
             int currentLineNumber = i + 1;
 
             // Fine procedura - controlla SOLO i terminatori specifici della procedura

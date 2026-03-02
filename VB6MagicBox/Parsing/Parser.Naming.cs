@@ -200,6 +200,36 @@ public static partial class VbParser
             var expectedPrefix = GetControlPrefix(controlType);
 
             if (expectedPrefix.Equals("fra", StringComparison.OrdinalIgnoreCase) &&
+                controlName.Length > 5 &&
+                controlName.StartsWith("Frame", StringComparison.OrdinalIgnoreCase) &&
+                char.IsUpper(controlName[5]))
+            {
+                var baseName = controlName.Substring(5);
+                if (!baseName.All(char.IsDigit))
+                    return EnsurePascalCaseControlName(expectedPrefix + baseName);
+            }
+
+            if (expectedPrefix.Equals("pnl", StringComparison.OrdinalIgnoreCase) &&
+                controlName.Length > 5 &&
+                controlName.StartsWith("Panel", StringComparison.OrdinalIgnoreCase) &&
+                char.IsUpper(controlName[5]))
+            {
+                var baseName = controlName.Substring(5);
+                if (!baseName.All(char.IsDigit))
+                    return EnsurePascalCaseControlName(expectedPrefix + baseName);
+            }
+
+            if (expectedPrefix.Equals("lbl", StringComparison.OrdinalIgnoreCase) &&
+                controlName.Length > 5 &&
+                controlName.StartsWith("Label", StringComparison.OrdinalIgnoreCase) &&
+                char.IsUpper(controlName[5]))
+            {
+                var baseName = controlName.Substring(5);
+                if (!baseName.All(char.IsDigit))
+                    return EnsurePascalCaseControlName(expectedPrefix + baseName);
+            }
+
+            if (expectedPrefix.Equals("fra", StringComparison.OrdinalIgnoreCase) &&
                 controlName.Length > 2 &&
                 controlName.StartsWith("fr", StringComparison.OrdinalIgnoreCase) &&
                 char.IsUpper(controlName[2]))

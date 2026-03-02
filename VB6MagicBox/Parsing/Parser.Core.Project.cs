@@ -107,7 +107,7 @@ public static partial class VbParser
 
     foreach (var raw in lines)
     {
-      var line = raw.Trim();
+      var line = raw.TrimEnd();
 
       if (line.StartsWith("Form=", StringComparison.OrdinalIgnoreCase))
       {

@@ -53,13 +53,13 @@ public static partial class VbParser
 
       var originalLineNumber = lineMapping[lineIndex];
       lineIndex++;
-      var line = raw.Trim();
+      var line = raw.TrimEnd();
 
       // Rimuovi commenti
       var noComment = line;
       var commentIndex = noComment.IndexOf("'");
       if (commentIndex >= 0)
-        noComment = noComment.Substring(0, commentIndex).Trim();
+        noComment = noComment.Substring(0, commentIndex).TrimEnd();
 
       // -------------------------
       // ATTRIBUTE VB_NAME (per classi e moduli)
