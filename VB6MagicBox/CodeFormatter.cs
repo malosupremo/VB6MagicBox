@@ -42,9 +42,9 @@ public static class CodeFormatter
         var enc = Encoding.GetEncoding(1252);
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("  4: Riordino Variabili Locali", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("  4: Riordino Variabili Locali", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.WriteLine();
 
         var vbpDir = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile!))!;
@@ -117,9 +117,9 @@ public static class CodeFormatter
 
         Console.WriteLine();
         if (totalProcs == 0)
-            ConsoleX.WriteLineColor("[OK] Nessuna variabile da riordinare.", ConsoleColor.Cyan);
+            Console.WriteLineColor("[OK] Nessuna variabile da riordinare.", ConsoleColor.Cyan);
         else
-            ConsoleX.WriteLineColor($"[OK] {totalProcs} procedura/e riordinata/e in {totalFiles} file/i.", ConsoleColor.Green);
+            Console.WriteLineColor($"[OK] {totalProcs} procedura/e riordinata/e in {totalFiles} file/i.", ConsoleColor.Green);
     }
 
     /// <summary>
@@ -133,9 +133,9 @@ public static class CodeFormatter
         var enc = Encoding.GetEncoding(1252);
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("  5: Armonizzazione Spaziature", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("  5: Armonizzazione Spaziature", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.WriteLine();
 
         var vbpDir = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile!))!;
@@ -180,9 +180,9 @@ public static class CodeFormatter
 
         Console.WriteLine();
         if (totalFiles == 0)
-            ConsoleX.WriteLineColor("[OK] Nessuna modifica alle spaziature.", ConsoleColor.Cyan);
+            Console.WriteLineColor("[OK] Nessuna modifica alle spaziature.", ConsoleColor.Cyan);
         else
-            ConsoleX.WriteLineColor($"[OK] Spaziature armonizzate in {totalFiles} file/i.", ConsoleColor.Green);
+            Console.WriteLineColor($"[OK] Spaziature armonizzate in {totalFiles} file/i.", ConsoleColor.Green);
     }
 
     // -------------------------

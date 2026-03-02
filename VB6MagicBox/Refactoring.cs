@@ -24,9 +24,9 @@ public static class Refactoring
         // Registra il provider per encoding legacy (Windows-1252) necessario per VB6
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("  2: Applica refactoring (da Replaces)", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("  2: Applica refactoring (da Replaces)", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.WriteLine();
         Console.ForegroundColor = ConsoleColor.Gray;
 
@@ -146,21 +146,21 @@ public static class Refactoring
                 filesProcessed++;
                 totalReplaces += replacesApplied;
 
-                ConsoleX.WriteLineColor($"   [OK] {replacesApplied} sostituzioni applicate", ConsoleColor.Green);
+                Console.WriteLineColor($"   [OK] {replacesApplied} sostituzioni applicate", ConsoleColor.Green);
             }
             else
             {
-                ConsoleX.WriteLineColor("   [i] Nessuna modifica (contenuto identico)", ConsoleColor.Cyan);
+                Console.WriteLineColor("   [i] Nessuna modifica (contenuto identico)", ConsoleColor.Cyan);
             }
         }
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Green);
-        ConsoleX.WriteLineColor("[OK] Refactoring completato!", ConsoleColor.Green);
-        ConsoleX.WriteLineColor($"     File modificati:   {filesProcessed}", ConsoleColor.Green);
-        ConsoleX.WriteLineColor($"     File backuppati:   {filesBackedUp}", ConsoleColor.Green);
-        ConsoleX.WriteLineColor($"     Sostituzioni totali: {totalReplaces}", ConsoleColor.Green);
-        ConsoleX.WriteLineColor($"     Cartella backup:   {backupDir}", ConsoleColor.Green);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Green);
+        Console.WriteLineColor("===========================================", ConsoleColor.Green);
+        Console.WriteLineColor("[OK] Refactoring completato!", ConsoleColor.Green);
+        Console.WriteLineColor($"     File modificati:   {filesProcessed}", ConsoleColor.Green);
+        Console.WriteLineColor($"     File backuppati:   {filesBackedUp}", ConsoleColor.Green);
+        Console.WriteLineColor($"     Sostituzioni totali: {totalReplaces}", ConsoleColor.Green);
+        Console.WriteLineColor($"     Cartella backup:   {backupDir}", ConsoleColor.Green);
+        Console.WriteLineColor("===========================================", ConsoleColor.Green);
     }
 }

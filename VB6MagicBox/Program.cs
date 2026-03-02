@@ -10,9 +10,9 @@ public class Program
 
     public static void Main(string[] args)
     {
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("              VB6 Magic Box ", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("              VB6 Magic Box ", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.ForegroundColor = ConsoleColor.Gray;
 
         // Se ci sono argomenti da riga di comando, usa la modalità legacy (analisi diretta)
@@ -38,7 +38,7 @@ public class Program
             Console.WriteLine("4. Riordina le variabili di procedura");
             Console.WriteLine("5. Armonizza le spaziature");
             Console.Write("6. ");
-            ConsoleX.WriteColor("BACCHETTA MAGICA", ConsoleColor.Yellow);
+            Console.WriteColor("BACCHETTA MAGICA", ConsoleColor.Yellow);
             Console.WriteLine(": tutto insieme!");
             Console.WriteLine("0. Esci");
             Console.WriteLine();
@@ -80,7 +80,7 @@ public class Program
 
                 default:
                     Console.WriteLine();
-                    ConsoleX.WriteLineColor("[X] Opzione non valida. Riprova.", ConsoleColor.Red);
+                    Console.WriteLineColor("[X] Opzione non valida. Riprova.", ConsoleColor.Red);
                     break;
             }
         }
@@ -93,7 +93,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
+            Console.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -105,8 +105,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[X] Errore durante l'armonizzazione spaziature:", ConsoleColor.Red);
-            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
+            Console.WriteLineColor("[X] Errore durante l'armonizzazione spaziature:", ConsoleColor.Red);
+            Console.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -117,7 +117,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            ConsoleX.WriteLineColor("[X] File non trovato!", ConsoleColor.Red);
+            Console.WriteLineColor("[X] File non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -131,13 +131,13 @@ public class Program
             var project = VbParser.ParseAndResolve(vbpPath);
             ExportProjectFiles(project, vbpPath);
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[OK] Analisi completata.", ConsoleColor.Green);
+            Console.WriteLineColor("[OK] Analisi completata.", ConsoleColor.Green);
         }
         catch (Exception ex)
         {
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[X] Errore durante l'analisi:", ConsoleColor.Red);
-            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
+            Console.WriteLineColor("[X] Errore durante l'analisi:", ConsoleColor.Red);
+            Console.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -148,7 +148,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
+            Console.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -163,8 +163,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[X] Errore durante l'aggiunta dei tipi:", ConsoleColor.Red);
-            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
+            Console.WriteLineColor("[X] Errore durante l'aggiunta dei tipi:", ConsoleColor.Red);
+            Console.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -175,7 +175,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
+            Console.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -194,8 +194,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[X] Errore durante il refactoring:", ConsoleColor.Red);
-            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
+            Console.WriteLineColor("[X] Errore durante il refactoring:", ConsoleColor.Red);
+            Console.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -206,7 +206,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
+            Console.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -218,8 +218,8 @@ public class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[X] Errore durante il riordino:", ConsoleColor.Red);
-            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
+            Console.WriteLineColor("[X] Errore durante il riordino:", ConsoleColor.Red);
+            Console.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
     }
 
@@ -268,7 +268,7 @@ public class Program
 
         if (string.IsNullOrEmpty(vbpPath) || !File.Exists(vbpPath))
         {
-            ConsoleX.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
+            Console.WriteLineColor("[X] File .vbp non trovato!", ConsoleColor.Red);
             return;
         }
 
@@ -298,13 +298,13 @@ public class Program
             CodeFormatter.HarmonizeSpacing(project);
 
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[OK] Bacchetta magica applicata!", ConsoleColor.Green);
+            Console.WriteLineColor("[OK] Bacchetta magica applicata!", ConsoleColor.Green);
         }
         catch (Exception ex)
         {
             Console.WriteLine();
-            ConsoleX.WriteLineColor("[X] Errore durante la bacchetta magica:", ConsoleColor.Red);
-            ConsoleX.WriteLineColor(ex.ToString(), ConsoleColor.Red);
+            Console.WriteLineColor("[X] Errore durante la bacchetta magica:", ConsoleColor.Red);
+            Console.WriteLineColor(ex.ToString(), ConsoleColor.Red);
         }
         finally
         {

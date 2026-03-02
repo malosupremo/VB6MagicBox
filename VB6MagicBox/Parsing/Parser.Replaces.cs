@@ -93,9 +93,9 @@ public static partial class VbParser
     public static void BuildReplaces(VbProject project, Dictionary<string, string[]> fileCache)
     {
         Console.WriteLine();
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("  2: Costruzione sostituzioni (Replaces)", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("  2: Costruzione sostituzioni (Replaces)", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.WriteLine();
 
         int totalReplaces = 0;
@@ -342,7 +342,7 @@ public static partial class VbParser
         });
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor("   [i] Raccolta references completata. Inizio applicazione replaces...", ConsoleColor.Cyan);
+        Console.WriteLineColor("   [i] Raccolta references completata. Inizio applicazione replaces...", ConsoleColor.Cyan);
 
         var lineCache = new Dictionary<(string Module, int Line), (string CodePart, List<(int start, int end)> StringRanges, bool AllowStringReplace)>();
         var sourceModuleCache = new Dictionary<object, string>(ReferenceEqualityComparer.Instance);
@@ -401,7 +401,7 @@ public static partial class VbParser
         }
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor($"   [OK] Ordinamento in corso...", ConsoleColor.Green);
+        Console.WriteLineColor($"   [OK] Ordinamento in corso...", ConsoleColor.Green);
 
         // STEP 3: Conta i replace totali
         foreach (var module in project.Modules)
@@ -416,7 +416,7 @@ public static partial class VbParser
         }
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor($"   [OK] {totalReplaces} sostituzioni ordinate e preparate per {project.Modules.Count} moduli", ConsoleColor.Green);
+        Console.WriteLineColor($"   [OK] {totalReplaces} sostituzioni ordinate e preparate per {project.Modules.Count} moduli", ConsoleColor.Green);
     }
 
     private static void ApplyReferenceReplace(

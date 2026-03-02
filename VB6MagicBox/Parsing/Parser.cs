@@ -28,9 +28,9 @@ public static partial class VbParser
         var stopwatch = Stopwatch.StartNew();
 
         Console.WriteLine();
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("  1: Analisi progetto .vbp", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("  1: Analisi progetto .vbp", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.WriteLine();
 
         // 1) Parsing

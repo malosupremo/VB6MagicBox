@@ -26,7 +26,7 @@ public static partial class VbParser
         }
         catch (IOException ex)
         {
-            ConsoleX.WriteLineColor($"    [WARN] Impossibile leggere {Path.GetFileName(filePath)}: {ex.Message}", ConsoleColor.Yellow);
+            Console.WriteLineColor($"    [WARN] Impossibile leggere {Path.GetFileName(filePath)}: {ex.Message}", ConsoleColor.Yellow);
             return Array.Empty<string>();
         }
     }

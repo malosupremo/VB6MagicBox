@@ -81,9 +81,9 @@ public static class TypeAnnotator
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var enc = Encoding.GetEncoding(1252);
 
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("  3: Aggiunta Tipi Mancanti", ConsoleColor.Yellow);
-        ConsoleX.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineColor("  3: Aggiunta Tipi Mancanti", ConsoleColor.Yellow);
+        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
         Console.WriteLine();
         Console.ForegroundColor = ConsoleColor.Gray;
 
@@ -134,12 +134,12 @@ public static class TypeAnnotator
 
         Console.WriteLine();
         if (totalChanges == 0)
-            ConsoleX.WriteLineColor("[OK] Nessun tipo mancante trovato.", ConsoleColor.Green);
+            Console.WriteLineColor("[OK] Nessun tipo mancante trovato.", ConsoleColor.Green);
         else
-            ConsoleX.WriteLineColor($"[OK] {totalChanges} tipo/i aggiunto/i in {totalFiles} file/i.", ConsoleColor.Green);
+            Console.WriteLineColor($"[OK] {totalChanges} tipo/i aggiunto/i in {totalFiles} file/i.", ConsoleColor.Green);
 
         if (missingTypes.Count > 0)
-            ConsoleX.WriteLineColor($"[WARN] Tipi non deducibili: {missingTypesPath}", ConsoleColor.Yellow);
+            Console.WriteLineColor($"[WARN] Tipi non deducibili: {missingTypesPath}", ConsoleColor.Yellow);
     }
 
     // -------------------------

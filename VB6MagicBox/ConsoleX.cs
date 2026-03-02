@@ -1,17 +1,20 @@
 namespace VB6MagicBox;
 
-public static class ConsoleX
+public static class ConsoleExtensions
 {
-    public static void WriteLineColor(this string message, ConsoleColor color)
+    extension(Console)
     {
-        WriteColor(message + Environment.NewLine, color);
-    }
+        public static void WriteLineColor(string message, ConsoleColor color)
+        {
+            WriteColor(message + Environment.NewLine, color);
+        }
 
-    public static void WriteColor(this string message, ConsoleColor color)
-    {
-        var previous = Console.ForegroundColor;
-        Console.ForegroundColor = color;
-        Console.Write(message);
-        Console.ForegroundColor = previous;
+        public static void WriteColor(string message, ConsoleColor color)
+        {
+            var previous = Console.ForegroundColor;
+            Console.ForegroundColor = color;
+            Console.Write(message);
+            Console.ForegroundColor = previous;
+        }
     }
 }
