@@ -486,7 +486,7 @@ public static partial class VbParser
     {
         var csvLines = new List<string>
     {
-      "SymbolKind,SymbolName,ReferenceModule,ReferenceProcedure,LineNumber,OccurrenceIndex,StartChar"
+      "SymbolKind,SymbolName,ReferenceModule,ReferenceProcedure,LineNumber,StartChar"
     };
 
         static void AddReferenceIssues(List<string> lines, string kind, string? name, IEnumerable<VbReference> references)
@@ -496,14 +496,13 @@ public static partial class VbParser
                 for (int i = 0; i < reference.LineNumbers.Count; i++)
                 {
                     var lineNumber = reference.LineNumbers[i];
-                    var occurrenceIndex = i < reference.OccurrenceIndexes.Count ? reference.OccurrenceIndexes[i] : -1;
                     var startChar = i < reference.StartChars.Count ? reference.StartChars[i] : -1;
 
-                    if (occurrenceIndex >= 0 && startChar >= 0)
+                    if (startChar >= 0)
                         continue;
 
                     lines.Add(
-                      $"\"{EscapeCsv(kind)}\",\"{EscapeCsv(name ?? string.Empty)}\",\"{EscapeCsv(reference.Module ?? string.Empty)}\",\"{EscapeCsv(reference.Procedure ?? string.Empty)}\",{lineNumber},{occurrenceIndex},{startChar}");
+                      $"\"{EscapeCsv(kind)}\",\"{EscapeCsv(name ?? string.Empty)}\",\"{EscapeCsv(reference.Module ?? string.Empty)}\",\"{EscapeCsv(reference.Procedure ?? string.Empty)}\",{lineNumber},{startChar}");
                 }
             }
         }

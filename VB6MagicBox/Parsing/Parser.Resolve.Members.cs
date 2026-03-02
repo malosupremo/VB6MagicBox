@@ -127,8 +127,6 @@ public static partial class VbParser
                     if (overlapRanges.Any(r => lineNumber >= r.Start && lineNumber <= r.End))
                     {
                         reference.LineNumbers.RemoveAt(i);
-                        if (i < reference.OccurrenceIndexes.Count)
-                            reference.OccurrenceIndexes.RemoveAt(i);
                         if (i < reference.StartChars.Count)
                             reference.StartChars.RemoveAt(i);
                     }
@@ -376,7 +374,7 @@ public static partial class VbParser
         return index >= 0 ? index : fallbackIndex;
     }
 
-    private static int GetTokenStartChar(string rawLine, string token, int occurrenceIndex, int fallbackIndex)
+    private static int GetTokenStartChar(string rawLine, string token, int fallbackIndex)
     {
         if (string.IsNullOrEmpty(rawLine) || string.IsNullOrEmpty(token))
             return fallbackIndex;
@@ -384,52 +382,19 @@ public static partial class VbParser
         var matches = Regex.Matches(rawLine, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
         if (matches.Count > 0)
         {
-            if (occurrenceIndex > 0 && occurrenceIndex <= matches.Count)
-                return matches[occurrenceIndex - 1].Index;
+            var exact = matches.Cast<Match>().FirstOrDefault(m => m.Index == fallbackIndex);
+            if (exact != null)
+                return exact.Index;
 
-            return matches[0].Index;
+            return matches.Cast<Match>().OrderBy(m => Math.Abs(m.Index - fallbackIndex)).First().Index;
         }
 
         return GetStartCharFromRaw(rawLine, token, fallbackIndex);
     }
 
     // ---------------------------------------------------------
-    // HELPER: occurrence index e utility
+    // HELPER: utility
     // ---------------------------------------------------------
-
-    private static int GetOccurrenceIndex(string line, string token, int tokenIndex, int currentLineNumber = 0)
-    {
-        bool isDebug = false;
-
-        if (tokenIndex < 0)
-            return -1;
-
-        var matches = Regex.Matches(line, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
-
-        if (isDebug)
-        {
-            Console.WriteLine($"[DEBUG GetOccurrenceIndex] Line {currentLineNumber}, Token={token}, TokenIndex={tokenIndex}");
-            Console.WriteLine($"[DEBUG]   Line: {line}");
-            Console.WriteLine($"[DEBUG]   Total matches: {matches.Count}");
-            for (int j = 0; j < matches.Count; j++)
-                Console.WriteLine($"[DEBUG]     Match {j + 1} at index {matches[j].Index}: '{matches[j].Value}'");
-        }
-
-        for (int i = 0; i < matches.Count; i++)
-        {
-            if (matches[i].Index == tokenIndex)
-            {
-                if (isDebug)
-                    Console.WriteLine($"[DEBUG]   ? Returning occurrence {i + 1}");
-                return i + 1; // 1-based occurrence index
-            }
-        }
-
-        if (isDebug)
-            Console.WriteLine($"[DEBUG]   ? Token not found at specified index, returning -1");
-
-        return -1;
-    }
 
     private static bool TryUnwrapFunctionChain(string chainText, int chainIndex, out string unwrappedChain, out int unwrappedIndex)
     {

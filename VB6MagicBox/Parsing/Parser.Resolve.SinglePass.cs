@@ -305,12 +305,9 @@ public static partial class VbParser
                     gIdx.ModuleByName.TryGetValue(withFirstToken.Token, out var withTargetMod) &&
                     !string.Equals(withTargetMod.Name, mod.Name, StringComparison.OrdinalIgnoreCase))
                 {
-                    var sc = GetTokenStartChar(raw, withFirstToken.Token,
-                        GetOccurrenceIndex(noComment, withFirstToken.Token, withFirstToken.Index, currentLine),
-                        withFirstToken.Index);
+                    var sc = GetTokenStartChar(raw, withFirstToken.Token, withFirstToken.Index);
                     withTargetMod.Used = true;
-                    withTargetMod.References.AddLineNumber(mod.Name, memberName, currentLine,
-                        GetOccurrenceIndex(noComment, withFirstToken.Token, sc, currentLine), sc, owner: withTargetMod);
+                    withTargetMod.References.AddLineNumber(mod.Name, memberName, currentLine, sc, owner: withTargetMod);
                 }
 
                 if (!string.IsNullOrEmpty(withExpr))
@@ -495,10 +492,8 @@ public static partial class VbParser
                 // 6. Control (same module, bare usage like `lblTitle = "x"`)
                 if (controlIndex.TryGetValue(token, out var control) && !localNames.Contains(token))
                 {
-                    var startChar = GetTokenStartChar(raw, token,
-                        GetOccurrenceIndex(masked, token, tokenIdx, currentLine), tokenIdx);
-                    MarkControlAsUsed(control, mod.Name, memberName, currentLine,
-                        GetOccurrenceIndex(masked, token, tokenIdx, currentLine), startChar);
+                    var startChar = GetTokenStartChar(raw, token, tokenIdx);
+                    MarkControlAsUsed(control, mod.Name, memberName, currentLine, startChar);
                     recorded.Add((currentLine, tokenIdx));
                     continue;
                 }
@@ -675,10 +670,8 @@ public static partial class VbParser
             }
             else if (controlIndex.TryGetValue(baseVarName, out var baseControl) && !localNames.Contains(baseVarName))
             {
-                var sc = GetTokenStartChar(rawLine, baseVarName,
-                    GetOccurrenceIndex(scanLine, baseVarName, baseTokenPos.Item2, currentLine), baseTokenPos.Item2);
-                MarkControlAsUsed(baseControl, mod.Name, memberName, currentLine,
-                    GetOccurrenceIndex(scanLine, baseVarName, baseTokenPos.Item2, currentLine), sc);
+                var sc = GetTokenStartChar(rawLine, baseVarName, baseTokenPos.Item2);
+                MarkControlAsUsed(baseControl, mod.Name, memberName, currentLine, sc);
                 recorded.Add((currentLine, baseTokenPos.Item2));
             }
             else if (gIdx.ModuleByName.TryGetValue(baseVarName, out var baseMod))
@@ -861,7 +854,6 @@ public static partial class VbParser
         if (startChar < 0 || !recorded.Add((lineNumber, startChar)))
             return;
 
-        var occIdx = GetOccurrenceIndex(scanLine, ExtractTokenAt(scanLine, startChar), startChar, lineNumber);
         references.AddLineNumber(module, procedure, lineNumber, startChar, owner: owner);
     }
 

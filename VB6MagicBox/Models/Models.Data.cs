@@ -225,16 +225,7 @@ public class VbReference
     [JsonPropertyOrder(2)]
     public List<int> LineNumbers { get; set; } = new();
 
-    /// <summary>
-    /// Occurrence index (1-based) per ogni LineNumber.
-    /// Usato quando stesso simbolo appare più volte sulla stessa riga
-    /// (es. parametri multipli: "func(a As TYPE, b As TYPE)")
-    /// -1 significa "prima occorrenza" o "tutte le occorrenze sulla riga"
-    /// </summary>
     [JsonPropertyOrder(3)]
-    public List<int> OccurrenceIndexes { get; set; } = new();
-
-    [JsonPropertyOrder(4)]
     public List<int> StartChars { get; set; } = new();
 }
 
@@ -291,7 +282,6 @@ public static class VbReferenceListExtensions
         public string? Module { get; set; }
         public string? Procedure { get; set; }
         public int LineNumber { get; set; }
-        public int OccurrenceIndex { get; set; }
         public int StartChar { get; set; }
         public List<VbReference>? ReferenceList { get; set; }
         public string? SymbolKind { get; set; }
@@ -312,7 +302,7 @@ public static class VbReferenceListExtensions
     {
         var lines = new List<string>
     {
-      "SymbolKind,SymbolName,Module,Procedure,LineNumber,OccurrenceIndex,StartChar,SourceMember,SourceFile,SourceLine"
+      "SymbolKind,SymbolName,Module,Procedure,LineNumber,StartChar,SourceMember,SourceFile,SourceLine"
     };
 
         if (ReferenceDebugEntries.IsEmpty)
@@ -329,7 +319,7 @@ public static class VbReferenceListExtensions
             var symbolKind = entry.SymbolKind ?? string.Empty;
             var symbolName = entry.SymbolName ?? string.Empty;
 
-            lines.Add($"\"{symbolKind}\",\"{symbolName}\",\"{entry.Module}\",\"{entry.Procedure}\",{entry.LineNumber},{entry.OccurrenceIndex},{entry.StartChar},\"{entry.SourceMember}\",\"{entry.SourceFile}\",{entry.SourceLine}");
+            lines.Add($"\"{symbolKind}\",\"{symbolName}\",\"{entry.Module}\",\"{entry.Procedure}\",{entry.LineNumber},{entry.StartChar},\"{entry.SourceMember}\",\"{entry.SourceFile}\",{entry.SourceLine}");
         }
 
         File.WriteAllText(outputPath, string.Join(Environment.NewLine, lines));
@@ -338,14 +328,12 @@ public static class VbReferenceListExtensions
     /// <summary>
     /// Adds <paramref name="lineNumber"/> to an existing reference entry keyed by
     /// Module+Procedure, or creates a new entry when none exists.
-    /// occurrenceIndex (1-based) tracks which occurrence on the line (for multiple params same type).
     /// </summary>
     public static void AddLineNumber(
         this List<VbReference> references,
         string module,
         string procedure,
         int lineNumber,
-        int occurrenceIndex = -1,
         int startChar = -1,
         object? owner = null,
         [System.Runtime.CompilerServices.CallerMemberName] string sourceMember = "",
@@ -366,8 +354,6 @@ public static class VbReferenceListExtensions
                 {
                     while (existing.StartChars.Count < existing.LineNumbers.Count)
                         existing.StartChars.Add(-1);
-                    while (existing.OccurrenceIndexes.Count < existing.LineNumbers.Count)
-                        existing.OccurrenceIndexes.Add(-1);
 
                     if (startChar < 0 && existing.LineNumbers.Any(ln => ln == lineNumber))
                     {
@@ -382,34 +368,19 @@ public static class VbReferenceListExtensions
                         }
                     }
 
-                    // Controlla se questa combinazione lineNumber+occurrenceIndex esiste già
                     bool alreadyExists = false;
                     for (int i = 0; i < existing.LineNumbers.Count; i++)
                     {
                         var existingStartChar = i < existing.StartChars.Count ? existing.StartChars[i] : -1;
-                        var existingOccurrence = i < existing.OccurrenceIndexes.Count ? existing.OccurrenceIndexes[i] : -1;
                         if (existing.LineNumbers[i] == lineNumber &&
                             existingStartChar == -1 &&
-                            startChar >= 0 &&
-                            (existingOccurrence == -1 || existingOccurrence == occurrenceIndex))
-                        {
-                            existing.StartChars[i] = startChar;
-                            existing.OccurrenceIndexes[i] = occurrenceIndex;
-                            alreadyExists = true;
-                            break;
-                        }
-                        if (existing.LineNumbers[i] == lineNumber &&
-                            startChar >= 0 &&
-                            existingOccurrence == occurrenceIndex &&
-                            existingStartChar != startChar)
+                            startChar >= 0)
                         {
                             existing.StartChars[i] = startChar;
                             alreadyExists = true;
                             break;
                         }
                         if (existing.LineNumbers[i] == lineNumber &&
-                            i < existing.OccurrenceIndexes.Count &&
-                            existing.OccurrenceIndexes[i] == occurrenceIndex &&
                             existingStartChar == startChar)
                         {
                             alreadyExists = true;
@@ -420,7 +391,6 @@ public static class VbReferenceListExtensions
                     if (!alreadyExists)
                     {
                         existing.LineNumbers.Add(lineNumber);
-                        existing.OccurrenceIndexes.Add(occurrenceIndex);
                         existing.StartChars.Add(startChar);
                     }
                 }
@@ -431,13 +401,12 @@ public static class VbReferenceListExtensions
                 if (lineNumber > 0)
                 {
                     newRef.LineNumbers.Add(lineNumber);
-                    newRef.OccurrenceIndexes.Add(occurrenceIndex);
                     newRef.StartChars.Add(startChar);
                 }
                 references.Add(newRef);
             }
 
-            if (lineNumber > 0 && (occurrenceIndex < 0 || startChar < 0))
+            if (lineNumber > 0 && startChar < 0)
             {
                 var symbolKind = string.Empty;
                 var symbolName = string.Empty;
@@ -451,7 +420,6 @@ public static class VbReferenceListExtensions
                     Module = module,
                     Procedure = normalizedProcedure,
                     LineNumber = lineNumber,
-                    OccurrenceIndex = occurrenceIndex,
                     StartChar = startChar,
                     ReferenceList = references,
                     SymbolKind = symbolKind,
@@ -545,20 +513,16 @@ public static class LineReplaceListExtensions
         string oldName,
         string newName,
         string category,
-        int occurrenceIndex = -1,
         bool skipStringLiterals = false)
     {
         if (oldName == newName)
             return;
 
-        // Se dobbiamo saltare le stringhe literals (es. per le costanti),
-        // elimina temporaneamente le stringhe dal codice prima di cercare i match
         var codeToSearch = lineCode;
         var stringRanges = new List<(int start, int end)>();
 
         if (skipStringLiterals)
         {
-            // Trova tutte le stringhe literals e segna i loro range
             bool inString = false;
             int stringStart = -1;
 
@@ -573,7 +537,7 @@ public static class LineReplaceListExtensions
                     }
                     else if (i + 1 < lineCode.Length && lineCode[i + 1] == '"')
                     {
-                        i++; // Escaped double quote
+                        i++;
                     }
                     else
                     {
@@ -585,14 +549,12 @@ public static class LineReplaceListExtensions
             }
         }
 
-        // Trova tutte le occorrenze del token nella riga
         var pattern = $@"\b{Regex.Escape(oldName)}\b";
         var matches = Regex.Matches(codeToSearch, pattern, RegexOptions.IgnoreCase);
 
         if (matches.Count == 0)
             return;
 
-        // Funzione helper per verificare se una posizione è dentro una stringa
         bool IsInsideString(int pos)
         {
             return stringRanges.Any(range => pos >= range.start && pos < range.end);
@@ -605,13 +567,8 @@ public static class LineReplaceListExtensions
         if (effectiveMatches.Count == 0)
             return;
 
-        // Se occurrenceIndex è specificato (1-based), usa solo quella
-        if (occurrenceIndex > 0)
+        foreach (var match in effectiveMatches)
         {
-            if (occurrenceIndex > effectiveMatches.Count)
-                return;
-
-            var match = effectiveMatches[occurrenceIndex - 1];
             replaces.AddReplace(
                 lineNumber,
                 match.Index,
@@ -619,22 +576,6 @@ public static class LineReplaceListExtensions
                 match.Value,
                 newName,
                 category);
-        }
-        else
-        {
-            // Se occurrenceIndex NON è specificato (-1), aggiungi TUTTE le occorrenze
-            // Questo gestisce variabili/simboli usati più volte sulla stessa riga
-            // Es: If m_Queue(i).X = ... And m_Queue(j).Y = ...
-            foreach (var match in effectiveMatches)
-            {
-                replaces.AddReplace(
-                    lineNumber,
-                    match.Index,
-                    match.Index + match.Length,
-                    match.Value,
-                    newName,
-                    category);
-            }
         }
     }
 }

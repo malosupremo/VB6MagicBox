@@ -9,7 +9,6 @@ public static partial class VbParser
     private sealed record ReferenceReplaceEntry(
         VbModule RefModule,
         int LineNumber,
-        int OccurrenceIndex,
         int StartChar,
         string OldName,
         string NewName,
@@ -23,7 +22,6 @@ public static partial class VbParser
         public string? Procedure { get; set; }
         public int LineNumber { get; set; }
         public int StartChar { get; set; }
-        public int OccurrenceIndex { get; set; }
         public string? OldName { get; set; }
         public string? NewName { get; set; }
         public string? Category { get; set; }
@@ -49,10 +47,10 @@ public static partial class VbParser
             .ToList() ?? new List<StartCharCheckEntry>();
 
         using var writer = new StreamWriter(outputPath, false);
-        writer.WriteLine("Module;Procedure;LineNumber;StartChar;OccurrenceIndex;OldName;NewName;Category");
+        writer.WriteLine("Module;Procedure;LineNumber;StartChar;OldName;NewName;Category");
         foreach (var entry in entries)
         {
-            writer.WriteLine($"{entry.Module};{entry.Procedure};{entry.LineNumber};{entry.StartChar};{entry.OccurrenceIndex};{entry.OldName};{entry.NewName};{entry.Category}");
+            writer.WriteLine($"{entry.Module};{entry.Procedure};{entry.LineNumber};{entry.StartChar};{entry.OldName};{entry.NewName};{entry.Category}");
         }
     }
 
@@ -298,13 +296,11 @@ public static partial class VbParser
                     continue;
 
                 var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
-                var occurrenceIndexesProp = reference?.GetType().GetProperty("OccurrenceIndexes");
                 var startCharsProp = reference?.GetType().GetProperty("StartChars");
 
                 if (lineNumbersProp?.GetValue(reference) is not System.Collections.Generic.List<int> refLineNumbers)
                     continue;
 
-                var occurrenceIndexes = occurrenceIndexesProp?.GetValue(reference) as System.Collections.Generic.List<int>;
                 var startChars = startCharsProp?.GetValue(reference) as System.Collections.Generic.List<int>;
 
                 for (int idx = 0; idx < refLineNumbers.Count; idx++)
@@ -313,19 +309,17 @@ public static partial class VbParser
                     if (lineNum <= 0 || lineNum > lines.Length)
                         continue;
 
-                    var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
                     var startChar = (startChars != null && idx < startChars.Count) ? startChars[idx] : -1;
 
-                    if (occIndex < 0 && startChar < 0)
+                    if (startChar < 0)
                         continue;
 
-                    var entryKey = $"{refModule.Name}|{lineNum}|{startChar}|{occIndex}|{oldName}|{newName}|{category}|{forceQualification}";
+                    var entryKey = $"{refModule.Name}|{lineNum}|{startChar}|{oldName}|{newName}|{category}|{forceQualification}";
                     if (replaceEntryKeys.TryAdd(entryKey, 0))
                     {
                         replaceEntries.Add(new ReferenceReplaceEntry(
                             refModule,
                             lineNum,
-                            occIndex,
                             startChar,
                             oldName!,
                             newName!,
@@ -447,7 +441,7 @@ public static partial class VbParser
         if (entry.Category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
         {
             AddEnumValueReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, entry.NewName, referenceNewName,
-                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, forceQualification: true, fileLines: fileLines, project: project);
+                entry.Category, entry.StartChar, stringRanges, forceQualification: true, fileLines: fileLines, project: project);
             return;
         }
 
@@ -458,7 +452,7 @@ public static partial class VbParser
             if (isSameModule || isAttributeLine)
             {
                 AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
-                    entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier: null, sourceModule, sourceModuleReferenceName,
+                    entry.Category, entry.StartChar, stringRanges, allowStringReplace, qualifier: null, sourceModule, sourceModuleReferenceName,
                     forceQualification: false, qualifiedName: referenceNewName);
                 return;
             }
@@ -467,13 +461,13 @@ public static partial class VbParser
             if (procAtLine != null && MatchesName(procAtLine.Name, procAtLine.ConventionalName, entry.OldName))
             {
                 AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
-                    entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier: null, sourceModule, sourceModuleReferenceName,
+                    entry.Category, entry.StartChar, stringRanges, allowStringReplace, qualifier: null, sourceModule, sourceModuleReferenceName,
                     forceQualification: false, qualifiedName: referenceNewName);
                 return;
             }
 
             AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, qualifiedReferenceName,
-                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, sourceModuleReferenceName, sourceModule, sourceModuleReferenceName,
+                entry.Category, entry.StartChar, stringRanges, allowStringReplace, sourceModuleReferenceName, sourceModule, sourceModuleReferenceName,
                 entry.ForceQualification, qualifiedReferenceName);
             return;
         }
@@ -487,7 +481,7 @@ public static partial class VbParser
             var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, entry.RefModule, entry.RefModule.Name, shouldQualify);
             var recordDisambiguation = !isPropertyScope;
             AddPropertyReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
-                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, propertyQualifier,
+                entry.Category, entry.StartChar, stringRanges, allowStringReplace, propertyQualifier,
                 entry.ForceQualification, qualifiedReferenceName, recordDisambiguation);
             return;
         }
@@ -521,7 +515,7 @@ public static partial class VbParser
             }
 
             AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
-                entry.Category, entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName,
+                entry.Category, entry.StartChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName,
                 entry.ForceQualification, qualifiedReferenceName);
             return;
         }
@@ -550,7 +544,7 @@ public static partial class VbParser
         if (string.Equals(entry.Category, "Constant", StringComparison.OrdinalIgnoreCase))
         {
             AddConstantReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName, entry.Category,
-                entry.OccurrenceIndex, entry.StartChar, stringRanges, allowStringReplace, qualifiedReferenceName, entry.ForceQualification);
+                entry.StartChar, stringRanges, allowStringReplace, qualifiedReferenceName, entry.ForceQualification);
             return;
         }
 
@@ -587,7 +581,7 @@ public static partial class VbParser
         }
 
         entry.RefModule.Replaces.AddReplaceFromLine(codePart, entry.LineNumber, effectiveOldName, qualifiedReferenceName,
-            entry.Category + "_Reference", entry.OccurrenceIndex, skipStringLiterals: !allowStringReplace);
+            entry.Category + "_Reference", skipStringLiterals: !allowStringReplace);
     }
 
     /// <summary>
@@ -617,7 +611,7 @@ public static partial class VbParser
         // Per le costanti, usa AddReplaceFromLine con skipStringLiterals
         if (source is VbConstant)
         {
-            module.Replaces.AddReplaceFromLine(codePart, lineNum, oldName!, newName!, category + "_Declaration", -1, skipStringLiterals: true);
+            module.Replaces.AddReplaceFromLine(codePart, lineNum, oldName!, newName!, category + "_Declaration", skipStringLiterals: true);
             return;
         }
 
@@ -704,13 +698,11 @@ public static partial class VbParser
 
             var lineNumbersProp = reference?.GetType().GetProperty("LineNumbers");
             var procedureProp = reference?.GetType().GetProperty("Procedure");
-            var occurrenceIndexesProp = reference?.GetType().GetProperty("OccurrenceIndexes");
             var startCharsProp = reference?.GetType().GetProperty("StartChars");
 
             if (lineNumbersProp?.GetValue(reference) is not System.Collections.Generic.List<int> refLineNumbers)
                 continue;
 
-            var occurrenceIndexes = occurrenceIndexesProp?.GetValue(reference) as System.Collections.Generic.List<int>;
             var startChars = startCharsProp?.GetValue(reference) as System.Collections.Generic.List<int>;
 
             for (int idx = 0; idx < refLineNumbers.Count; idx++)
@@ -722,10 +714,9 @@ public static partial class VbParser
                 var line = lines[lineNum - 1];
                 var (codePart, _) = SplitCodeAndComment(line);
 
-                var occIndex = (occurrenceIndexes != null && idx < occurrenceIndexes.Count) ? occurrenceIndexes[idx] : -1;
                 var startChar = (startChars != null && idx < startChars.Count) ? startChars[idx] : -1;
 
-                if (occIndex < 0 && startChar < 0)
+                if (startChar < 0)
                     continue;
 
                 var sourceModule = GetDefiningModule(project, source!);
@@ -743,7 +734,7 @@ public static partial class VbParser
 
                 if (category == "EnumValue" && referenceNewName.Contains('.', StringComparison.Ordinal))
                 {
-                    AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, occIndex, startChar, stringRanges, forceQualification: true, fileLines: null, project: project);
+                    AddEnumValueReferenceReplaces(refModule, codePart, lineNum, oldName, newName, referenceNewName, category, startChar, stringRanges, forceQualification: true, fileLines: null, project: project);
                     continue;
                 }
 
@@ -751,7 +742,7 @@ public static partial class VbParser
                 {
                     var shouldQualify = ShouldQualifyPropertyReference(refModule, lineNum, referenceNewName);
                     var propertyQualifier = GetPropertyQualifier(sourceModule, sourceModuleReferenceName, refModule, refModuleName, shouldQualify);
-                    AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, propertyQualifier,
+                    AddPropertyReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, startChar, stringRanges, allowStringReplace, propertyQualifier,
                         forceQualification: false, qualifiedName: referenceNewName, recordDisambiguation: true);
                 }
                 else if (source is VbVariable variable && IsGlobalVariable(project, sourceModule, variable))
@@ -782,7 +773,7 @@ public static partial class VbParser
                         }
                     }
 
-                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName,
+                    AddModuleMemberReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, startChar, stringRanges, allowStringReplace, qualifier, sourceModule, sourceModuleReferenceName,
                         forceQualification: false, qualifiedName: referenceNewName);
                 }
                 else if (source is VbControl && Regex.IsMatch(codePart.TrimStart(), @"^Begin\s+\S+\s+", RegexOptions.IgnoreCase))
@@ -806,7 +797,7 @@ public static partial class VbParser
                 }
                 else if (string.Equals(category, "Constant", StringComparison.OrdinalIgnoreCase))
                 {
-                    AddConstantReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, occIndex, startChar, stringRanges, allowStringReplace, referenceNewName, false);
+                    AddConstantReferenceReplaces(refModule, codePart, lineNum, oldName, referenceNewName, category, startChar, stringRanges, allowStringReplace, referenceNewName, false);
                 }
                 else
                 {
@@ -842,7 +833,7 @@ public static partial class VbParser
                         }
                     }
 
-                    refModule.Replaces.AddReplaceFromLine(codePart, lineNum, effectiveOldName, referenceNewName, category + "_Reference", occIndex, skipStringLiterals: !allowStringReplace);
+                    refModule.Replaces.AddReplaceFromLine(codePart, lineNum, effectiveOldName, referenceNewName, category + "_Reference", skipStringLiterals: !allowStringReplace);
                 }
 
                 if (startChar >= 0 && refModule.Replaces.Count == replacesBefore)
@@ -855,7 +846,6 @@ public static partial class VbParser
                         Procedure = refProcedureName,
                         LineNumber = lineNum,
                         StartChar = startChar,
-                        OccurrenceIndex = occIndex,
                         OldName = oldName,
                         NewName = referenceNewName,
                         Category = category
@@ -866,7 +856,7 @@ public static partial class VbParser
                 //{
                 //  var added = refModule.Replaces.Count - replacesBefore;
                 //  var lastReplace = added > 0 ? refModule.Replaces.Last() : null;
-                //  Console.WriteLine($"\n[DBG] '{oldName}'@{refModuleName}:{lineNum} occIdx={occIndex} → {added} replace(s)" +
+                //  Console.WriteLine($"\n[DBG] '{oldName}'@{refModuleName}:{lineNum} → {added} replace(s)" +
                 //      (lastReplace != null ? $" char {lastReplace.StartChar}-{lastReplace.EndChar} '{lastReplace.OldText}'→'{lastReplace.NewText}'" : " NONE"));
                 //}
             }
@@ -881,7 +871,6 @@ public static partial class VbParser
         string newName,
         string qualifiedName,
         string category,
-        int occIndex,
         int startChar,
         List<(int start, int end)> stringRanges,
         bool forceQualification,
@@ -900,10 +889,6 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
-        }
-        else if (occIndex > 0 && occIndex <= matches.Count)
-        {
-            targetMatches = new[] { matches[occIndex - 1] };
         }
 
         foreach (var match in targetMatches)
@@ -1005,7 +990,6 @@ public static partial class VbParser
         string oldName,
         string newName,
         string category,
-        int occIndex,
         int startChar,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
@@ -1024,10 +1008,6 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
-        }
-        else if (occIndex > 0 && occIndex <= matches.Count)
-        {
-            targetMatches = new[] { matches[occIndex - 1] };
         }
 
         foreach (var match in targetMatches)
@@ -1254,7 +1234,6 @@ public static partial class VbParser
         string oldName,
         string newName,
         string category,
-        int occIndex,
         int startChar,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
@@ -1275,10 +1254,6 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
-        }
-        else if (occIndex > 0 && occIndex <= matches.Count)
-        {
-            targetMatches = new[] { matches[occIndex - 1] };
         }
 
         foreach (var match in targetMatches)
@@ -1317,7 +1292,6 @@ public static partial class VbParser
         string oldName,
         string newName,
         string category,
-        int occIndex,
         int startChar,
         List<(int start, int end)> stringRanges,
         bool allowStringReplace,
@@ -1339,10 +1313,6 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
-        }
-        else if (occIndex > 0 && occIndex <= matches.Count)
-        {
-            targetMatches = new[] { matches[occIndex - 1] };
         }
 
         foreach (var match in targetMatches)

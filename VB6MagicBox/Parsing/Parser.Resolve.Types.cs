@@ -190,7 +190,6 @@ public static partial class VbParser
     }
 
     var noComment = StripInlineComment(lineText);
-    var occIdx = GetOccurrenceIndex(noComment, baseTypeName, startChar, lineNumber);
     referencedType.Used = true;
     referencedType.References.AddLineNumber(moduleName, procedureName, lineNumber, startChar, owner: referencedType);
   }
@@ -301,7 +300,6 @@ public static partial class VbParser
       return;
 
     var noComment = StripInlineComment(lineText);
-    var occIdx = GetOccurrenceIndex(noComment, baseName, startChar, lineNumber);
     classModule.Used = true;
     classModule.References.AddLineNumber(declaringModule, procedureName, lineNumber, startChar, owner: classModule);
   }
@@ -353,7 +351,6 @@ public static partial class VbParser
         return;
 
       var noComment = StripInlineComment(lineText);
-      var occIdx = GetOccurrenceIndex(noComment, clean, startChar, lineNumber);
 
       if (allTypes.TryGetValue(clean, out var t))
       {

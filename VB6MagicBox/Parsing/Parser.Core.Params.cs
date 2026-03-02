@@ -109,7 +109,6 @@ public static partial class VbParser
                 {
                     var resolvedLineNumber = lineIdx + 1;
                     var startChar = match.Index;
-                    var occurrenceIndex = GetOccurrenceIndex(noComment, param.Name, startChar, resolvedLineNumber);
                     param.LineNumber = resolvedLineNumber;
 
                     // Trovato! Aggiungi una Reference a questa riga specifica
