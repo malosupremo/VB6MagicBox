@@ -42,9 +42,9 @@ public static class CodeFormatter
         var enc = Encoding.GetEncoding(1252);
 
         Console.WriteLine();
-        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        Console.WriteLineColor("  4: Riordino Variabili Locali", ConsoleColor.Yellow);
-        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineWarning("===========================================");
+        Console.WriteLineWarning("  4: Riordino Variabili Locali");
+        Console.WriteLineWarning("===========================================");
         Console.WriteLine();
 
         var vbpDir = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile!))!;
@@ -133,9 +133,9 @@ public static class CodeFormatter
         var enc = Encoding.GetEncoding(1252);
 
         Console.WriteLine();
-        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
-        Console.WriteLineColor("  5: Armonizzazione Spaziature", ConsoleColor.Yellow);
-        Console.WriteLineColor("===========================================", ConsoleColor.Yellow);
+        Console.WriteLineWarning("===========================================");
+        Console.WriteLineWarning("  5: Armonizzazione Spaziature");
+        Console.WriteLineWarning("===========================================");
         Console.WriteLine();
 
         var vbpDir = Path.GetDirectoryName(Path.GetFullPath(project.ProjectFile!))!;
