@@ -464,14 +464,12 @@ public static partial class VbParser
                     continue;
                 }
 
-                // 5. Global variable from another module
+                // 5. Global variable from another module (only non-private)
                 if (gIdx.GlobalVarIndex.TryGetValue(token, out var gvList))
                 {
-                    // Prefer first match not in current module
                     var gv = gvList.FirstOrDefault(x =>
-                        !string.Equals(x.Module, mod.Name, StringComparison.OrdinalIgnoreCase));
-                    if (gv.Variable == null && gvList.Count > 0)
-                        gv = gvList[0];
+                        !string.Equals(x.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(x.Variable.Visibility, "Private", StringComparison.OrdinalIgnoreCase));
                     if (gv.Variable != null && !localNames.Contains(token))
                     {
                         gv.Variable.Used = true;
@@ -493,13 +491,15 @@ public static partial class VbParser
                 if (isDeclLine)
                     continue;
 
-                // 7. Global constant
+                // 7. Global constant (cross-module only non-private, same-module any visibility)
                 if (gIdx.ConstantIndex.TryGetValue(token, out var constList) && !localNames.Contains(token))
                 {
                     var c = constList.FirstOrDefault(x =>
-                        !string.Equals(x.Module, mod.Name, StringComparison.OrdinalIgnoreCase));
-                    if (c.Constant == null && constList.Count > 0)
-                        c = constList[0];
+                        !string.Equals(x.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(x.Constant.Visibility, "Private", StringComparison.OrdinalIgnoreCase));
+                    if (c.Constant == null)
+                        c = constList.FirstOrDefault(x =>
+                            string.Equals(x.Module, mod.Name, StringComparison.OrdinalIgnoreCase));
                     if (c.Constant != null)
                     {
                         c.Constant.Used = true;
@@ -662,8 +662,9 @@ public static partial class VbParser
             }
             else if (gIdx.GlobalVarIndex.TryGetValue(baseVarName, out var gvList) && !localNames.Contains(baseVarName))
             {
-                var gv = gvList.FirstOrDefault(x => !string.Equals(x.Module, mod.Name, StringComparison.OrdinalIgnoreCase));
-                if (gv.Variable == null && gvList.Count > 0) gv = gvList[0];
+                var gv = gvList.FirstOrDefault(x =>
+                    !string.Equals(x.Module, mod.Name, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(x.Variable.Visibility, "Private", StringComparison.OrdinalIgnoreCase));
                 if (gv.Variable != null)
                 {
                     gv.Variable.Used = true;
