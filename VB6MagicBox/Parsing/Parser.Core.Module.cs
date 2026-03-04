@@ -41,7 +41,7 @@ public static partial class VbParser
     VbProperty? currentProperty = null;
     VbTypeDef? currentType = null;
     VbEnumDef? currentEnum = null;
-    bool insideControl = false;
+    int controlDepth = 0;
     VbControl? currentControl = null;
     string? currentWith = null;
 
@@ -100,7 +100,7 @@ public static partial class VbParser
         var mc = ReFormControlBegin.Match(noComment);
         if (mc.Success)
         {
-          insideControl = true;
+          controlDepth++;
           var controlName = mc.Groups[2].Value;
           var controlType = mc.Groups[1].Value;
 
@@ -116,14 +116,14 @@ public static partial class VbParser
           continue;
         }
 
-        if (insideControl && noComment.StartsWith("End", StringComparison.OrdinalIgnoreCase))
+        if (controlDepth > 0 && noComment.TrimStart().Equals("End", StringComparison.OrdinalIgnoreCase))
         {
-          insideControl = false;
-          currentControl = null;
+          controlDepth--;
+          if (controlDepth == 0) currentControl = null;
           continue;
         }
 
-        if (insideControl && currentControl != null)
+        if (controlDepth > 0 && currentControl != null)
         {
           var propMatch = Regex.Match(noComment, @"^\s*(\w+)\s*=\s*(.+)$");
           if (propMatch.Success && !propMatch.Groups[1].Value.Equals("Begin", StringComparison.OrdinalIgnoreCase))

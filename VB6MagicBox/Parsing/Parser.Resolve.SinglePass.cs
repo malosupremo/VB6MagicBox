@@ -731,7 +731,7 @@ public static partial class VbParser
                     }
                     else
                     {
-                        // Could be Module.Procedure or Module.Constant — record references
+                        // Could be Module.Procedure, Module.Constant, or Module.Control
                         var mProc = moduleMatch.Procedures.FirstOrDefault(p =>
                             p.Name.Equals(member, StringComparison.OrdinalIgnoreCase));
                         if (mProc != null)
@@ -752,8 +752,24 @@ public static partial class VbParser
                                 var memberTokenPos = tokenPositions.ElementAtOrDefault(1);
                                 RecordReference(mConst.References, mod.Name, memberName, currentLine, memberTokenPos.Item2, scanLine, recorded, mConst);
                             }
+                            else
+                            {
+                                // Module.Control (e.g., FrmLoading.progress)
+                                var mCtrl = moduleMatch.Controls.FirstOrDefault(c =>
+                                    c.Name != null && c.Name.Equals(member, StringComparison.OrdinalIgnoreCase));
+                                if (mCtrl != null)
+                                {
+                                    var memberTokenPos = tokenPositions.ElementAtOrDefault(1);
+                                    if (memberTokenPos.Item2 >= 0)
+                                    {
+                                        var sc = GetTokenStartChar(rawLine, member, memberTokenPos.Item2);
+                                        MarkControlAsUsed(mCtrl, mod.Name, memberName, currentLine, sc);
+                                        recorded.Add((currentLine, memberTokenPos.Item2));
+                                    }
+                                }
+                            }
                         }
-                        // No further chain traversal for procedures or constants
+                        // No further chain traversal for procedures, constants, or controls
                         return;
                     }
                 }

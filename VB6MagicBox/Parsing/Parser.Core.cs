@@ -137,7 +137,7 @@ public static partial class VbParser
         new(@"([A-Za-z_]\w*(?:\([^)]*\))?)\s*\.\s*([A-Za-z_]\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ReFormControlBegin =
-        new(@"^Begin\s+(\S+)\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"^\s*Begin\s+(\S+)\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly HashSet<string> VbKeywords = new(StringComparer.OrdinalIgnoreCase)
       {

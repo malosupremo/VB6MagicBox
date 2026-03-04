@@ -61,17 +61,17 @@ public static class Refactoring
         {
             if (module.IsSharedExternal)
             {
-                Console.WriteLine($">> {module.Name}: modulo condiviso, salto refactoring");
+                Console.WriteLine($">> {module.Name}: modulo condiviso, salto refactoring\r".PadRight(Console.WindowWidth - 1));
                 continue;
             }
 
             if (module.Replaces.Count == 0)
             {
-                Console.WriteLine($">> {module.Name}: nessuna sostituzione");
+                Console.WriteLine($">> {module.Name}: nessuna sostituzione\r".PadRight(Console.WindowWidth - 1));
                 continue;
             }
 
-            Console.WriteLine($">> {module.Name}: {module.Replaces.Count} sostituzioni...");
+            Console.WriteLine($">> {module.Name}: {module.Replaces.Count} sostituzioni...\r".PadRight(Console.WindowWidth - 1));
 
             var filePath = module.FullPath;
             if (!File.Exists(filePath))
@@ -146,11 +146,11 @@ public static class Refactoring
                 filesProcessed++;
                 totalReplaces += replacesApplied;
 
-                Console.WriteLineColor($"   [OK] {replacesApplied} sostituzioni applicate", ConsoleColor.Green);
+                //Console.WriteLineColor($"   [OK] {replacesApplied} sostituzioni applicate", ConsoleColor.Green);
             }
             else
             {
-                Console.WriteLineColor("   [i] Nessuna modifica (contenuto identico)", ConsoleColor.Cyan);
+                //Console.WriteLineColor("   [i] Nessuna modifica (contenuto identico)", ConsoleColor.Cyan);
             }
         }
 
