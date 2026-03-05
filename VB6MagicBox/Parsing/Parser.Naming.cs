@@ -229,16 +229,26 @@ public static partial class VbParser
                     return EnsurePascalCaseControlName(expectedPrefix + baseName);
             }
 
+            if (expectedPrefix.Equals("lbl", StringComparison.OrdinalIgnoreCase) &&
+                controlName.Length > 2 &&
+                controlName.StartsWith("lb", StringComparison.OrdinalIgnoreCase) &&
+                !controlName.StartsWith("lbl", StringComparison.OrdinalIgnoreCase) &&
+                char.IsUpper(controlName[2]))
+            {
+                // Strip the "Lb" prefix, then add "Lbl": LbLatWidth → LblLatWidth
+                var baseName = controlName.Substring(2);
+                return EnsurePascalCaseControlName(expectedPrefix + baseName);
+            }
+
             if (expectedPrefix.Equals("fra", StringComparison.OrdinalIgnoreCase) &&
                 controlName.Length > 2 &&
                 controlName.StartsWith("fr", StringComparison.OrdinalIgnoreCase) &&
+                !controlName.StartsWith("fra", StringComparison.OrdinalIgnoreCase) &&
                 char.IsUpper(controlName[2]))
             {
-                var frameNameToFix = controlName;
-                if (frameNameToFix.Length > 0 && char.IsLower(frameNameToFix[0]))
-                    frameNameToFix = char.ToUpper(frameNameToFix[0]) + frameNameToFix.Substring(1);
-
-                return EnsurePascalCaseControlName(expectedPrefix + frameNameToFix);
+                // Strip the "Fr" prefix, then add "Fra": FrQualcosa → FraQualcosa
+                var baseName = controlName.Substring(2);
+                return EnsurePascalCaseControlName(expectedPrefix + baseName);
             }
 
             // Caso speciale: TextBox con prefissi non standard (tb, tx) ? normalizza a txt

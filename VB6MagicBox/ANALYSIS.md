@@ -3,13 +3,13 @@
 ## Purpose
 VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (types/calls/fields), build dependencies/usage, apply naming conventions, **build precise replaces**, export outputs, apply refactoring.
 
-## Architecture (NEW - Optimized)
+## Architecture
 **Phase 1 (Analysis)**: `Parser.ParseAndResolve`
-1. Parse project files (`Parser.Core`)
-2. Resolve types/calls/fields (`Parser.Resolve` + `.Members`)
+1. Parse project files (`Parser.Core` + `Parser.Core.Module`)
+2. **Single-pass reference resolution** (`Parser.Resolve.SinglePass` + `.Members` + `.Indexes` + `.Helpers` + `.Types`)
 3. Build dependencies & mark used symbols (`Parser.Resolve.Dependencies`)
 4. Apply naming conventions & sort (`Parser.Export` → `NamingConvention.Apply`)
-5. **Build Replaces** (`Parser.Replaces`) - **NEW**: pre-calculate exact character positions for all renames
+5. **Build Replaces** (`Parser.Replaces`) - pre-calculate exact character positions for all renames
 
 **Phase 2 (Refactoring)**: `Refactoring.ApplyRenames`
 - ⚡ Ultra-fast: uses pre-calculated `VbModule.Replaces[]` (line + char position)
@@ -35,26 +35,87 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - Regexes for array parens use `\([^)]*\)`; `ReFieldAccess` pattern: `([A-Za-z_]\w*(?:\([^)]*\))?)\s*\.\s*([A-Za-z_]\w+)`.
 - `Implements` lines recorded in `VbModule.ImplementsInterfaces`.
 
-## Resolution (Parser.Resolve + .Members)
-- `ResolveTypesAndCalls` builds `procIndex` (procedures only) + `propIndex`.
-- **Bare property resolution**: Public properties (PropertyGet) usable bare across modules (e.g., `If ExecSts = ...`) resolved in PASS 1.2 alongside bare procedure calls.
-- **External type exclusion**: Field access chains stop if base type not in `typeIndex` or `classIndex` (e.g., `gobjFM489.ActualState.Program.Frequency_Long` where `gobjFM489` is external COM object).
-- Field access resolution handles:
-  - nested dot chains with arrays at any segment,
-  - `With` blocks (prefix `With` expression and replace inline `.Member`),
-  - module-prefixed chains (e.g., `Cnf.Config...`) by resolving module globals/properties to a type,
-  - class-property chaining (if type is class, use property `ReturnType` to continue chain).
-- References are accumulated per occurrence (no skipping for properties).
-- Property blocks are resolved separately (field/parameter/return references).
-- Function return variable is typed in `env` (function name -> return type) and return assignments are referenced for renames.
-- Enum values: explicit pass `ResolveEnumValueReferences` adds references for bare enum values and qualified `EnumName.Value`, respecting shadowing.
-- Enum/type references now capture exact `StartChar` (and normalized occurrence) from source lines; ambiguous matches without context are skipped.
-- Class usage via `ResolveClassModuleReferences`.
-- Type references via `ResolveTypeReferences` for every `As TypeName` occurrence.
-- `MarkUsedTypes` also scans Type fields.
-- Module `Used` propagated from any used member.
-- Public properties are scanned across modules (like globals) for bare uses.
-- **Default control property usage**: control references are tracked even when used bare (`lblTitle = "x"`) or as `Module.Control` without an explicit property.
+## Resolution (Single-Pass Architecture)
+
+### Overview
+`ResolveTypesAndCalls` replaces the old multi-pass approach with a **single-pass** resolver.
+Files: `Parser.Resolve.SinglePass.cs` (main entry + procedure body), `Parser.Resolve.Indexes.cs` (GlobalIndexes),
+`Parser.Resolve.Members.cs` (helpers: chain detection, token enumeration, position mapping),
+`Parser.Resolve.Helpers.cs` (MarkControlAsUsed, RecordReference, utility), `Parser.Resolve.Types.cs` (post-processing type/class refs).
+
+### GlobalIndexes (`Parser.Resolve.Indexes.cs`)
+Built **once** before scanning, reused for every module/procedure:
+- `ProcIndex` — Procedure (Sub/Function/Declare, NOT Property) by name → list of (Module, Proc)
+- `PropIndex` — Property (Get/Let/Set) by name → list of (Module, Prop)
+- `TypeIndex` — UDT (Type) by name
+- `EnumDefIndex` — Enum by name → list
+- `EnumValueIndex` — Enum value name → list of VbEnumValue
+- `EnumValueOwners` — Reverse lookup: VbEnumValue → owning VbEnumDef
+- `ClassIndex` — Class modules + forms by name (forms added for `Dim obj As FrmXxx`)
+- `ModuleByName` — All modules by VB_Name
+- `ConstantIndex` — Global constants by name → list of (Module, Constant)
+- `GlobalVarIndex` — Global variables by name → list of (Module, Variable)
+- `EnumValueNames` — Fast existence check set
+
+### Per-Module / Per-Procedure Indexes
+- `controlIndex` = `mod.Controls.ToDictionary(c => c.Name, OrdinalIgnoreCase)` — one per module
+- `paramIndex`, `localVarIndex`, `localConstIndex`, `globalVarModIndex` — one per procedure
+- `localNames` — HashSet of param + local var + local const names (shadow guard)
+- `env` — variable→type map (global type map, all modules' globals, params, locals, function return, local Set assignments)
+
+### Two-Step Line Processing (`ResolveProcedureBody`)
+For each line in the procedure body (original file lines, not collapsed):
+
+**STEP 1 — Dot-chain resolution:**
+1. `EnumerateDotChains(maskedEffective)` detects `identifier.identifier` chains
+2. `EnumerateParenContents(maskedEffective)` → inner chains inside `(...)`
+3. `TryUnwrapFunctionChain` → unwrap `CStr(obj.Field)` patterns
+4. Each chain → `ResolveChain` which claims token positions via `chainTokensClaimed`
+
+**STEP 2 — Bare-token resolution:**
+`EnumerateTokens(masked)` scans all identifiers; tokens already in `chainTokensClaimed` or after a dot are skipped.
+
+### Resolution Priority (base variable in ResolveChain)
+1. `paramIndex` — procedure parameters
+2. `localVarIndex` — local variables (skip declaration line)
+3. `globalVarModIndex` — module-level variables (same module)
+4. `controlIndex` — current form's controls
+5. `GlobalVarIndex` — global variables from other modules (non-Private filter)
+6. `ModuleByName` — module-qualified access
+
+### STEP 2 Bare-Token Priority
+1. Parameter
+2. Local variable (skip declaration line)
+3. Local constant
+4. Module-level global variable (same module)
+5. Control (same form, bare usage like `lblTitle = "x"`)
+6. Global variable from another module (non-Private)
+7. Global constant (cross-module non-Private, then same-module)
+8. Procedure (Sub/Function) via `SelectProcTarget`
+9. Property (bare cross-module, e.g., `If ExecSts = ...`)
+10. Enum value (bare, with context filtering)
+11. Module name
+
+### Chain Resolution (`ResolveChain`)
+- **Enum.Value**: 2-part chains matching EnumDefIndex are handled first
+- **Module-qualified**: `Module.GlobalVar`, `Module.Property`, `Module.Procedure`, `Module.Constant`, `Module.Control`
+- **Me keyword**: `Me.Member` resolved as self-reference to current class/form module
+- **Chain walk**: uses `env` for type resolution → ClassIndex → Properties → Procedures → Controls → UDT fields; stops at external (non-project) types
+- **Position mapping**: `GetDepthZeroTokenPositions` extracts structural tokens (not inside parens); `FindTokenInRawLine` maps effective-line positions → raw-line positions (handles With-expanded lines)
+
+### Key Helpers (`Parser.Resolve.Members.cs`)
+- `SkipOptionalParentheses` — returns index unchanged for unbalanced parens (fix for multi-line calls with `_`)
+- `EnumerateParenContents` — extracts balanced `()` content for inner chain resolution
+- `TryUnwrapFunctionChain` — unwraps function wrappers; skips array access `var(i).Member`
+- `MaskStringLiterals` — replaces string content with spaces, preserving positions
+- `StripInlineComment` — removes `'` comments (string-aware)
+- `PrunePropertyReferenceOverlaps` — removes references overlapping between Property Get/Let/Set variants of the same name
+
+### Post-Processing
+- `ResolveTypeReferences` — adds References for `As TypeName` in type fields, global vars, params, locals
+- `ResolveClassModuleReferences` — adds References for `As [New] ClassName`
+- `MarkUsedTypes` — marks types from declarations
+- Module `Used` propagated from any used member
 
 ## BuildReplaces (Parser.Replaces) - NEW
 - **Pre-calculates ALL substitutions** during analysis phase (after naming conventions applied).
@@ -104,10 +165,16 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - Enum naming preserves short acronyms (e.g., `SQM`).
 
 ## Known Pitfalls / Rules
-- Always use `StartLine/EndLine` bounds when scanning.
+- Always use `StartLine/EndLine` bounds when scanning procedures; use `GetProcedureAtLine(lineNum)` (not `FirstOrDefault(p => lineNum >= p.LineNumber)`).
 - Regex for arrays must escape parentheses correctly (`\([^)]*\)`).
 - `ReFieldAccess` and nested chain regex must allow array indexing.
 - Constants: use `skipStringLiterals=true` when building replaces to avoid altering constant values in quotes.
+- `chainTokensClaimed` claims positions BEFORE resolution; if a chain is detected but resolution fails, STEP 2 cannot process those tokens. This is by design to avoid double-counting.
+- Local form controls always take priority over cross-module global variables (VB6 scoping).
+- `SkipOptionalParentheses` must return the original index for unbalanced parens (multi-line calls with `_`).
+- `FindTokenInRawLine` returns -1 for synthetic With-prefix tokens; callers must guard with `pos >= 0`.
+- Procedure conflict disambiguation ignores class modules; class members are accessed via object and are not ambiguous.
+- `LineReplace.StartChar`/`EndChar` refer to positions in the original source before substitutions; only `NewText` changes later.
 
 ## Recent Fixes (2024)
 - **External object members**: member-access tokens (e.g., `obj.Prop`) are excluded from parameter/local reference scans so external member names are not renamed.
@@ -155,6 +222,24 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 - **Control naming PascalCase**: control conventional names start with uppercase, so event handlers become `LstSel_Click`.
 - **BuildReplaces optimization**: references are aggregated into a per-line list, sorted with `List.Sort` and module index, then applied with cached line parsing; entries are de-duplicated.
 
+## Recent Fixes (2025 — Single-Pass Resolver)
+- **Single-pass resolver**: replaced old multi-pass approach (PASS 1, 1.2, 1.5, 1.5b + ResolveFieldAccesses + ResolveControlAccesses + ResolveParameterAndLocalVariableReferences + ResolveEnumValueReferences) with a single `ResolveTypesAndCalls` that scans each line once.
+- **GlobalIndexes**: 11 pre-built dictionaries replace ad-hoc per-pass index building.
+- **OccurrenceIndexes removal**: dead code cleanup across 8 files.
+- **Visibility filter**: cross-module resolution now skips `Private` symbols.
+- **Form control parsing**: handles indented `Begin` blocks and nested `controlDepth` for container controls.
+- **Module.Control lookup**: module-qualified section of ResolveChain checks `moduleMatch.Controls` for `Module.Control` patterns (e.g., `FrmLoading.progress`).
+- **Forms in ClassIndex**: forms are added to ClassIndex (alongside classes) so `Dim obj As FrmXxx` chain walks find form controls/properties.
+- **Control naming prefixes**: `Frame` → `Fra` (not `Fr`), `Label` → `Lbl` (not `Lb`), `Panel` → `Pnl` (not `Pn`); numeric-only suffixes retain the stem (e.g., `Label1` → `LblLabel1`).
+- **SkipOptionalParentheses fix**: returns original index for unbalanced parentheses in multi-line calls (lines with `_` continuation); prevents `EnumerateDotChains` from consuming the entire line.
+- **Me keyword**: `Me.Control`, `Me.Property`, etc. in class/form modules resolved as self-reference.
+- **Control priority over cross-module globals**: `controlIndex` check moved before `GlobalVarIndex` in both ResolveChain and STEP 2, matching VB6 scoping semantics. Also fixes the `else if` fall-through bug where `GlobalVarIndex` matching the key but failing the inner filter would block the control check.
+- **With block expansion**: `ReWithDotReplacement` expands `.Member` references inside `With` blocks; negative lookbehind `(?<![\w)])` prevents false matches on `identifier.member`.
+- **Array dimension constants**: constants used as array dimensions in `Dim arr(CONST)` are resolved.
+- **Multi-line Declare params**: parameters in multiline `Declare` statements are resolved with corrected line numbers.
+- **Space-before-paren**: VB6 call syntax `FuncName (args)` with space before paren is handled.
+- **Position collision fix**: `FindTokenInRawLine` maps effective-line positions to raw-line positions, preventing collisions between With-expanded and raw coordinates.
+
 ## Performance Considerations
 **Why is VB6 IDE faster?**
 1. **Incremental parsing** - VB6 keeps parsed project in memory, doesn't reparse on every load
@@ -164,15 +249,15 @@ VB6 parser/refactoring tool. Pipeline: parse VB6 project, resolve references (ty
 5. **Optimized for single-file edits** - our tool analyzes entire project every run
 
 **Our bottlenecks:**
-- Multiple file reads (Parse, Resolve, BuildReplaces) - **FIXED with file cache in BuildReplaces**
+- Multiple file reads (Parse, Resolve, BuildReplaces) - **FIXED with file cache**
 - Full semantic analysis (all References tracked) - needed for precise refactoring
-- Regex matching for every symbol on every line - expensive
-- Multiple passes over same data (Parse → Resolve → References → Replaces)
+- Regex matching for every symbol on every line - **REDUCED** (single-pass uses char-level scanning for chains/tokens, regex only for hot-path patterns)
+- Multiple passes over same data - **FIXED**: resolution is now single-pass per line
 
 **Potential optimizations:**
-1. **Single-pass parsing** - combine parsing + resolution in one pass
+1. ~~**Single-pass parsing**~~ - ✅ **DONE**: `ResolveTypesAndCalls` scans each line once
 2. **Parallel processing** - analyze modules in parallel (Thread.ParallelForEach)
-3. **Compiled Regex** - use `RegexOptions.Compiled` for hot-path patterns
+3. **Compiled Regex** - use `RegexOptions.Compiled` for hot-path patterns (partially done)
 4. **Span<char>** - avoid string allocations in parsing
 5. **Incremental mode** - cache parsed project, only reparse changed files
 6. **Lazy References** - optionally skip reference tracking if not needed

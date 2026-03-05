@@ -14,3 +14,32 @@ Module,Procedure,Name,ConventionalName,Kind
 "modGlobal","ByteArrayToIntArray","ByteArrayToIntArray","ByteArrayToIntArray","FunctionReturn"
 ma è 
 Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As Integer = -1, Optional ByVal inEnd As Integer = 32767) As Integer()
+
+
+## LblLbQualcosa
+         Begin VB.Label LblLbLatWidth 
+
+# LblOmonime tra etichetta e valore... invece di fare rename con 2, aggiungere Value? se caption ha <numero> allora è un valore, se no è un'etichetta... 
+
+ Begin VB.Label LblGasFlow2 
+         Alignment       =   1  'Right Justify
+         Appearance      =   0  'Flat
+         BackColor       =   &H00008000&
+         BackStyle       =   0  'Transparent
+         Caption         =   "<135>"
+         BeginProperty Font 
+            Name            =   "Segoe UI"
+            Size            =   13.5
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         ForeColor       =   &H00800000&
+         Height          =   315
+         Left            =   2520
+         TabIndex        =   62
+         Top             =   420
+         Width           =   1080
+      End

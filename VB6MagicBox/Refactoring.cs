@@ -48,6 +48,7 @@ public static class Refactoring
 
         Console.WriteLine($">> Preparazione backup...");
         Console.WriteLine($"   Cartella backup: {backupDir}");
+        Console.WriteLine();
         Directory.CreateDirectory(backupDir);
 
         int filesProcessed = 0;
@@ -57,22 +58,25 @@ public static class Refactoring
         // Usa esplicitamente Windows-1252 (ANSI) per VB6
         var ansiEncoding = Encoding.GetEncoding(1252);
 
+        int totalModules = project.Modules.Count;
+        int currentModuleIndex = 0;
+
         foreach (var module in project.Modules)
         {
+            currentModuleIndex++;
             if (module.IsSharedExternal)
             {
-                Console.WriteLine($">> {module.Name}: modulo condiviso, salto refactoring\r".PadRight(Console.WindowWidth - 1));
+                Console.Write($"\r>> [{currentModuleIndex}/{totalModules}] {module.Name}: modulo condiviso, salto refactoring".PadRight(Console.WindowWidth - 1));
                 continue;
             }
 
             if (module.Replaces.Count == 0)
             {
-                Console.WriteLine($">> {module.Name}: nessuna sostituzione\r".PadRight(Console.WindowWidth - 1));
+                Console.Write($"\r>> [{currentModuleIndex}/{totalModules}] {module.Name}: nessuna sostituzione".PadRight(Console.WindowWidth - 1));
                 continue;
             }
 
-            Console.WriteLine($">> {module.Name}: {module.Replaces.Count} sostituzioni...\r".PadRight(Console.WindowWidth - 1));
-
+            Console.Write($"\r>> [{currentModuleIndex}/{totalModules}] {module.Name}: {module.Replaces.Count} sostituzioni...".PadRight(Console.WindowWidth - 1));
             var filePath = module.FullPath;
             if (!File.Exists(filePath))
             {

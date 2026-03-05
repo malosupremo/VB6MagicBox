@@ -332,7 +332,11 @@ public static partial class VbParser
             }
         }
 
-        return line.Length;
+        // Unbalanced parentheses (e.g., multi-line call with _ continuation):
+        // return the original index so EnumerateDotChains does NOT consume
+        // everything after the opening '(' — chains inside the arguments
+        // must still be discoverable.
+        return index;
     }
 
     private static bool IsWordBoundary(string line, int index, int length)

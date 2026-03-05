@@ -464,7 +464,16 @@ public static partial class VbParser
                     continue;
                 }
 
-                // 5. Global variable from another module (only non-private)
+                // 5. Control (same module, bare usage like `lblTitle = "x"`)
+                if (controlIndex.TryGetValue(token, out var control) && !localNames.Contains(token))
+                {
+                    var startChar = GetTokenStartChar(raw, token, tokenIdx);
+                    MarkControlAsUsed(control, mod.Name, memberName, currentLine, startChar);
+                    recorded.Add((currentLine, tokenIdx));
+                    continue;
+                }
+
+                // 6. Global variable from another module (only non-private)
                 if (gIdx.GlobalVarIndex.TryGetValue(token, out var gvList))
                 {
                     var gv = gvList.FirstOrDefault(x =>
@@ -476,15 +485,6 @@ public static partial class VbParser
                         RecordReference(gv.Variable.References, mod.Name, memberName, currentLine, tokenIdx, masked, recorded, gv.Variable);
                         continue;
                     }
-                }
-
-                // 6. Control (same module, bare usage like `lblTitle = "x"`)
-                if (controlIndex.TryGetValue(token, out var control) && !localNames.Contains(token))
-                {
-                    var startChar = GetTokenStartChar(raw, token, tokenIdx);
-                    MarkControlAsUsed(control, mod.Name, memberName, currentLine, startChar);
-                    recorded.Add((currentLine, tokenIdx));
-                    continue;
                 }
 
                 // Skip remaining lookups on declaration lines
@@ -660,6 +660,15 @@ public static partial class VbParser
                 globalRef.Used = true;
                 RecordReference(globalRef.References, mod.Name, memberName, currentLine, baseTokenPos.Item2, scanLine, recorded, globalRef);
             }
+            else if (controlIndex.TryGetValue(baseVarName, out var baseControl) && !localNames.Contains(baseVarName))
+            {
+                if (baseTokenPos.Item2 >= 0)
+                {
+                    var sc = GetTokenStartChar(rawLine, baseVarName, baseTokenPos.Item2);
+                    MarkControlAsUsed(baseControl, mod.Name, memberName, currentLine, sc);
+                    recorded.Add((currentLine, baseTokenPos.Item2));
+                }
+            }
             else if (gIdx.GlobalVarIndex.TryGetValue(baseVarName, out var gvList) && !localNames.Contains(baseVarName))
             {
                 var gv = gvList.FirstOrDefault(x =>
@@ -669,15 +678,6 @@ public static partial class VbParser
                 {
                     gv.Variable.Used = true;
                     RecordReference(gv.Variable.References, mod.Name, memberName, currentLine, baseTokenPos.Item2, scanLine, recorded, gv.Variable);
-                }
-            }
-            else if (controlIndex.TryGetValue(baseVarName, out var baseControl) && !localNames.Contains(baseVarName))
-            {
-                if (baseTokenPos.Item2 >= 0)
-                {
-                    var sc = GetTokenStartChar(rawLine, baseVarName, baseTokenPos.Item2);
-                    MarkControlAsUsed(baseControl, mod.Name, memberName, currentLine, sc);
-                    recorded.Add((currentLine, baseTokenPos.Item2));
                 }
             }
             else if (gIdx.ModuleByName.TryGetValue(baseVarName, out var baseMod))
@@ -698,6 +698,14 @@ public static partial class VbParser
             // Try resolve as module-qualified access: Module.GlobalVar / Module.Property
             var moduleMatch = mod.Owner?.Modules?.FirstOrDefault(m =>
                 m.Name.Equals(baseVarName, StringComparison.OrdinalIgnoreCase));
+
+            // Handle "Me" as a self-reference to the current class/form module
+            if (moduleMatch == null &&
+                baseVarName.Equals("Me", StringComparison.OrdinalIgnoreCase) &&
+                (mod.IsClass || mod.Kind?.Equals("frm", StringComparison.OrdinalIgnoreCase) == true))
+            {
+                moduleMatch = mod;
+            }
 
             if (moduleMatch != null && parts.Length > 1)
             {
@@ -831,6 +839,21 @@ public static partial class VbParser
                     typeName = classProc.ReturnType;
                     if (string.IsNullOrEmpty(typeName)) typeName = null;
                     continue;
+                }
+
+                // Try as class control (e.g., objForm.WinTitle where WinTitle is a control on the form)
+                var classCtrl = classModule.Controls.FirstOrDefault(c =>
+                    c.Name != null && c.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                if (classCtrl != null)
+                {
+                    var tp = tokenPositions.ElementAtOrDefault(pi);
+                    if (tp.Item2 >= 0)
+                    {
+                        var sc = GetTokenStartChar(rawLine, fieldName, tp.Item2);
+                        MarkControlAsUsed(classCtrl, mod.Name, memberName, currentLine, sc);
+                        recorded.Add((currentLine, tp.Item2));
+                    }
+                    break; // Control properties (e.g., .Caption) are VB6 runtime — stop chain traversal
                 }
 
                 // Member not found in class

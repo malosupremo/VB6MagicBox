@@ -81,6 +81,12 @@ public static partial class VbParser
                 }
             }
 
+            // --- Forms are also usable as types (Dim obj As FrmXxx) ---
+            if (mod.Kind?.Equals("frm", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                idx.ClassIndex.TryAdd(mod.Name, mod);
+            }
+
             // --- Procedures (Sub/Function/Declare, NOT Property) ---
             foreach (var proc in mod.Procedures.Where(
                          p => !p.Kind.StartsWith("Property", StringComparison.OrdinalIgnoreCase)))
