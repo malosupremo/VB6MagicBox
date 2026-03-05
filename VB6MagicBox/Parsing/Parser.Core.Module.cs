@@ -665,15 +665,13 @@ public static partial class VbParser
           continue;
         }
 
-        // variabili locali
-        var ml = ReLocalVar.Match(noComment);
-        if (ml.Success)
+        // variabili locali (supporta multi-dichiarazione: Dim a, b, c As Integer)
+        var declMatch = Regex.Match(noComment, @"^\s*(Dim|Static)\s+(.*)$", RegexOptions.IgnoreCase);
+        if (declMatch.Success)
         {
-          var declarationType = ml.Groups[1].Value; // Dim or Static
+          var declarationType = declMatch.Groups[1].Value;
           var isStatic = declarationType.Equals("Static", StringComparison.OrdinalIgnoreCase);
-
-          var declMatch = Regex.Match(noComment, @"^\s*(Dim|Static)\s+(.*)$", RegexOptions.IgnoreCase);
-          var declBody = declMatch.Success ? declMatch.Groups[2].Value : string.Empty;
+          var declBody = declMatch.Groups[2].Value;
           var segments = string.IsNullOrWhiteSpace(declBody)
               ? new List<string> { noComment }
               : SplitTopLevel(declBody);
@@ -716,25 +714,6 @@ public static partial class VbParser
                 LineNumber = originalLineNumber
               });
             }
-          }
-        }
-        else
-        {
-          // variabili locali senza tipo esplicito (fallback per TypeAnnotator)
-          var mlnt = ReLocalVarNoType.Match(noComment);
-          if (mlnt.Success)
-          {
-            currentProc?.LocalVariables.Add(new VbVariable
-            {
-              Name = mlnt.Groups[2].Value,
-              Type = "",
-              IsStatic = mlnt.Groups[1].Value.Equals("Static", StringComparison.OrdinalIgnoreCase),
-              IsArray = !string.IsNullOrEmpty(mlnt.Groups[4].Value),
-              Scope = "Procedure",
-              Visibility = "Private",
-              Level = "Local",
-              LineNumber = originalLineNumber
-            });
           }
         }
 

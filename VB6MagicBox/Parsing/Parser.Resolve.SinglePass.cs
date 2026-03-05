@@ -392,8 +392,13 @@ public static partial class VbParser
                 if (IsMemberAccessToken(masked, tokenIdx))
                     continue;
 
-                // VB keyword
-                if (VbKeywords.Contains(token))
+                // VB keyword (unless shadowed by a local declaration, module variable, or control)
+                if (VbKeywords.Contains(token)
+                    && !paramIndex.ContainsKey(token)
+                    && !localVarIndex.ContainsKey(token)
+                    && !localConstIndex.ContainsKey(token)
+                    && !globalVarModIndex.ContainsKey(token)
+                    && !controlIndex.ContainsKey(token))
                     continue;
 
                 // Skip auto-reference (procedure calling itself bare)
