@@ -343,6 +343,7 @@ public static partial class VbParser
                 ResolveChain(
                     chainText, chainIndex, maskedEffective, raw,
                     currentLine, mod, memberName,
+                    isFunction, memberReferences, lineNumber,
                     env, gIdx, controlIndex, localNames,
                     paramIndex, localVarIndex, globalVarModIndex,
                     calls, recorded, chainTokensClaimed);
@@ -356,6 +357,7 @@ public static partial class VbParser
                     ResolveChain(
                         chainText, innerStart + chainIndex, maskedEffective, raw,
                         currentLine, mod, memberName,
+                        isFunction, memberReferences, lineNumber,
                         env, gIdx, controlIndex, localNames,
                         paramIndex, localVarIndex, globalVarModIndex,
                         calls, recorded, chainTokensClaimed);
@@ -372,6 +374,7 @@ public static partial class VbParser
                         ResolveChain(
                             innerChain, unwrappedIdx + innerIdx, maskedEffective, raw,
                             currentLine, mod, memberName,
+                            isFunction, memberReferences, lineNumber,
                             env, gIdx, controlIndex, localNames,
                             paramIndex, localVarIndex, globalVarModIndex,
                             calls, recorded, chainTokensClaimed);
@@ -516,7 +519,7 @@ public static partial class VbParser
                 // 8. Procedure (Sub/Function)
                 if (gIdx.ProcIndex.TryGetValue(token, out var procTargets) && procTargets.Count > 0)
                 {
-                    var selected = SelectProcTarget(procTargets, env, token);
+                    var selected = SelectProcTarget(procTargets, env, token, mod.Name);
                     if (selected.Proc != null)
                     {
                         selected.Proc.Used = true;
@@ -583,6 +586,9 @@ public static partial class VbParser
         int currentLine,
         VbModule mod,
         string memberName,
+        bool isFunction,
+        List<VbReference> memberReferences,
+        int lineNumber,
         Dictionary<string, string> env,
         GlobalIndexes gIdx,
         Dictionary<string, VbControl> controlIndex,
@@ -690,6 +696,12 @@ public static partial class VbParser
                 // Module-qualified access (e.g., FrmRestart.Show)
                 baseMod.Used = true;
                 RecordReference(baseMod.References, mod.Name, memberName, currentLine, baseTokenPos.Item2, scanLine, recorded, baseMod);
+            }
+            else if (isFunction && string.Equals(baseVarName, memberName, StringComparison.OrdinalIgnoreCase)
+                     && currentLine != lineNumber)
+            {
+                // Function return value used in dot-chain (e.g., Queue_Pop.Seq = ...)
+                RecordReference(memberReferences, mod.Name, memberName, currentLine, baseTokenPos.Item2, scanLine, recorded, null);
             }
         }
 
@@ -928,8 +940,14 @@ public static partial class VbParser
     private static (string Module, VbProcedure Proc) SelectProcTarget(
         List<(string Module, VbProcedure Proc)> targets,
         Dictionary<string, string> env,
-        string token)
+        string token,
+        string currentModule)
     {
+        // Prefer local module's procedure (same module has priority)
+        var localMatch = targets.FirstOrDefault(t =>
+            string.Equals(t.Module, currentModule, StringComparison.OrdinalIgnoreCase));
+        if (localMatch.Proc != null) return localMatch;
+
         if (env.TryGetValue(token, out var resolvedType) && !string.IsNullOrEmpty(resolvedType))
         {
             var match = targets.FirstOrDefault(t =>

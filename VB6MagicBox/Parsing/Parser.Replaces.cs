@@ -136,7 +136,7 @@ public static partial class VbParser
         var allSymbols = new List<(string? oldName, string? newName, string category, object source, string? definingModule, VbEnumDef? enumOwner, bool qualifyEnumValueRefs, bool forceQualification)>();
 
         var constantConflicts = project.Modules
-            .Where(m => !m.IsClass)
+            .Where(m => !m.IsClass && !m.IsForm)
             .SelectMany(m => m.Constants.Select(c => new { Module = m, Constant = c }))
             .Where(x => !string.IsNullOrWhiteSpace(x.Constant.ConventionalName) && IsPublicVisibility(x.Constant.Visibility))
             .GroupBy(x => x.Constant.ConventionalName, StringComparer.OrdinalIgnoreCase)
@@ -145,7 +145,7 @@ public static partial class VbParser
             .ToHashSet();
 
         var procedureConflicts = project.Modules
-            .Where(m => !m.IsClass)
+            .Where(m => !m.IsClass && !m.IsForm)
             .SelectMany(m => m.Procedures.Select(p => new { Module = m, Proc = p }))
             .Where(x => !string.IsNullOrWhiteSpace(x.Proc.ConventionalName) && IsPublicVisibility(x.Proc.Visibility))
             .GroupBy(x => x.Proc.ConventionalName, StringComparer.OrdinalIgnoreCase)
@@ -154,7 +154,7 @@ public static partial class VbParser
             .ToHashSet();
 
         var propertyConflicts = project.Modules
-            .Where(m => !m.IsClass)
+            .Where(m => !m.IsClass && !m.IsForm)
             .SelectMany(m => m.Properties.Select(p => new { Module = m, Prop = p }))
             .Where(x => !string.IsNullOrWhiteSpace(x.Prop.ConventionalName) && IsPublicVisibility(x.Prop.Visibility))
             .GroupBy(x => x.Prop.ConventionalName, StringComparer.OrdinalIgnoreCase)
@@ -466,7 +466,7 @@ public static partial class VbParser
                 return;
             }
 
-            AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, qualifiedReferenceName,
+            AddModuleMemberReferenceReplaces(entry.RefModule, codePart, entry.LineNumber, entry.OldName, referenceNewName,
                 entry.Category, entry.StartChar, stringRanges, allowStringReplace, sourceModuleReferenceName, sourceModule, sourceModuleReferenceName,
                 entry.ForceQualification, qualifiedReferenceName);
             return;
