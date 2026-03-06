@@ -580,8 +580,9 @@ public static partial class VbParser
             }
         }
 
-        entry.RefModule.Replaces.AddReplaceFromLine(codePart, entry.LineNumber, effectiveOldName, qualifiedReferenceName,
-            entry.Category + "_Reference", skipStringLiterals: !allowStringReplace);
+        // Do NOT fall through to AddReplaceFromLine: all entries have valid StartChar (>= 0),
+        // so a blind \bName\b regex scan would match ALL occurrences on the line,
+        // potentially claiming positions that belong to other symbols with the same name.
     }
 
     /// <summary>
@@ -889,6 +890,8 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
+            else
+                return; // StartChar valid but no match at that position — don't scatter to all occurrences
         }
 
         foreach (var match in targetMatches)
@@ -1008,6 +1011,8 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
+            else
+                return; // StartChar valid but no match at that position — don't scatter to all occurrences
         }
 
         foreach (var match in targetMatches)
@@ -1254,6 +1259,8 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
+            else
+                return; // StartChar valid but no match at that position — don't scatter to all occurrences
         }
 
         foreach (var match in targetMatches)
@@ -1313,6 +1320,8 @@ public static partial class VbParser
             var preciseMatch = matches.Cast<Match>().FirstOrDefault(m => m.Index == startChar);
             if (preciseMatch != null)
                 targetMatches = new[] { preciseMatch };
+            else
+                return; // StartChar valid but no match at that position — don't scatter to all occurrences
         }
 
         foreach (var match in targetMatches)

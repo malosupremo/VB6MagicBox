@@ -4,6 +4,10 @@ Attribute objComPort.VB_VarHelpID = -1
 
 ... ma che noia un oggetto privato con eventi diventa m_qualcosa_evento... uffffffffffffffffffffff
 
+
+## default property 
+ma se aggiungessimo i .text o .caption almeno?
+
 ### preservare i nomi pubblici delle classi?
 enum, const, funct, types?... che noia
 

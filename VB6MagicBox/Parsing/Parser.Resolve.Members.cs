@@ -519,16 +519,25 @@ public static partial class VbParser
     /// Finds the position of a token in the raw (original) source line closest to the
     /// given position hint. Returns -1 if the token does not appear in the raw line
     /// (e.g., it belongs to a synthetic With-prefix expansion).
+    /// When claimedPositions is provided, positions already used by previous chains are
+    /// skipped so that each chain maps to a distinct raw-line occurrence.
     /// </summary>
-    private static int FindTokenInRawLine(string rawLine, string token, int positionHint)
+    private static int FindTokenInRawLine(string rawLine, string token, int positionHint, HashSet<int>? claimedPositions = null)
     {
         if (string.IsNullOrEmpty(rawLine) || string.IsNullOrEmpty(token))
             return -1;
         var matches = Regex.Matches(rawLine, $@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
         if (matches.Count == 0)
             return -1;
-        if (matches.Count == 1)
-            return matches[0].Index;
-        return matches.Cast<Match>().OrderBy(m => Math.Abs(m.Index - positionHint)).First().Index;
+
+        IEnumerable<Match> candidates = matches.Cast<Match>();
+        if (claimedPositions != null && claimedPositions.Count > 0)
+            candidates = candidates.Where(m => !claimedPositions.Contains(m.Index));
+
+        return candidates
+            .OrderBy(m => Math.Abs(m.Index - positionHint))
+            .Select(m => m.Index)
+            .DefaultIfEmpty(-1)
+            .First();
     }
 }

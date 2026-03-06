@@ -9,6 +9,7 @@
 - Reference resolution must avoid homonym false positives: when a token is part of a dot-notation member access chain, do not record it as a local/parameter reference; always identify references with precise context.
 - When a reported reference fix still reproduces, add defensive pruning to remove local/parameter references whose StartChar points to member-access tokens in dot-notation, even after initial filtering.
 - For reference generation, avoid duplicate ownership of the same token position: each line/startChar should resolve to a single symbol, and local/parameter references colliding with member-access symbols must be pruned.
+- Update ANALYSIS.md after every code modification to keep context fresh for future sessions with GitHub Copilot. This file must contain all essential details about what the project does, how, and where, serving as a foundation for opening new chats with Copilot.
 
 ## Code Style
 - Use specific formatting rules

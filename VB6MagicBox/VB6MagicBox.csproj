@@ -10,6 +10,11 @@
 		<!-- Suppress warning about System.Text.Encoding.CodePages not being trimmed, as we are explicitly keeping it -->
 		<NoWarn>$(NoWarn);NU1510</NoWarn>
 	</PropertyGroup>
+	<ItemGroup>
+	  <Compile Remove="Satis\**" />
+	  <EmbeddedResource Remove="Satis\**" />
+	  <None Remove="Satis\**" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.3" />

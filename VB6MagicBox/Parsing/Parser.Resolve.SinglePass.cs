@@ -608,6 +608,20 @@ public static partial class VbParser
         // unclaimed so the bare-token scan at STEP 2 can resolve them independently.
         var tokenPositions = GetDepthZeroTokenPositions(chainText, chainIndex);
 
+        // Duplicate chain guard: if the first structural token's natural raw position
+        // is already claimed, this chain was already resolved (e.g., the main
+        // EnumerateDotChains loop resolved it and now EnumerateParenContents found
+        // the same chain inside parentheses). Re-resolving would cause
+        // FindTokenInRawLine to map homonym tokens to wrong positions because
+        // the correct ones are already claimed, producing false references.
+        if (tokenPositions.Count > 0)
+        {
+            var (firstVal, firstPos) = tokenPositions[0];
+            var naturalRawPos = FindTokenInRawLine(rawLine, firstVal, firstPos, null);
+            if (naturalRawPos >= 0 && chainTokensClaimed.Contains(naturalRawPos))
+                return;
+        }
+
         // Map effective-line positions → raw-line positions.
         // On With-expanded lines the effective line has a synthetic prefix that shifts
         // all positions; using effective coords in the shared recorded/chainTokensClaimed
@@ -615,7 +629,7 @@ public static partial class VbParser
         for (int tp = 0; tp < tokenPositions.Count; tp++)
         {
             var (val, pos) = tokenPositions[tp];
-            tokenPositions[tp] = (val, FindTokenInRawLine(rawLine, val, pos));
+            tokenPositions[tp] = (val, FindTokenInRawLine(rawLine, val, pos, chainTokensClaimed));
         }
 
         // Claim structural token positions in this chain (skip phantom With-prefix tokens)
