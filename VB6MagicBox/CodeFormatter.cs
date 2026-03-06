@@ -413,6 +413,9 @@ public static class CodeFormatter
                 if (!string.IsNullOrEmpty(nextNonBlank) && IsBlockEnd(nextNonBlank))
                     continue;
 
+                if (!string.IsNullOrEmpty(nextNonBlank) && IsElseLine(nextNonBlank))
+                    continue;
+
                 if (TryGetPropertyName(nextNonBlank, out _))
                     continue;
 
@@ -551,6 +554,20 @@ public static class CodeFormatter
                 var prevNonBlank = PrevNonBlank(result);
                 if (!string.IsNullOrEmpty(prevNonBlank) &&
                     !IsBlockStart(prevNonBlank) &&
+                    !IsElseLine(prevNonBlank) &&
+                    !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
+                    !IsCommentLine(prevNonBlank))
+                {
+                    result.Add(string.Empty);
+                }
+            }
+
+            if (IsMultiLineIfStart(trimmed))
+            {
+                var prevNonBlank = PrevNonBlank(result);
+                if (!string.IsNullOrEmpty(prevNonBlank) &&
+                    !IsBlockStart(prevNonBlank) &&
+                    !IsElseLine(prevNonBlank) &&
                     !string.IsNullOrWhiteSpace(result.LastOrDefault()) &&
                     !IsCommentLine(prevNonBlank))
                 {
@@ -583,7 +600,7 @@ public static class CodeFormatter
                 {
                     var nextNonBlank = NextNonBlank(lines, i + 1);
                     if (!string.IsNullOrEmpty(nextNonBlank) && !IsBlockEnd(nextNonBlank) &&
-                        !IsClosingComment(nextNonBlank))
+                        !IsClosingComment(nextNonBlank) && !IsElseLine(nextNonBlank))
                         result.Add(string.Empty);
                 }
                 else if (IsNextLine(trimmed))
@@ -769,6 +786,21 @@ public static class CodeFormatter
         var trimmed = line.TrimStart();
         return trimmed.StartsWith("For ", StringComparison.OrdinalIgnoreCase) ||
                trimmed.StartsWith("Do", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsElseLine(string line)
+    {
+        var trimmed = line.TrimStart();
+        return trimmed.StartsWith("ElseIf ", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("Else ", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmed, "Else", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMultiLineIfStart(string line)
+    {
+        var trimmed = StripInlineComment(line).TrimStart();
+        return trimmed.StartsWith("If ", StringComparison.OrdinalIgnoreCase) &&
+               trimmed.TrimEnd().EndsWith("Then", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsSingleLineIf(string line)

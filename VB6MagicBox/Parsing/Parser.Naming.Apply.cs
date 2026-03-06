@@ -70,7 +70,27 @@ public static partial class VbParser
           }
 
           string conventionalName;
-          if (v.IsStatic)
+
+          // WithEvents variables: M_ + PascalCase for clarity about module scope.
+          // Event handlers become M_VarName_EventName (e.g., M_Container_Click).
+          if (v.IsWithEvents)
+          {
+            var withEventsBase = baseName;
+            if (withEventsBase.StartsWith("m_", StringComparison.OrdinalIgnoreCase))
+              withEventsBase = withEventsBase.Substring(2);
+            else if (withEventsBase.StartsWith("g_", StringComparison.OrdinalIgnoreCase))
+              withEventsBase = withEventsBase.Substring(2);
+            else if (withEventsBase.StartsWith("gobj", StringComparison.OrdinalIgnoreCase) && withEventsBase.Length > 4)
+              withEventsBase = withEventsBase.Substring(4);
+
+            // Handle m + Hungarian patterns (e.g., mpicContainer)
+            var mMatch = Regex.Match(withEventsBase, @"^m([a-z]{3})([A-Z].*)");
+            if (mMatch.Success)
+              withEventsBase = mMatch.Groups[2].Value;
+
+            conventionalName = "M_" + ToPascalCase(withEventsBase) + (arraySuffix ?? "");
+          }
+          else if (v.IsStatic)
           {
             // Per le variabili static: controlla se inizia gi� con "s_"
             if (baseName.StartsWith("s_", StringComparison.OrdinalIgnoreCase))
@@ -214,9 +234,15 @@ public static partial class VbParser
         // Enums - con conflict resolution (usando globalNamesUsed perch� sono a livello modulo)
         foreach (var e in mod.Enums)
         {
-          // Convert SCREAMING_SNAKE_CASE to PascalCase
+          // Convert SCREAMING_SNAKE_CASE to PascalCase, stripping e_ or e prefix
           var enumName = e.Name;
           if (!string.IsNullOrEmpty(enumName) &&
+              enumName.StartsWith("e_", StringComparison.OrdinalIgnoreCase) &&
+              enumName.Length > 2)
+          {
+            enumName = enumName.Substring(2);
+          }
+          else if (!string.IsNullOrEmpty(enumName) &&
               enumName.Length > 1 &&
               enumName[0] == 'e' &&
               char.IsUpper(enumName[1]))

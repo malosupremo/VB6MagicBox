@@ -1,4 +1,4 @@
-﻿# VB6MagicBox — Naming Conventions
+﻿﻿# VB6MagicBox — Naming Conventions
 
 Documento generato dall'analisi di `Parser.Naming.cs` e `Refactoring.cs`.  
 Ogni sezione riporta il tipo di simbolo, la regola applicata, esempi concreti e note speciali.
@@ -26,6 +26,8 @@ Ogni sezione riporta il tipo di simbolo, la regola applicata, esempi concreti e 
 17. [Ordine di Applicazione dei Rename](#17-ordine-di-applicazione-dei-rename)
 18. [Pattern Regex per il Rename](#18-pattern-regex-per-il-rename)
 19. [Casi Speciali](#19-casi-speciali)
+20. [Output diagnostici (CSV)](#20-output-diagnostici-csv)
+21. [Spacing rules (formatter)](#21-spacing-rules-formatter)
 
 ---
 ## Riassunto
@@ -33,9 +35,9 @@ Ogni sezione riporta il tipo di simbolo, la regola applicata, esempi concreti e 
 | Sezione |	Contenuto |
 | ------- | --------- | 
 | §1 Moduli	 | .bas/.cls/.frm, prefisso `Frm`/`Cls` (sempre maiuscolo), all-caps+cifre → PascalCase per run di lettere, keyword → Class|
-| §2 Variabili Globali	| 7 sotto-casi: private, static, gobj, classe in .bas, classe in form, primitivo, suffisso _N |
+| §2 Variabili Globali	| WithEvents → `M_` + PascalCase; 7 sotto-casi: private, static, gobj, classe in .bas, classe in form, primitivo, suffisso _N |
 | §3 Costanti modulo |	ToScreamingSnakeCase(string) con esempi di acronimi |
-| §4-5 Enum / Valori |	ToPascalCaseFromScreamingSnake(string) |
+| §4-5 Enum / Valori |	ToPascalCaseFromScreamingSnake(string), strip prefisso `e_` o `e` |
 | §6 Tipi UDT |	ToPascalCaseType(string) con suffisso _T sempre ri-aggiunto |
 | §7 Campi UDT |	PascalCase, Type → TypeValue |
 | §8 Controlli |	Tabella completa dei 30+ prefissi, logica di sostituzione, tb/tx → txt |
@@ -72,26 +74,6 @@ Form e classi ricevono un prefisso fisso (`Frm` / `Cls`) **prima** di applicare 
 Un segmento (parte separata da `_`) viene convertito in PascalCase se **tutte le sue lettere sono maiuscole** (le cifre non partecipano al controllo). La conversione applica una regex che processa ogni _run di lettere_ separatamente, lasciando le cifre invariate nella loro posizione:
 
 ```
-
----
-
-## 20. Output diagnostici (CSV)
-
-| File | Contenuto | Note |
-|------|-----------|------|
-| `*.disambiguations.csv` | Solo righe dove è stato applicato un prefisso di disambiguazione | Ordinato per `Module` e `LineNumber` |
-| `*.shadows.csv` | Conflitti locali vs simboli esterni | Include `LineNumber`, `LocalType`, `ShadowedType` |
-
----
-
-## 21. Spacing rules (formatter)
-
-| Regola | Dettaglio |
-|--------|-----------|
-| Property Get/Let/Set | Blocchi con stesso nome restano adiacenti, senza riga vuota |
-| Post dichiarazioni | Dopo l’ultimo `Dim/Static/Const` va sempre una riga vuota |
-| Prima dei loop | `For/Do` hanno riga vuota se preceduti da istruzioni non‑blocco |
-| `End With` | Inserisce riga vuota se non seguito da un altro `End ...` |
 "SQM242HND" → run "SQM" → "Sqm", cifre "242" invariate, run "HND" → "Hnd" → "Sqm242Hnd"
 "EXEC1"     → run "EXEC" → "Exec", cifra "1" invariata                → "Exec1"
 "MAX"       → run "MAX" → "Max"                                        → "Max"
@@ -108,9 +90,33 @@ I segmenti con lettere miste (es. `frmMain`, `PDxI`) seguono la regola precedent
 
 ## 2. Variabili Globali
 
-La regola dipende da **visibilità**, **staticità**, **tipo** e **tipo di modulo** (`.bas` vs `.frm`/`.cls`).
+La regola dipende da **visibilità**, **staticità**, **tipo**, **tipo di modulo** (`.bas` vs `.frm`/`.cls`) e **WithEvents**.
 
-### 2a. Private (`Dim` / `Private`)
+### ⚡ 2.PRE — Regola WithEvents (priorità assoluta)
+
+Le variabili dichiarate `WithEvents` generano event handler con il pattern `NomeVariabile_NomeEvento`.
+Per chiarezza di appartenenza al modulo, il prefisso `M_` viene aggiunto davanti al nome PascalCase.
+
+Questa regola ha **priorità su tutte** le altre sotto-regole di §2.
+
+| Dichiarazione originale | Esempio prima | Esempio dopo | Event handler |
+|------------------------|---------------|--------------|---------------|
+| `Private WithEvents m_ComPort As SaxComm` | `m_ComPort` | `M_ComPort` | `M_ComPort_OnComm` |
+| `Private WithEvents mpicContainer As PictureBox` | `mpicContainer` | `M_Container` | `M_Container_Click` |
+| `Public WithEvents objPlcManager As ClsPlc` (form) | `objPlcManager` | `M_PlcManager` | `M_PlcManager_StatusChanged` |
+| `Private WithEvents Sinottico As FrmSinottico` | `Sinottico` | `M_Sinottico` | `M_Sinottico_Resize` |
+
+**Logica di stripping:**
+1. Strip `m_` se presente
+2. Strip `g_` se presente
+3. Strip `gobj` se presente
+4. Strip pattern `m` + prefisso ungherese 3 lettere (es. `mudt`, `mpic`) → PascalCase del resto
+5. Se nessun prefisso: `ToPascalCase` diretto
+6. Prefisso `M_` aggiunto al risultato
+
+**Motivazione:** il prefisso `M_` rende immediatamente chiaro che la variabile è di modulo, evitando conflitti con proprietà o controlli omonimi (es. una property `Container` e un WithEvents `mpicContainer`).
+
+### 2a. Private (`Dim` / `Private`) — non WithEvents
 
 | Caso | Regola | Esempio prima | Esempio dopo |
 |------|--------|---------------|--------------|
@@ -195,9 +201,13 @@ La funzione inserisce `_` alle transizioni:
 **Regola:** PascalCase da SCREAMING_SNAKE_CASE via `ToPascalCaseFromScreamingSnake()`.  
 Ogni segmento separato da `_` diventa Parola con iniziale maiuscola e resto minuscolo.
 
+**Prefisso `e_` o `e`:** se il nome inizia con `e_` (con underscore) oppure con `e` seguito da maiuscola, il prefisso viene strippato prima della conversione.
+
 | Esempio prima | Esempio dopo |
 |---------------|--------------|
 | `POLLING_STATE` | `PollingState` |
+| `e_POLLING_STATE` | `PollingState` *(strip `e_`, poi PascalCase)* |
+| `ePollingState` | `PollingState` *(strip `e`, poi PascalCase)* |
 | `UA_SERVER_STATUS` | `UaServerStatus` |
 | `AlreadyCamelCase` | `AlreadyCamelcase` *(nessun `_`, trattato come PascalCase)* |
 
@@ -312,11 +322,16 @@ Conflict resolution interno al tipo (scope isolato dal resto del modulo).
 | `txtPower_Change` | `txtPower_Change` *(già corretto se il controllo lo è)* |
 | `Command1_Click` | `cmd1_Click` *(usa ConventionalName del controllo)* |
 
-### 9c. Event handler di variabile WithEvents — `VarConventionalName_EventPascalCase`
+### 9c. Event handler di variabile WithEvents — `M_VarName_EventPascalCase`
 
-| Esempio prima | Esempio dopo |
-|---------------|--------------|
-| `objATH3204_0_ReadStatusCompleted` | `objATH32040_ReadStatusCompleted` |
+Poiché le variabili WithEvents usano il prefisso `M_` (§2.PRE), gli event handler lo riflettono.
+
+| Esempio prima | Esempio dopo | Motivo |
+|---------------|--------------|--------|
+| `m_ComPort_OnComm` | `M_ComPort_OnComm` | `m_ComPort` → `M_ComPort` (WithEvents, strip `m_`, add `M_`) |
+| `mpicContainer_Click` | `M_Container_Click` | `mpicContainer` → `M_Container` (WithEvents, strip `mpic`, add `M_`) |
+| `objPlcManager_StatusChanged` | `M_PlcManager_StatusChanged` | `objPlcManager` → `M_PlcManager` (WithEvents, strip `obj`, add `M_`) |
+| `Sinottico_Resize` | `M_Sinottico_Resize` | `Sinottico` → `M_Sinottico` |
 
 ### 9d. Procedure normali — PascalCase
 
@@ -525,3 +540,26 @@ Prima di modificare un file viene creato un backup nella cartella `<ParentDir>.b
 Le convenzioni sono progettate per essere **idempotenti**: eseguire il tool due volte sullo stesso sorgente non produce ulteriori modifiche. Verificato tramite:
 - `IsPascalCase()`: se il tail dopo `g_` è già PascalCase, il nome viene mantenuto invariato.
 - `IsConventional` su ogni simbolo: se `Name == ConventionalName` il simbolo viene saltato.
+
+
+---
+
+## 20. Output diagnostici (CSV)
+
+| File | Contenuto | Note |
+|------|-----------|------|
+| `*.disambiguations.csv` | Solo righe dove è stato applicato un prefisso di disambiguazione | Ordinato per `Module` e `LineNumber` |
+| `*.shadows.csv` | Conflitti locali vs simboli esterni | Include `LineNumber`, `LocalType`, `ShadowedType` |
+
+---
+
+## 21. Spacing rules (formatter)
+
+| Regola | Dettaglio |
+|--------|-----------|
+| Property Get/Let/Set | Blocchi con stesso nome restano adiacenti, senza riga vuota |
+| Post dichiarazioni | Dopo l'ultimo `Dim/Static/Const` va sempre una riga vuota |
+| Prima dei loop | `For/Do` hanno riga vuota se preceduti da istruzioni non‑blocco |
+| Prima di `If` multi‑riga | `If...Then` (senza codice dopo `Then`) ha riga vuota se preceduto da istruzioni non‑blocco |
+| `End If` / `Else` | `End If` non inserisce riga vuota se seguito da `Else` o `ElseIf` |
+| `End With` | Inserisce riga vuota se non seguito da un altro `End ...` |

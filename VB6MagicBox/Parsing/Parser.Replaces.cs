@@ -641,6 +641,31 @@ public static partial class VbParser
                 }
             }
 
+            // SSTab (and similar containers): Tab(N).Control(N)= "ControlName" or "ControlName(idx)"
+            // The control name inside quotes must be renamed to match the new conventional name.
+            if (module.IsForm)
+            {
+                var escapedOld = Regex.Escape(oldName!);
+                var tabRefPattern = new Regex(
+                    @"Tab\(\d+\)\.Control\(\d+\)\s*=\s*""(" + escapedOld + @")(?:\(\d+\))?""",
+                    RegexOptions.IgnoreCase);
+
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    var m = tabRefPattern.Match(lines[i]);
+                    if (!m.Success) continue;
+
+                    var nameGroup = m.Groups[1];
+                    module.Replaces.AddReplace(
+                        i + 1,
+                        nameGroup.Index,
+                        nameGroup.Index + nameGroup.Length,
+                        nameGroup.Value,
+                        newName!,
+                        category + "_TabControlRef");
+                }
+            }
+
             return;
         }
 
@@ -1125,7 +1150,7 @@ public static partial class VbParser
         string category,
         Dictionary<string, string[]> fileCache)
     {
-        if (!fileCache.TryGetValue(module.Name!, out var lines))
+        if (!fileCache.TryGetValue(module.FullPath!, out var lines))
             return;
 
         // VB_Name per moduli/classi/form

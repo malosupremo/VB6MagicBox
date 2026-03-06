@@ -1,16 +1,12 @@
-﻿### attributo
-Private WithEvents m_ComPort As SaxComm       'Oggetto objComPort di SAX
-Attribute objComPort.VB_VarHelpID = -1
-
-... ma che noia un oggetto privato con eventi diventa m_qualcosa_evento... uffffffffffffffffffffff
-
-
-## default property 
+﻿## default property 
 ma se aggiungessimo i .text o .caption almeno?
 
 ### preservare i nomi pubblici delle classi?
 enum, const, funct, types?... che noia
+mettiamo un flag
 
+## SHARESTRUCT
+doppio sharestruct, PO e CALLER e differenze
 
 ### missing 
 Module,Procedure,Name,ConventionalName,Kind
@@ -18,6 +14,8 @@ Module,Procedure,Name,ConventionalName,Kind
 "modGlobal","ByteArrayToIntArray","ByteArrayToIntArray","ByteArrayToIntArray","FunctionReturn"
 ma è 
 Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As Integer = -1, Optional ByVal inEnd As Integer = 32767) As Integer()
+
+###I TAB!!!!!!!!!
 
 
 ## LblLbQualcosa
@@ -47,3 +45,14 @@ Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As
          Top             =   420
          Width           =   1080
       End
+
+--- 
+
+#FATTI
+
+### attributo
+Private WithEvents m_ComPort As SaxComm       'Oggetto objComPort di SAX
+Attribute objComPort.VB_VarHelpID = -1
+
+### M_
+... ma che noia un oggetto privato con eventi diventa m_qualcosa_evento... uffffffffffffffffffffff
