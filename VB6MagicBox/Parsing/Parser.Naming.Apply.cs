@@ -361,11 +361,38 @@ public static partial class VbParser
             .ThenBy(g => g.Group.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Label Value disambiguation: quando due Label collidono sullo stesso ProposedName
+        // e una ha Caption solo numerica (placeholder), usa suffisso "Value" invece di "2"
+        var labelValueOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var proposedNameCollisions = controlGroups
+            .GroupBy(g => g.ProposedName, StringComparer.OrdinalIgnoreCase)
+            .Where(pg => pg.Count() > 1);
+
+        foreach (var collision in proposedNameCollisions)
+        {
+          var labelGroups = collision
+              .Where(g => IsLabelType(g.Group.First().ControlType))
+              .ToList();
+
+          if (labelGroups.Count < 2) continue;
+
+          var numericCaption = labelGroups.Where(g => HasNumericOnlyCaption(g.Group)).ToList();
+          var textCaption = labelGroups.Where(g => !HasNumericOnlyCaption(g.Group)).ToList();
+
+          if (numericCaption.Count > 0 && textCaption.Count > 0)
+          {
+            foreach (var nc in numericCaption)
+              labelValueOverrides[nc.Group.Key] = collision.Key + "Value";
+          }
+        }
+
         var controlNamesUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in controlGroups)
         {
-          var conventionalName = item.ProposedName;
+          var conventionalName = labelValueOverrides.TryGetValue(item.Group.Key, out var overrideName)
+              ? overrideName
+              : item.ProposedName;
 
           if (IsReservedWord(conventionalName))
             conventionalName = item.Group.Key; // Torna al nome originale se reserved

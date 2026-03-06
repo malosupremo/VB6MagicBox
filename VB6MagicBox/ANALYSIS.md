@@ -265,6 +265,7 @@ With-expanded lines have different character positions from the raw source. The 
 - Properties share `ConventionalName` across Get/Let/Set
 - Enum naming: strips `e_` (with underscore) or `e` (before uppercase) prefix, then screaming snake to PascalCase; preserves short acronyms (e.g., `SQM`)
 - Control prefixes: `Frame` → `Fra`, `Label` → `Lbl`, `Panel` → `Pnl`; numeric-only suffixes retain the stem (e.g., `Label1` → `LblLabel1`)
+- **Label Value disambiguation**: when two `VB.Label` controls collide on the same proposed name and one has a numeric-only Caption (after stripping `<>` placeholders) while the other has text, the numeric-caption label gets suffix `Value` instead of `2` (e.g., `LblStatusValue` vs `LblStatus`). This is order-independent: `labelValueOverrides` dictionary pre-computes overrides before the naming loop, so even if the numeric-caption label is declared first it still gets `Value`
 - Global `g`+Hungarian prefix: stripped (e.g., `glngLanguage` → `Language`)
 - Type name normalization: trailing single-letter `T` stripped before `_T` (e.g., `ParamT` → `Param_T`)
 - Convention names are PascalCase (initial uppercase) so event procedures use uppercase initial
@@ -363,6 +364,7 @@ With-expanded lines have different character positions from the raw source. The 
 - **Spacing: blank before multi-line If**: added blank line before `If...Then` (multi-line) when preceded by regular statements, matching the existing `For`/`Do` logic. Uses `IsMultiLineIfStart` (starts with `If`, ends with `Then` after stripping inline comment)
 - **SSTab container control references**: `Tab(N).Control(N)= "ControlName"` lines inside SSTab definitions were not renamed when child controls were renamed, causing the SSTab to lose track of its children. Fix: `AddDeclarationReplace` for controls now scans form files for the `Tab(\d+)\.Control(\d+)\s*=\s*"OldName(\(\d+\))?"` pattern and replaces the control name inside quotes (preserving any array index)
 - **Duplicate chain resolution fix**: `EnumerateParenContents` re-discovers dot-chains already resolved
+`HasNumericOnlyCaption(controls)` strips quotes/`<>`/`>` from the first control's Caption and checks all-digit (dots allowed for decimals like `123.456`)
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**

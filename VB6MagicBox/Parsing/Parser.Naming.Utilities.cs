@@ -308,5 +308,38 @@ public static partial class VbParser
       // Deve contenere solo lettere e numeri
       return name.All(c => char.IsLetterOrDigit(c));
     }
+
+    /// <summary>
+    /// Verifica se il tipo controllo è un Label (VB.Label o Label).
+    /// </summary>
+    private static bool IsLabelType(string controlType)
+    {
+      if (string.IsNullOrEmpty(controlType)) return false;
+      var clean = controlType;
+      if (clean.StartsWith("VB.", StringComparison.OrdinalIgnoreCase))
+        clean = clean.Substring(3);
+      return clean.Equals("Label", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifica se la Caption del primo controllo del gruppo contiene solo numeri
+    /// (dopo aver rimosso virgolette e placeholder &lt;&gt;).
+    /// </summary>
+    private static bool HasNumericOnlyCaption(IEnumerable<VbControl> controls)
+    {
+      var first = controls.FirstOrDefault();
+      if (first == null) return false;
+      if (!first.Properties.TryGetValue("Caption", out var caption)) return false;
+
+      // Strip virgolette
+      if (caption.Length >= 2 && caption.StartsWith("\"") && caption.EndsWith("\""))
+        caption = caption[1..^1];
+
+      // Strip placeholder < e >
+      caption = caption.Replace("<", "").Replace(">", "");
+
+      // Deve essere non vuoto e contenere solo cifre (con eventuale punto decimale)
+      return caption.Length > 0 && caption.All(c => char.IsDigit(c) || c == '.');
+    }
   }
 }

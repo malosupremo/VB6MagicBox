@@ -40,7 +40,7 @@ Ogni sezione riporta il tipo di simbolo, la regola applicata, esempi concreti e 
 | §4-5 Enum / Valori |	ToPascalCaseFromScreamingSnake(string), strip prefisso `e_` o `e` |
 | §6 Tipi UDT |	ToPascalCaseType(string) con suffisso _T sempre ri-aggiunto |
 | §7 Campi UDT |	PascalCase, Type → TypeValue |
-| §8 Controlli |	Tabella completa dei 30+ prefissi, logica di sostituzione, tb/tx → txt |
+| §8 Controlli |	Tabella completa dei 30+ prefissi, logica di sostituzione, tb/tx → txt, Label Value disambiguation |
 | §9-10 Procedure / Property |	Event handler standard, controllo, WithEvents, normali; regola Get/Let/Set condivisi |
 | §11-14 Parametri / Locali / Costanti locali |	camelCase, s_, strip ungherese |
 | §15 Prefissi ungheresi |	Tabella prefissi rimossi + preservati (msg, plc) + casi speciali m, m_, cur |
@@ -301,6 +301,20 @@ Conflict resolution interno al tipo (scope isolato dal resto del modulo).
 **Namespace VB6 rimossi prima della ricerca:** `VB.`, `MSComCtl2.`, `MSComctlLib.`, `Threed.SS`.
 
 **Array di controlli:** tutti gli elementi dello stesso nome condividono il medesimo `ConventionalName`.
+
+### Label Value disambiguation
+
+Quando due controlli `VB.Label` (o `Label`) collidono sullo stesso nome convenzionale proposto e uno ha una Caption puramente numerica (dopo aver rimosso virgolette e placeholder `<>`) mentre l'altro ha testo, il label con Caption numerica riceve il suffisso `Value` invece del numerico `2`.
+
+| Controllo A | Caption A | Controllo B | Caption B | Risultato A | Risultato B |
+|-------------|-----------|-------------|-----------|-------------|-------------|
+| `LabelStatus` | `"<0>"` | `lblStatus` | `"Status:"` | `LblStatusValue` | `LblStatus` |
+
+**Note:**
+- Il meccanismo è **indipendente dall'ordine di dichiarazione**: un dizionario `labelValueOverrides` pre-calcola gli override prima del loop di naming.
+- Se entrambi i label hanno Caption numerica o entrambi testuale, si applica il normale suffisso numerico (`2`, `3`, …).
+- La Caption viene valutata dal primo controllo del gruppo (per control array).
+- Sono considerate numeriche anche caption con punto decimale (es. `"123.456"`).
 
 ---
 
