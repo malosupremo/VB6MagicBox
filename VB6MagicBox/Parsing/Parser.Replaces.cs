@@ -254,7 +254,7 @@ public static partial class VbParser
         {
             var (oldName, newName, category, source, definingModule, enumOwner, qualifyEnumValueRefs, forceQualification) = item;
             var currentIndex = Interlocked.Increment(ref symbolIndex);
-            if (oldName == newName && !qualifyEnumValueRefs && !string.Equals(category, "Type", StringComparison.OrdinalIgnoreCase))
+            if (oldName == newName && !qualifyEnumValueRefs)
                 return;
 
             lock (consoleLock)
@@ -548,30 +548,18 @@ public static partial class VbParser
             return;
         }
 
-        var effectiveOldName = entry.OldName;
-        if (string.Equals(entry.Category, "Type", StringComparison.OrdinalIgnoreCase))
-        {
-            var alternateOldName = GetTypeAlternateName(entry.OldName);
-            if (!string.IsNullOrEmpty(alternateOldName) &&
-                !Regex.IsMatch(codePart, $@"\b{Regex.Escape(entry.OldName)}\b", RegexOptions.IgnoreCase) &&
-                Regex.IsMatch(codePart, $@"\b{Regex.Escape(alternateOldName)}\b", RegexOptions.IgnoreCase))
-            {
-                effectiveOldName = alternateOldName;
-            }
-        }
-
         if (entry.StartChar >= 0 && entry.StartChar < codePart.Length)
         {
-            var length = Math.Min(effectiveOldName.Length, codePart.Length - entry.StartChar);
+            var length = Math.Min(entry.OldName.Length, codePart.Length - entry.StartChar);
             var foundText = codePart.Substring(entry.StartChar, length);
-            if (string.Equals(foundText, effectiveOldName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(foundText, entry.OldName, StringComparison.OrdinalIgnoreCase))
             {
                 if (allowStringReplace || !IsInsideStringLiteral(stringRanges, entry.StartChar))
                 {
                     entry.RefModule.Replaces.AddReplace(
                         entry.LineNumber,
                         entry.StartChar,
-                        entry.StartChar + effectiveOldName.Length,
+                        entry.StartChar + entry.OldName.Length,
                         foundText,
                         qualifiedReferenceName,
                         entry.Category + "_Reference");
@@ -827,30 +815,18 @@ public static partial class VbParser
                 }
                 else
                 {
-                    var effectiveOldName = oldName;
-                    if (string.Equals(category, "Type", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var alternateOldName = GetTypeAlternateName(oldName);
-                        if (!string.IsNullOrEmpty(alternateOldName) &&
-                            !Regex.IsMatch(codePart, $@"\b{Regex.Escape(oldName)}\b", RegexOptions.IgnoreCase) &&
-                            Regex.IsMatch(codePart, $@"\b{Regex.Escape(alternateOldName)}\b", RegexOptions.IgnoreCase))
-                        {
-                            effectiveOldName = alternateOldName;
-                        }
-                    }
-
                     if (startChar >= 0 && startChar < codePart.Length)
                     {
-                        var length = Math.Min(effectiveOldName.Length, codePart.Length - startChar);
+                        var length = Math.Min(oldName.Length, codePart.Length - startChar);
                         var foundText = codePart.Substring(startChar, length);
-                        if (string.Equals(foundText, effectiveOldName, StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(foundText, oldName, StringComparison.OrdinalIgnoreCase))
                         {
                             if (allowStringReplace || !IsInsideStringLiteral(stringRanges, startChar))
                             {
                                 refModule.Replaces.AddReplace(
                                     lineNum,
                                     startChar,
-                                    startChar + effectiveOldName.Length,
+                                    startChar + oldName.Length,
                                     foundText,
                                     referenceNewName,
                                     category + "_Reference");
@@ -859,7 +835,7 @@ public static partial class VbParser
                         }
                     }
 
-                    refModule.Replaces.AddReplaceFromLine(codePart, lineNum, effectiveOldName, referenceNewName, category + "_Reference", skipStringLiterals: !allowStringReplace);
+                    refModule.Replaces.AddReplaceFromLine(codePart, lineNum, oldName, referenceNewName, category + "_Reference", skipStringLiterals: !allowStringReplace);
                 }
 
                 if (startChar >= 0 && refModule.Replaces.Count == replacesBefore)
@@ -1669,16 +1645,5 @@ public static partial class VbParser
                 return (line[..i].TrimEnd(), line[i..]);
         }
         return (line, string.Empty);
-    }
-
-    private static string GetTypeAlternateName(string typeName)
-    {
-        if (string.IsNullOrWhiteSpace(typeName))
-            return string.Empty;
-
-        if (typeName.EndsWith("_T", StringComparison.OrdinalIgnoreCase))
-            return typeName.Substring(0, typeName.Length - 2);
-
-        return typeName + "_T";
     }
 }

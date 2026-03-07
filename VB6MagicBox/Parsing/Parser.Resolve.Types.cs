@@ -139,21 +139,6 @@ public static partial class VbParser
     if (typeMatch.Success)
       return searchFrom + typeMatch.Index;
 
-    // Prova con/senza suffisso _T
-    if (!baseTypeName.EndsWith("_T", StringComparison.OrdinalIgnoreCase))
-    {
-      typeMatch = Regex.Match(sub, $@"\b{Regex.Escape(baseTypeName + "_T")}\b", RegexOptions.IgnoreCase);
-      if (typeMatch.Success)
-        return searchFrom + typeMatch.Index;
-    }
-    else
-    {
-      var unsuffixed = baseTypeName.Substring(0, baseTypeName.Length - 2);
-      typeMatch = Regex.Match(sub, $@"\b{Regex.Escape(unsuffixed)}\b", RegexOptions.IgnoreCase);
-      if (typeMatch.Success)
-        return searchFrom + typeMatch.Index;
-    }
-
     return -1;
   }
 
@@ -177,22 +162,7 @@ public static partial class VbParser
         : typeName;
 
     if (!typeIndex.TryGetValue(baseTypeName, out var referencedType))
-    {
-      if (!baseTypeName.EndsWith("_T", StringComparison.OrdinalIgnoreCase))
-      {
-        if (typeIndex.TryGetValue(baseTypeName + "_T", out referencedType))
-          baseTypeName = baseTypeName + "_T";
-      }
-      else
-      {
-        var unsuffixed = baseTypeName.Substring(0, baseTypeName.Length - 2);
-        if (typeIndex.TryGetValue(unsuffixed, out referencedType))
-          baseTypeName = unsuffixed;
-      }
-
-      if (referencedType == null)
-        return;
-    }
+      return;
 
     var noComment = StripInlineComment(lineText);
     referencedType.Used = true;

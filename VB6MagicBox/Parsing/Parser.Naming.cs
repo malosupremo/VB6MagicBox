@@ -202,6 +202,19 @@ public static partial class VbParser
 
             var expectedPrefix = GetControlPrefix(controlType);
 
+            // Verifica se il nome inizia già con il prefisso corretto (case insensitive)
+            // IMPORTANTE: deve esserci una lettera MAIUSCOLA dopo il prefisso (camelCase)
+            // Questo check è PRIMA dei casi speciali Frame/Panel/Label per evitare
+            // false corrispondenze (es: FraMES matcherebbe "Frame" case-insensitive)
+            if (controlName.Length > expectedPrefix.Length &&
+                controlName.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase) &&
+                char.IsUpper(controlName[expectedPrefix.Length]))
+            {
+                // Ha già il prefisso corretto, preserva la capitalizzazione esistente
+                var baseName = controlName.Substring(expectedPrefix.Length);
+                return EnsurePascalCaseControlName(expectedPrefix + baseName);
+            }
+
             if (expectedPrefix.Equals("fra", StringComparison.OrdinalIgnoreCase) &&
                 controlName.Length > 5 &&
                 controlName.StartsWith("Frame", StringComparison.OrdinalIgnoreCase) &&
@@ -275,17 +288,6 @@ public static partial class VbParser
                         return EnsurePascalCaseControlName("txt" + baseName);
                     }
                 }
-            }
-
-            // Verifica se il nome inizia già con il prefisso corretto (case insensitive)
-            // IMPORTANTE: deve esserci una lettera MAIUSCOLA dopo il prefisso (camelCase)
-            if (controlName.Length > expectedPrefix.Length &&
-                controlName.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase) &&
-                char.IsUpper(controlName[expectedPrefix.Length]))
-            {
-                // Ha già il prefisso corretto, preserva la capitalizzazione esistente
-                var baseName = controlName.Substring(expectedPrefix.Length);
-                return EnsurePascalCaseControlName(expectedPrefix + baseName);
             }
 
             // Controlla se ha un altro prefisso a 3 lettere (es: txt, cmd, lbl)

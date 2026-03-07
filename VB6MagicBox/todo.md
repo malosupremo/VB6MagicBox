@@ -1,4 +1,7 @@
-﻿## Idempotenza
+﻿
+
+
+
 
 ## default property 
 ma se aggiungessimo i .text o .caption almeno?
@@ -27,6 +30,8 @@ Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As
 --- 
 
 #FATTI
+
+## Idempotenza
 
 ## SHARESTRUCT
 doppio sharestruct, PO e CALLER e differenze??
