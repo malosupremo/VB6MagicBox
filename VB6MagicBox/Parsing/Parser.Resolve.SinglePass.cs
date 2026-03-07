@@ -404,11 +404,10 @@ public static partial class VbParser
                     && !controlIndex.ContainsKey(token))
                     continue;
 
-                // Skip auto-reference (procedure calling itself bare)
+                // Self-reference (recursive call or function return assignment)
                 if (string.Equals(token, memberName, StringComparison.OrdinalIgnoreCase))
                 {
-                    // But track function return assignments
-                    if (isFunction && currentLine != lineNumber)
+                    if (currentLine != lineNumber)
                     {
                         RecordReference(memberReferences, mod.Name, memberName, currentLine, tokenIdx, masked, recorded, null);
                     }
@@ -711,10 +710,10 @@ public static partial class VbParser
                 baseMod.Used = true;
                 RecordReference(baseMod.References, mod.Name, memberName, currentLine, baseTokenPos.Item2, scanLine, recorded, baseMod);
             }
-            else if (isFunction && string.Equals(baseVarName, memberName, StringComparison.OrdinalIgnoreCase)
+            else if (string.Equals(baseVarName, memberName, StringComparison.OrdinalIgnoreCase)
                      && currentLine != lineNumber)
             {
-                // Function return value used in dot-chain (e.g., Queue_Pop.Seq = ...)
+                // Self-reference in dot-chain (e.g., Queue_Pop.Seq = ... or Me.MySub)
                 RecordReference(memberReferences, mod.Name, memberName, currentLine, baseTokenPos.Item2, scanLine, recorded, null);
             }
         }

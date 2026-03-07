@@ -11,9 +11,9 @@
 		<NoWarn>$(NoWarn);NU1510</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="Satis\**" />
-	  <EmbeddedResource Remove="Satis\**" />
-	  <None Remove="Satis\**" />
+	  <Compile Remove="vbp\**" />
+	  <EmbeddedResource Remove="vbp\**" />	  
+	  <None Remove="vbp\**" />
 	</ItemGroup>
 
 	<ItemGroup>

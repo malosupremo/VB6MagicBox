@@ -1,14 +1,11 @@
-﻿## default property 
+﻿## Idempotenza
+
+## default property 
 ma se aggiungessimo i .text o .caption almeno?
 
 ### preservare i nomi pubblici delle classi?
 enum, const, funct, types?... che noia
 mettiamo un flag
-
-## SHARESTRUCT
-doppio sharestruct, PO e CALLER e differenze??
-
-## Idempotenza
 
 ## i nomi dei moduli
 tipo LOGALARM da dove lo prende? dal PDB?
@@ -30,6 +27,9 @@ Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As
 --- 
 
 #FATTI
+
+## SHARESTRUCT
+doppio sharestruct, PO e CALLER e differenze??
 
 ### attributo
 Private WithEvents m_ComPort As SaxComm       'Oggetto objComPort di SAX
