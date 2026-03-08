@@ -40,10 +40,10 @@ VB6MagicBox/
 
 ## Architecture — Full Pipeline
 **Phase 1 (Analysis)**: `VbParser.ParseAndResolve` — `Parser.cs`
-1. **Step 1/5 — Parsing**: `ParseProjectFromVbp` → `ParseModuleFile` per module (`Parser.Core.Project` + `Parser.Core.Module`)
+1. **Step 1/5 — Parsing**: `ParseProjectFromVbp` → `ParseModuleFile` per module (`Parser.Core.Project` + `Parser.Core.Module`); also reads `Type=` from `.vbp` into `VbProject.ProjectType`
 2. **Step 2/5 — Resolution**: `ResolveTypesAndCalls` — single-pass reference resolution (`Parser.Resolve.SinglePass` + `.Indexes` + `.Members` + `.Helpers` + `.Types`)
 3. **Step 3/5 — Dependencies**: `BuildDependenciesAndUsage` — cross-module dependency graph + mark `Used` symbols (`Parser.Resolve.Dependencies`)
-4. **Step 4/5 — Naming & Sort**: `SortProject` → `NamingConvention.Apply` — assigns `ConventionalName` to all symbols, sorts alphabetically (`Parser.Naming.Apply` + `Parser.Export`)
+4. **Step 4/5 — Naming & Sort**: `SortProject` → `NamingConvention.Apply` — assigns `ConventionalName` to all symbols, sorts alphabetically (`Parser.Naming.Apply` + `Parser.Export`). When `PreserveCompatibility` is on, `PreserveComVisibleNames` post-processes .cls/.bas modules to reset public COM-visible symbols to their original names
 5. **Step 5/5 — Build Replaces**: `BuildReplaces` — pre-calculates exact character positions for all renames (`Parser.Replaces`)
 
 **Phase 2 (Refactoring)**: `Refactoring.ApplyRenames` — `Refactoring.cs`
@@ -66,8 +66,19 @@ VB6MagicBox/
 
 **Magic Wand (option 6)**: runs all 5 phases sequentially on a single `ParseAndResolve` result.
 
+### COM Binary Compatibility (`PreserveCompatibility`)
+- Activated via interactive question when project is ActiveX (DLL/EXE/Control)
+- `ParseAndResolve(vbpPath, preserveCompatibility: true)` passes the flag to the pipeline
+- `PreserveComVisibleNames` (post-processing in `NamingConvention.Apply`) uses `CasePreserve` for COM-visible symbols:
+  - **Case-only changes are allowed** (safe for COM because VB6/COM is case-insensitive)
+  - `CasePreserve(original, conventional)`: if `original.Equals(conventional, OrdinalIgnoreCase)` → keeps conventional (case fix); otherwise → resets to original (structural change blocked)
+  - Example: `getUserData` → `GetUserData` ✅ kept (case-only); `strName` → `Name` ❌ reset (prefix stripped)
+  - Applied to: module names (.cls/.bas), public procedures/properties/events, public global vars/constants, all enums/values, all UDT types/fields, WithEvents event handlers
+- Private members, local variables, local constants, and form controls are always renamed normally
+- `IsPublicMember(visibility, defaultIsPublic)` helper determines COM visibility per VB6 default rules
+
 ## Key Models (`Models/`)
-- **`VbProject`**: `ProjectFile`, `Modules[]`, `Dependencies[]`
+- **`VbProject`**: `ProjectFile`, `Modules[]`, `Dependencies[]`, `ProjectType` (`Exe`/`OleDll`/`OleExe`/`Control`), `PreserveCompatibility` (bool), `IsActiveXProject` (computed)
 - **`VbModule`**: `Name`, `ConventionalName`, `Kind` (`bas`/`cls`/`frm`), `FullPath`, `IsSharedExternal`, `Used`, `IsClass`/`IsForm` (computed), `ImplementsInterfaces[]`
   - Collections: `Procedures[]`, `Properties[]` (separate), `Types[]`, `Enums[]`, `Constants[]`, `GlobalVariables[]`, `Controls[]`, `References[]`, `ModuleReferences[]`
   - **`Replaces[]`** (`List<LineReplace>`) — all substitutions for this module, ordered by line (desc) + char (desc)

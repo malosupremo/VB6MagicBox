@@ -746,6 +746,139 @@ public static partial class VbParser
           }
         }
       }
+
+      // Post-processing: preserva i nomi COM-visible se richiesto
+      if (project.PreserveCompatibility)
+      {
+        foreach (var mod in project.Modules)
+        {
+          if (!mod.IsSharedExternal)
+            PreserveComVisibleNames(mod);
+        }
+      }
+    }
+
+    /// <summary>
+    /// Determina se un membro è pubblico (COM-visible) in base alla sua visibilità.
+    /// Per procedure/proprietà/eventi/enum/tipi il default è Public.
+    /// Per variabili/costanti il default è Private (Dim).
+    /// </summary>
+    private static bool IsPublicMember(string? visibility, bool defaultIsPublic)
+    {
+      if (string.IsNullOrEmpty(visibility))
+        return defaultIsPublic;
+      return visibility.Equals("Public", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Per i simboli COM-visible: se il ConventionalName differisce dall'originale
+    /// solo per il case (case-insensitive equal) → tiene il ConventionalName (sicuro per COM).
+    /// Se il nome è strutturalmente diverso (prefisso aggiunto/rimosso, underscore, ecc.) → reset all'originale.
+    /// VB6/COM è case-insensitive, quindi le modifiche di solo case non rompono la compatibilità binaria.
+    /// </summary>
+    private static string CasePreserve(string originalName, string? conventionalName)
+    {
+      if (!string.IsNullOrEmpty(conventionalName) &&
+          string.Equals(originalName, conventionalName, StringComparison.OrdinalIgnoreCase))
+        return conventionalName;
+      return originalName;
+    }
+
+    /// <summary>
+    /// Post-processing per i simboli COM-visible di un modulo .cls o .bas.
+    /// Permette modifiche di solo case (sicure per COM) ma blocca rinominazioni strutturali.
+    /// </summary>
+    private static void PreserveComVisibleNames(VbModule mod)
+    {
+      bool isCls = mod.IsClass;
+      bool isBas = mod.Kind?.Equals("bas", StringComparison.OrdinalIgnoreCase) == true;
+
+      if (!isCls && !isBas) return;
+
+      // Nome modulo: è il nome della classe COM (.cls) o della classe globale nascosta (.bas)
+      mod.ConventionalName = CasePreserve(mod.Name, mod.ConventionalName);
+
+      // Traccia le WithEvents preservate per ripristinare anche i loro event handler
+      var preservedWithEventsVars = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+      // Variabili globali: Public → COM-visible (Dim è Private di default)
+      foreach (var v in mod.GlobalVariables)
+      {
+        if (IsPublicMember(v.Visibility, defaultIsPublic: false))
+        {
+          if (v.IsWithEvents)
+            preservedWithEventsVars.Add(v.Name);
+          v.ConventionalName = CasePreserve(v.Name, v.ConventionalName);
+        }
+      }
+
+      // Costanti: Public Const → COM-visible (Const è Private di default)
+      foreach (var c in mod.Constants)
+      {
+        if (IsPublicMember(c.Visibility, defaultIsPublic: false))
+          c.ConventionalName = CasePreserve(c.Name, c.ConventionalName);
+      }
+
+      // Enum: default Public (non abbiamo Visibility nel modello, preserviamo sempre)
+      foreach (var e in mod.Enums)
+      {
+        e.ConventionalName = CasePreserve(e.Name, e.ConventionalName);
+        foreach (var val in e.Values)
+          val.ConventionalName = CasePreserve(val.Name, val.ConventionalName);
+      }
+
+      // Type (UDT): default Public (non abbiamo Visibility nel modello, preserviamo sempre)
+      foreach (var t in mod.Types)
+      {
+        t.ConventionalName = CasePreserve(t.Name, t.ConventionalName);
+        foreach (var f in t.Fields)
+          f.ConventionalName = CasePreserve(f.Name, f.ConventionalName);
+      }
+
+      // Eventi: sempre Public in VB6
+      foreach (var ev in mod.Events)
+      {
+        ev.ConventionalName = CasePreserve(ev.Name, ev.ConventionalName);
+        foreach (var p in ev.Parameters)
+          p.ConventionalName = CasePreserve(p.Name, p.ConventionalName);
+      }
+
+      // Procedure: default Public (solo Private è non-COM-visible)
+      foreach (var proc in mod.Procedures)
+      {
+        bool shouldPreserve = IsPublicMember(proc.Visibility, defaultIsPublic: true);
+
+        // Preserva anche gli event handler di WithEvents pubbliche
+        if (!shouldPreserve && preservedWithEventsVars.Count > 0)
+        {
+          foreach (var varName in preservedWithEventsVars)
+          {
+            if (proc.Name.StartsWith(varName + "_", StringComparison.OrdinalIgnoreCase))
+            {
+              shouldPreserve = true;
+              break;
+            }
+          }
+        }
+
+        if (shouldPreserve)
+        {
+          proc.ConventionalName = CasePreserve(proc.Name, proc.ConventionalName);
+          foreach (var p in proc.Parameters)
+            p.ConventionalName = CasePreserve(p.Name, p.ConventionalName);
+        }
+      }
+
+      // Proprietà: default Public
+      foreach (var prop in mod.Properties)
+      {
+        if (IsPublicMember(prop.Visibility, defaultIsPublic: true))
+        {
+          prop.ConventionalName = CasePreserve(prop.Name, prop.ConventionalName);
+          foreach (var p in prop.Parameters)
+            p.ConventionalName = CasePreserve(p.Name, p.ConventionalName);
+        }
+      }
     }
 
     private static void KeepOriginalNames(VbModule mod)

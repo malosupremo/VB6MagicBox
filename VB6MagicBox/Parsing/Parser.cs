@@ -18,7 +18,7 @@ public static partial class VbParser
     /// 3) Costruzione dipendenze + marcatura Used
     /// 4) Ordinamento alfabetico completo
     /// </summary>
-    public static VbProject ParseAndResolve(string vbpPath)
+    public static VbProject ParseAndResolve(string vbpPath, bool preserveCompatibility = false)
     {
         if (string.IsNullOrWhiteSpace(vbpPath))
             throw new ArgumentException("Percorso VBP non valido.", nameof(vbpPath));
@@ -36,7 +36,11 @@ public static partial class VbParser
         // 1) Parsing
         Console.WriteLine("Step 1/5: Parsing del progetto VB6...");
         var project = ParseProjectFromVbp(vbpPath);
+        project.PreserveCompatibility = preserveCompatibility;
         Console.WriteLine($"  -> {project.Modules.Count} moduli trovati");
+        Console.WriteLine($"  -> Tipo progetto: {GetProjectTypeLabel(project.ProjectType)}");
+        if (preserveCompatibility)
+            Console.WriteLineColor("  -> Compatibilità binaria COM: ATTIVA (solo normalizzazione case sui simboli pubblici)", ConsoleColor.Cyan);
 
         var fileCache = BuildFileCache(project);
 

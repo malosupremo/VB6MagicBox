@@ -5,9 +5,7 @@ SSPanel caption
 Label caption
 TextBox  Text
 
-### preservare i nomi pubblici delle classi?
-enum, const, funct, types?... che noia
-mettiamo un flag
+
 
 ## i nomi dei moduli
 tipo LOGALARM da dove lo prende? dal PDB?
@@ -25,6 +23,10 @@ Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As
 
 --- 
 # FATTI
+
+### preservare i nomi pubblici delle classi?
+enum, const, funct, types?... che noia
+mettiamo un flag
 
 
 

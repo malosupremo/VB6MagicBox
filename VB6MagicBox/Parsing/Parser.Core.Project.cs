@@ -11,6 +11,7 @@ public static partial class VbParser
   public static VbProject ParseProjectFromVbp(string vbpPath)
   {
     var project = new VbProject { ProjectFile = vbpPath };
+    project.ProjectType = ReadProjectType(vbpPath);
     var baseDir = Path.GetDirectoryName(vbpPath)!;
 
     var files = ParseVbpFile(vbpPath);
@@ -97,6 +98,35 @@ public static partial class VbParser
 
     var normalized = path.Replace('/', '\\');
     return normalized.Contains("..\\..\\", StringComparison.Ordinal);
+  }
+
+  /// <summary>
+  /// Legge rapidamente la riga Type= dal file .vbp senza fare il parsing completo.
+  /// Valori tipici: Exe, OleDll, OleExe, Control.
+  /// </summary>
+  public static string? ReadProjectType(string vbpPath)
+  {
+    foreach (var line in File.ReadLines(vbpPath))
+    {
+      if (line.StartsWith("Type=", StringComparison.OrdinalIgnoreCase))
+        return line.Substring("Type=".Length).Trim();
+    }
+    return null;
+  }
+
+  /// <summary>
+  /// Restituisce un'etichetta leggibile per il tipo di progetto VB6.
+  /// </summary>
+  public static string GetProjectTypeLabel(string? projectType)
+  {
+    return projectType?.ToUpperInvariant() switch
+    {
+      "OLEDLL"  => "ActiveX DLL",
+      "OLEEXE"  => "ActiveX EXE",
+      "CONTROL" => "ActiveX Control",
+      "EXE"     => "Standard EXE",
+      _         => projectType ?? "Sconosciuto"
+    };
   }
 
   private static List<VbpEntry> ParseVbpFile(string vbpPath)

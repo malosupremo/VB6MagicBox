@@ -168,6 +168,33 @@ public class Program
         }
     }
 
+    /// <summary>
+    /// Se il progetto è un componente ActiveX, chiede all'utente se preservare la compatibilità binaria COM.
+    /// </summary>
+    private static bool AskPreserveCompatibility(string vbpPath)
+    {
+        var projectType = VbParser.ReadProjectType(vbpPath);
+        bool isActiveX = projectType != null && (
+            projectType.Equals("OleDll", StringComparison.OrdinalIgnoreCase) ||
+            projectType.Equals("OleExe", StringComparison.OrdinalIgnoreCase) ||
+            projectType.Equals("Control", StringComparison.OrdinalIgnoreCase));
+
+        if (!isActiveX)
+            return false;
+
+        var label = VbParser.GetProjectTypeLabel(projectType);
+        Console.WriteLine();
+        Console.WriteLineColor($"Il progetto è un componente {label}.", ConsoleColor.Cyan);
+        Console.WriteLine("Preservare la compatibilità binaria COM?");
+        Console.WriteLine("  S = solo normalizzazione del case sui simboli pubblici (PascalCase, camelCase)");
+        Console.WriteLine("  N = rinomina completa di tutti i simboli");
+        Console.Write("Scelta (S/N): ");
+
+        var answer = Console.ReadLine()?.Trim();
+        return answer?.Equals("S", StringComparison.OrdinalIgnoreCase) == true ||
+               answer?.Equals("Y", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
     private static void RunRefactoringInteractive()
     {
         Console.WriteLine();
@@ -179,10 +206,12 @@ public class Program
             return;
         }
 
+        var preserveCompat = AskPreserveCompatibility(vbpPath);
+
         try
         {
             // 1) Analisi completa (parsing + risoluzione + naming + ordinamento)
-            var project = VbParser.ParseAndResolve(vbpPath);
+            var project = VbParser.ParseAndResolve(vbpPath, preserveCompat);
 
             // 2) Scrittura dei file di output prima del refactoring
             //    (l'analisi riflette i nomi originali VB6; il refactoring agisce solo sul disco)
@@ -272,12 +301,14 @@ public class Program
             return;
         }
 
+        var preserveCompat = AskPreserveCompatibility(vbpPath);
+
         var stopwatch = Stopwatch.StartNew();
 
         try
         {
             // 1) Analisi completa — una sola esecuzione del parser per tutte le fasi
-            var project = VbParser.ParseAndResolve(vbpPath);
+            var project = VbParser.ParseAndResolve(vbpPath, preserveCompat);
 
             // 2) Export file di analisi (symbols.json, rename.json, rename.csv, linereplace.json, dependencies.md)
             ExportProjectFiles(project, vbpPath);

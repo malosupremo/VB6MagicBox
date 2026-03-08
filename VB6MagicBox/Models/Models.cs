@@ -10,6 +10,19 @@ public class VbProject
   [JsonPropertyOrder(1)]
   public List<VbModule> Modules { get; set; } = new();
 
+  [JsonPropertyOrder(2)]
+  public string? ProjectType { get; set; }
+
+  [JsonIgnore]
+  public bool PreserveCompatibility { get; set; }
+
+  [JsonIgnore]
+  public bool IsActiveXProject =>
+      ProjectType != null && (
+          ProjectType.Equals("OleDll", StringComparison.OrdinalIgnoreCase) ||
+          ProjectType.Equals("OleExe", StringComparison.OrdinalIgnoreCase) ||
+          ProjectType.Equals("Control", StringComparison.OrdinalIgnoreCase));
+
   [JsonIgnore]
   public List<DependencyEdge> Dependencies { get; set; } = new();
 }
