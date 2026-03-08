@@ -248,10 +248,10 @@ public static partial class VbParser
             if (expectedPrefix.Equals("lbl", StringComparison.OrdinalIgnoreCase) &&
                 controlName.Length > 2 &&
                 controlName.StartsWith("lb", StringComparison.OrdinalIgnoreCase) &&
-                !controlName.StartsWith("lbl", StringComparison.OrdinalIgnoreCase) &&
+                !controlName.StartsWith("lbl", StringComparison.Ordinal) &&
                 char.IsUpper(controlName[2]))
             {
-                // Strip the "Lb" prefix, then add "Lbl": LbLatWidth → LblLatWidth
+                // Strip the "Lb" prefix, then add "Lbl": lbLonPosition → LblLonPosition
                 var baseName = controlName.Substring(2);
                 return EnsurePascalCaseControlName(expectedPrefix + baseName);
             }
@@ -259,10 +259,12 @@ public static partial class VbParser
             if (expectedPrefix.Equals("fra", StringComparison.OrdinalIgnoreCase) &&
                 controlName.Length > 2 &&
                 controlName.StartsWith("fr", StringComparison.OrdinalIgnoreCase) &&
-                !controlName.StartsWith("fra", StringComparison.OrdinalIgnoreCase) &&
+                !controlName.StartsWith("fra", StringComparison.Ordinal) &&
                 char.IsUpper(controlName[2]))
             {
                 // Strip the "Fr" prefix, then add "Fra": FrQualcosa → FraQualcosa
+                // Case-sensitive guard: frAnchor has "frA" which matches "fra" ignoring case,
+                // but should still be normalized (fr→fra + Anchor)
                 var baseName = controlName.Substring(2);
                 return EnsurePascalCaseControlName(expectedPrefix + baseName);
             }

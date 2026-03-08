@@ -1,10 +1,9 @@
 ﻿
-
-
-
-
 ## default property 
 ma se aggiungessimo i .text o .caption almeno?
+SSPanel caption
+Label caption
+TextBox  Text
 
 ### preservare i nomi pubblici delle classi?
 enum, const, funct, types?... che noia
@@ -22,14 +21,15 @@ Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As
 
 
 
-## LblLbQualcosa
-         Begin VB.Label LblLbLatWidth 
-
-
+# TODO E CHECK FILES
 
 --- 
+# FATTI
 
-#FATTI
+
+
+## LblLbQualcosa
+         Begin VB.Label LblLbLatWidth 
 
 ## Idempotenza
 
