@@ -978,8 +978,11 @@ public static class TypeAnnotator
     }
 
     /// <summary>
-    /// Esplicita le proprietà default implicite dei controlli VB6.
+    /// Esplicita le proprietà default implicite dei controlli VB6 solo quando
+    /// il controllo è il target di un'assegnazione diretta (primo token sulla riga).
     /// Es. <c>LblName = "Hello"</c> → <c>LblName.Caption = "Hello"</c>.
+    /// NON aggiunge la proprietà quando il controllo è usato come argomento
+    /// (potrebbe essere passato come oggetto: <c>GetFieldNumber PnlSteps, ...</c>).
     /// </summary>
     private static string ApplyDefaultProperties(string line, Dictionary<string, string> controlDefaults, ref int count)
     {
@@ -990,99 +993,29 @@ public static class TypeAnnotator
 
         if (string.IsNullOrWhiteSpace(trimmed)) return line;
         if (trimmed.StartsWith("Begin ", StringComparison.OrdinalIgnoreCase)) return line;
+        if (trimmed.StartsWith("Set ", StringComparison.OrdinalIgnoreCase)) return line;
 
-        var masked = MaskStrings(code);
-
-        var insertions = new List<(int position, string property)>();
-
+        // Solo target di assegnazione: ControlName[(index)] = valore
         foreach (var (controlName, defaultProp) in controlDefaults)
         {
-            var pattern = $@"\b{Regex.Escape(controlName)}\b(\s*\([^)]*\))?";
-            var matches = Regex.Matches(masked, pattern, RegexOptions.IgnoreCase);
+            var pattern = $@"^(\s*){Regex.Escape(controlName)}\b(\s*\([^)]*\))?\s*=";
+            var m = Regex.Match(code, pattern, RegexOptions.IgnoreCase);
+            if (!m.Success) continue;
 
-            foreach (Match m in matches)
-            {
-                var matchEnd = m.Index + m.Length;
+            // Punto di inserzione: subito dopo ControlName + eventuale (index)
+            int insertPos = m.Groups[1].Length + controlName.Length;
+            if (m.Groups[2].Success)
+                insertPos += m.Groups[2].Length;
 
-                // Skip se già seguito da '.' (proprietà esplicita)
-                if (matchEnd < masked.Length && masked[matchEnd] == '.')
-                    continue;
+            // Se già seguito da '.' è esplicita
+            if (insertPos < code.Length && code[insertPos] == '.')
+                continue;
 
-                // Skip se preceduto da keyword di contesto oggetto
-                var before = masked[..m.Index].TrimEnd();
-                if (EndsWithKeyword(before, "Set") ||
-                    EndsWithKeyword(before, "With") ||
-                    EndsWithKeyword(before, "TypeOf") ||
-                    EndsWithKeyword(before, "Load") ||
-                    EndsWithKeyword(before, "Unload") ||
-                    EndsWithKeyword(before, "Is"))
-                    continue;
-
-                insertions.Add((matchEnd, defaultProp));
-            }
-        }
-
-        if (insertions.Count == 0) return line;
-
-        // Ordina da destra a sinistra e rimuovi duplicati sulla stessa posizione
-        insertions = insertions.OrderByDescending(x => x.position)
-                               .DistinctBy(x => x.position)
-                               .ToList();
-
-        var result = code;
-        foreach (var (pos, prop) in insertions)
-        {
-            result = result.Insert(pos, $".{prop}");
+            var result = code.Insert(insertPos, $".{defaultProp}");
             count++;
+            return string.IsNullOrEmpty(comment) ? result : result + " " + comment;
         }
 
-        return string.IsNullOrEmpty(comment) ? result : result + " " + comment;
-    }
-
-    /// <summary>
-    /// Verifica se <paramref name="text"/> termina con la keyword specificata
-    /// (word-boundary: il carattere prima della keyword non deve essere alfanumerico o '_').
-    /// </summary>
-    private static bool EndsWithKeyword(string text, string keyword)
-    {
-        if (!text.EndsWith(keyword, StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        int beforeIdx = text.Length - keyword.Length - 1;
-        return beforeIdx < 0 || (!char.IsLetterOrDigit(text[beforeIdx]) && text[beforeIdx] != '_');
-    }
-
-    /// <summary>
-    /// Sostituisce il contenuto delle stringhe letterali con spazi per evitare
-    /// falsi match di nomi di controllo dentro le stringhe.
-    /// </summary>
-    private static string MaskStrings(string code)
-    {
-        var sb = new StringBuilder(code.Length);
-        bool inString = false;
-
-        for (int i = 0; i < code.Length; i++)
-        {
-            var ch = code[i];
-            if (ch == '"')
-            {
-                sb.Append(ch);
-                if (!inString)
-                    inString = true;
-                else if (i + 1 < code.Length && code[i + 1] == '"')
-                {
-                    sb.Append(' ');
-                    i++;
-                }
-                else
-                    inString = false;
-            }
-            else if (inString)
-                sb.Append(' ');
-            else
-                sb.Append(ch);
-        }
-
-        return sb.ToString();
+        return line;
     }
 }
