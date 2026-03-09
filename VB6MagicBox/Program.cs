@@ -126,6 +126,12 @@ public class Program
 
     private static void RunAnalysis(string vbpPath)
     {
+        if (!vbpPath.EndsWith(".vbp", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLineError("[X] Il file specificato non è un progetto VB6 (.vbp)!");
+            return;
+        }
+
         try
         {
             var project = VbParser.ParseAndResolve(vbpPath);
@@ -262,6 +268,13 @@ public class Program
 
         var input = Console.ReadLine()?.Trim().Trim('"');
         var vbpPath = string.IsNullOrWhiteSpace(input) ? lastPath : input;
+
+        if (!string.IsNullOrWhiteSpace(vbpPath) &&
+            !vbpPath.EndsWith(".vbp", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLineError("[X] Il file specificato non è un progetto VB6 (.vbp)!");
+            return string.Empty;
+        }
 
         if (!string.IsNullOrWhiteSpace(vbpPath))
             SaveLastVbpPath(vbpPath);

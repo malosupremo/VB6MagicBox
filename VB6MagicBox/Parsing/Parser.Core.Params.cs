@@ -470,4 +470,30 @@ public static partial class VbParser
             param.TypeLineNumber = foundLine >= 0 ? foundLine + 1 : param.LineNumber;
         }
     }
+
+    /// <summary>
+    /// Estrae il testo dei parametri e il tipo di ritorno da una signature di funzione/proprietà
+    /// usando il bilanciamento delle parentesi anziché il regex greedy.
+    /// Risolve il bug dove <c>As Integer()</c> veniva consumato dal <c>(.*)</c> nel regex.
+    /// </summary>
+    private static (string paramText, string returnType) ExtractParamsAndReturnType(string line, int openParenPos)
+    {
+        int depth = 0;
+        int closeParenPos = -1;
+
+        for (int i = openParenPos; i < line.Length; i++)
+        {
+            if (line[i] == '(') depth++;
+            else if (line[i] == ')') { depth--; if (depth == 0) { closeParenPos = i; break; } }
+        }
+
+        if (closeParenPos < 0)
+            return (line[(openParenPos + 1)..], "");
+
+        var paramText = line[(openParenPos + 1)..closeParenPos];
+        var afterClose = line[(closeParenPos + 1)..].Trim();
+        var asMatch = Regex.Match(afterClose, @"^As\s+([\w\.\(\)]+)", RegexOptions.IgnoreCase);
+        var returnType = asMatch.Success ? asMatch.Groups[1].Value : "";
+        return (paramText, returnType);
+    }
 }

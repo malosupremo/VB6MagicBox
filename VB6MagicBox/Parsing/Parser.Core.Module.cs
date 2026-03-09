@@ -263,6 +263,21 @@ public static partial class VbParser
       {
         var isStatic = Regex.IsMatch(noComment, @"\bStatic\b", RegexOptions.IgnoreCase);
 
+        var paramText = mf2.Groups[4].Value;
+        var returnType = NormalizeTypeName(mf2.Groups[6].Value);
+
+        // Fallback: se il regex greedy (.*) ha consumato `)` di un tipo array (es. As Integer()),
+        // riestraiamo parametri e tipo di ritorno con il bilanciamento parentesi
+        if (string.IsNullOrEmpty(returnType))
+        {
+          var openParen = noComment.IndexOf('(', mf2.Groups[3].Index + mf2.Groups[3].Length);
+          if (openParen >= 0)
+          {
+            var (bp, br) = ExtractParamsAndReturnType(noComment, openParen);
+            if (!string.IsNullOrEmpty(br)) { paramText = bp; returnType = br; }
+          }
+        }
+
         currentProc = new VbProcedure
         {
           Visibility = string.IsNullOrEmpty(mf2.Groups[1].Value) ? "Public" : mf2.Groups[1].Value,
@@ -270,8 +285,8 @@ public static partial class VbParser
           Kind = "Function",
           IsStatic = isStatic,
           Scope = "Module",
-          Parameters = ParseParameters(mf2.Groups[4].Value, originalLineNumber),
-          ReturnType = NormalizeTypeName(mf2.Groups[6].Value),
+          Parameters = ParseParameters(paramText, originalLineNumber),
+          ReturnType = returnType,
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
@@ -352,6 +367,19 @@ public static partial class VbParser
       {
         var isStatic = Regex.IsMatch(noComment, @"\bStatic\b", RegexOptions.IgnoreCase);
 
+        var pParamText = mp.Groups[5].Value;
+        var pReturnType = NormalizeTypeName(mp.Groups[7].Value);
+
+        if (string.IsNullOrEmpty(pReturnType))
+        {
+          var openParen = noComment.IndexOf('(', mp.Groups[4].Index + mp.Groups[4].Length);
+          if (openParen >= 0)
+          {
+            var (bp, br) = ExtractParamsAndReturnType(noComment, openParen);
+            if (!string.IsNullOrEmpty(br)) { pParamText = bp; pReturnType = br; }
+          }
+        }
+
         // Crea SOLO Property (NON aggiungere a Procedures per evitare duplicazioni)
         currentProperty = new VbProperty
         {
@@ -359,8 +387,8 @@ public static partial class VbParser
           Kind = mp.Groups[3].Value, // Get, Let, Set
           Name = mp.Groups[4].Value,
           Scope = "Module",
-          Parameters = ParseParameters(mp.Groups[5].Value, originalLineNumber),
-          ReturnType = NormalizeTypeName(mp.Groups[7].Value),
+          Parameters = ParseParameters(pParamText, originalLineNumber),
+          ReturnType = pReturnType,
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
@@ -399,7 +427,7 @@ public static partial class VbParser
         }
 
         // Imposta currentProc SOLO per tracciare la fine della Property (NON aggiungere a mod.Procedures)
-        // Questo � un oggetto temporaneo usato solo per il parsing interno
+        // Questo è un oggetto temporaneo usato solo per il parsing interno
         currentProc = new VbProcedure
         {
           Visibility = string.IsNullOrEmpty(mp.Groups[1].Value) ? "Public" : mp.Groups[1].Value,
@@ -407,8 +435,8 @@ public static partial class VbParser
           Name = mp.Groups[4].Value,
           IsStatic = isStatic,
           Scope = "Module",
-          Parameters = ParseParameters(mp.Groups[5].Value, originalLineNumber),
-          ReturnType = NormalizeTypeName(mp.Groups[7].Value),
+          Parameters = ParseParameters(pParamText, originalLineNumber),
+          ReturnType = pReturnType,
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber
         };
@@ -443,6 +471,19 @@ public static partial class VbParser
       var mdf = ReDeclareFunction.Match(noComment);
       if (mdf.Success)
       {
+        var dParamText = mdf.Groups[4].Value;
+        var dReturnType = NormalizeTypeName(mdf.Groups[6].Value);
+
+        if (string.IsNullOrEmpty(dReturnType))
+        {
+          var openParen = noComment.IndexOf('(', mdf.Groups[2].Index + mdf.Groups[2].Length);
+          if (openParen >= 0)
+          {
+            var (bp, br) = ExtractParamsAndReturnType(noComment, openParen);
+            if (!string.IsNullOrEmpty(br)) { dParamText = bp; dReturnType = br; }
+          }
+        }
+
         var declareProc = new VbProcedure
         {
           Visibility = string.IsNullOrEmpty(mdf.Groups[1].Value) ? "Public" : mdf.Groups[1].Value,
@@ -450,8 +491,8 @@ public static partial class VbParser
           Kind = "ExternalFunction",
           IsStatic = false,
           Scope = "Module",
-          Parameters = ParseParameters(mdf.Groups[4].Value, originalLineNumber),
-          ReturnType = NormalizeTypeName(mdf.Groups[6].Value),
+          Parameters = ParseParameters(dParamText, originalLineNumber),
+          ReturnType = dReturnType,
           LineNumber = originalLineNumber,
           StartLine = originalLineNumber,
           EndLine = originalLineNumber
