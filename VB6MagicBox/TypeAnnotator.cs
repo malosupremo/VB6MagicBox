@@ -38,6 +38,39 @@ public static class TypeAnnotator
     };
 
     // -------------------------
+    // MAPPATURA PROPRIETÀ DEFAULT CONTROLLI VB6
+    // -------------------------
+
+    /// <summary>
+    /// Mappa ControlType → proprietà default (DISPID 0) per i controlli VB6 più comuni.
+    /// Usata per esplicitare gli accessi impliciti alla proprietà default.
+    /// </summary>
+    private static readonly Dictionary<string, string> DefaultPropertyMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["VB.Label"] = "Caption",
+        ["VB.TextBox"] = "Text",
+        ["VB.ComboBox"] = "Text",
+        ["VB.ListBox"] = "Text",
+        ["VB.CheckBox"] = "Value",
+        ["VB.OptionButton"] = "Value",
+        ["VB.HScrollBar"] = "Value",
+        ["VB.VScrollBar"] = "Value",
+        ["VB.CommandButton"] = "Value",
+        ["VB.Frame"] = "Caption",
+        ["MSFlexGridLib.MSFlexGrid"] = "Text",
+        ["MSHFlexGridLib.MSHFlexGrid"] = "Text",
+        ["RichTextLib.RichTextBox"] = "Text",
+        ["Threed.SSPanel"] = "Caption",
+        ["Threed.SSCommand"] = "Caption",
+        ["Threed.SSCheck"] = "Value",
+        ["Threed.SSOption"] = "Value",
+        ["Threed.SSFrame"] = "Caption",
+        ["TabDlg.SSTab"] = "Tab",
+        ["MSComctlLib.Slider"] = "Value",
+        ["MSComctlLib.ProgressBar"] = "Value",
+    };
+
+    // -------------------------
     // REGEX (solo per l'applicazione delle fix, non per la discovery)
     // -------------------------
 
@@ -101,6 +134,7 @@ public static class TypeAnnotator
 
         int totalFiles = 0;
         int totalChanges = 0;
+        int totalDefaultProps = 0;
         var missingTypes = new List<MissingTypeInfo>();
 
         foreach (var mod in project.Modules)
@@ -114,7 +148,8 @@ public static class TypeAnnotator
             if (!File.Exists(filePath)) continue;
 
             var originalContent = File.ReadAllText(filePath, enc);
-            var (changes, newContent) = ProcessFileWithFixes(originalContent, fixes, missingTypes, mod);
+            var (changes, defaultProps, newContent) = ProcessFileWithFixes(originalContent, fixes, missingTypes, mod);
+            totalDefaultProps += defaultProps;
             if (changes == 0) continue;
 
             // Backup del file originale
@@ -133,10 +168,15 @@ public static class TypeAnnotator
         ExportMissingTypesCsv(missingTypesPath, missingTypes);
 
         Console.WriteLine();
-        if (totalChanges == 0)
+        if (totalChanges == 0 && totalDefaultProps == 0)
             Console.WriteLineColor("[OK] Nessun tipo mancante trovato.", ConsoleColor.Green);
         else
-            Console.WriteLineColor($"[OK] {totalChanges} tipo/i aggiunto/i in {totalFiles} file/i.", ConsoleColor.Green);
+        {
+            if (totalChanges > 0)
+                Console.WriteLineColor($"[OK] {totalChanges} tipo/i aggiunto/i in {totalFiles} file/i.", ConsoleColor.Green);
+            if (totalDefaultProps > 0)
+                Console.WriteLineColor($"[OK] {totalDefaultProps} proprietà default esplicitate.", ConsoleColor.Green);
+        }
 
         if (missingTypes.Count > 0)
             Console.WriteLineColor($"[WARN] Tipi non deducibili: {missingTypesPath}", ConsoleColor.Yellow);
@@ -221,9 +261,12 @@ public static class TypeAnnotator
     /// <summary>
     /// Applica le fix al testo del file, modificando solo le righe indicate dal modello.
     /// </summary>
-    private static (int changes, string newContent) ProcessFileWithFixes(
+    private static (int changes, int defaultProps, string newContent) ProcessFileWithFixes(
       string content, List<SymbolFix> fixes, List<MissingTypeInfo> missingTypes, VbModule mod)
     {
+        var controlDefaults = BuildControlDefaultMap(mod);
+        int defaultPropCount = 0;
+
         // Raggruppa le fix per numero di riga
         var varConstLines = fixes
           .Where(f => f.Kind == FixKind.VariableOrConstant)
@@ -301,6 +344,7 @@ public static class TypeAnnotator
 
             processed = ApplyCallRemoval(processed);
             processed = ApplyForStepCleanup(processed);
+            processed = ApplyDefaultProperties(processed, controlDefaults, ref defaultPropCount);
 
             if (!string.Equals(clean, processed, StringComparison.Ordinal))
             {
@@ -309,7 +353,7 @@ public static class TypeAnnotator
             }
         }
 
-        return (changes, string.Join("\n", lines));
+        return (changes, defaultPropCount, string.Join("\n", lines));
     }
 
     // -------------------------
@@ -903,5 +947,142 @@ public static class TypeAnnotator
         }
         segments.Add(input[start..]);
         return segments;
+    }
+
+    // -------------------------
+    // PROPRIETÀ DEFAULT CONTROLLI
+    // -------------------------
+
+    /// <summary>
+    /// Costruisce una mappa ConventionalName → proprietà default per i controlli
+    /// del modulo il cui ControlType è presente nella DefaultPropertyMap.
+    /// </summary>
+    private static Dictionary<string, string> BuildControlDefaultMap(VbModule mod)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (mod.Controls.Count == 0)
+            return map;
+
+        foreach (var ctrl in mod.Controls)
+        {
+            var name = ctrl.ConventionalName ?? ctrl.Name;
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(ctrl.ControlType))
+                continue;
+
+            if (DefaultPropertyMap.TryGetValue(ctrl.ControlType, out var defaultProp))
+                map.TryAdd(name, defaultProp);
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// Esplicita le proprietà default implicite dei controlli VB6.
+    /// Es. <c>LblName = "Hello"</c> → <c>LblName.Caption = "Hello"</c>.
+    /// </summary>
+    private static string ApplyDefaultProperties(string line, Dictionary<string, string> controlDefaults, ref int count)
+    {
+        if (controlDefaults.Count == 0) return line;
+
+        var (code, comment) = SplitCodeAndComment(line);
+        var trimmed = code.TrimStart();
+
+        if (string.IsNullOrWhiteSpace(trimmed)) return line;
+        if (trimmed.StartsWith("Begin ", StringComparison.OrdinalIgnoreCase)) return line;
+
+        var masked = MaskStrings(code);
+
+        var insertions = new List<(int position, string property)>();
+
+        foreach (var (controlName, defaultProp) in controlDefaults)
+        {
+            var pattern = $@"\b{Regex.Escape(controlName)}\b(\s*\([^)]*\))?";
+            var matches = Regex.Matches(masked, pattern, RegexOptions.IgnoreCase);
+
+            foreach (Match m in matches)
+            {
+                var matchEnd = m.Index + m.Length;
+
+                // Skip se già seguito da '.' (proprietà esplicita)
+                if (matchEnd < masked.Length && masked[matchEnd] == '.')
+                    continue;
+
+                // Skip se preceduto da keyword di contesto oggetto
+                var before = masked[..m.Index].TrimEnd();
+                if (EndsWithKeyword(before, "Set") ||
+                    EndsWithKeyword(before, "With") ||
+                    EndsWithKeyword(before, "TypeOf") ||
+                    EndsWithKeyword(before, "Load") ||
+                    EndsWithKeyword(before, "Unload") ||
+                    EndsWithKeyword(before, "Is"))
+                    continue;
+
+                insertions.Add((matchEnd, defaultProp));
+            }
+        }
+
+        if (insertions.Count == 0) return line;
+
+        // Ordina da destra a sinistra e rimuovi duplicati sulla stessa posizione
+        insertions = insertions.OrderByDescending(x => x.position)
+                               .DistinctBy(x => x.position)
+                               .ToList();
+
+        var result = code;
+        foreach (var (pos, prop) in insertions)
+        {
+            result = result.Insert(pos, $".{prop}");
+            count++;
+        }
+
+        return string.IsNullOrEmpty(comment) ? result : result + " " + comment;
+    }
+
+    /// <summary>
+    /// Verifica se <paramref name="text"/> termina con la keyword specificata
+    /// (word-boundary: il carattere prima della keyword non deve essere alfanumerico o '_').
+    /// </summary>
+    private static bool EndsWithKeyword(string text, string keyword)
+    {
+        if (!text.EndsWith(keyword, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        int beforeIdx = text.Length - keyword.Length - 1;
+        return beforeIdx < 0 || (!char.IsLetterOrDigit(text[beforeIdx]) && text[beforeIdx] != '_');
+    }
+
+    /// <summary>
+    /// Sostituisce il contenuto delle stringhe letterali con spazi per evitare
+    /// falsi match di nomi di controllo dentro le stringhe.
+    /// </summary>
+    private static string MaskStrings(string code)
+    {
+        var sb = new StringBuilder(code.Length);
+        bool inString = false;
+
+        for (int i = 0; i < code.Length; i++)
+        {
+            var ch = code[i];
+            if (ch == '"')
+            {
+                sb.Append(ch);
+                if (!inString)
+                    inString = true;
+                else if (i + 1 < code.Length && code[i + 1] == '"')
+                {
+                    sb.Append(' ');
+                    i++;
+                }
+                else
+                    inString = false;
+            }
+            else if (inString)
+                sb.Append(' ');
+            else
+                sb.Append(ch);
+        }
+
+        return sb.ToString();
     }
 }

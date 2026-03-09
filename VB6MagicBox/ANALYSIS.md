@@ -263,6 +263,19 @@ With-expanded lines have different character positions from the raw source. The 
 - **Const expressions with `Or`/`And` or parentheses** are treated as non-inferable and go to missing types
 - For forms/classes: adds explicit `Public` on procedures/properties without visibility and `Private` on module-level `Dim`/`Const`
 - Cleans VB6 `Call` statements and removes `Step 1` from `For` loops
+- **Default property expansion**: explicates implicit default property access for controls (e.g., `LblName = "Hello"` → `LblName.Caption = "Hello"`)
+  - `DefaultPropertyMap`: 21 control types → default property (Caption/Text/Value/Tab)
+  - `BuildControlDefaultMap(mod)`: per-module map of control ConventionalName → default property (from Controls list + ControlType lookup)
+  - `ApplyDefaultProperties(line, controlDefaults, ref count)`: per-line transformation with edge case handling:
+    - Skips `Begin` lines (form designer), empty lines
+    - Masks string literals (`MaskStrings`) to avoid false matches
+    - Matches `\bControlName\b(\s*\([^)]*\))?` (handles control arrays)
+    - Skips if followed by `.` (already explicit property access)
+    - Skips if preceded by object-context keywords: `Set`, `With`, `TypeOf`, `Load`, `Unload`, `Is` (word-boundary checked via `EndsWithKeyword`)
+    - Right-to-left insertion for multiple controls on same line
+    - Deduplicates by position
+  - Integrated after `ApplyForStepCleanup` in `ProcessFileWithFixes`
+  - Separate reporting: `totalDefaultProps` counter displayed in summary
 - **Runs AFTER refactoring** (uses conventional names already applied)
 
 ## CodeFormatter (`CodeFormatter.cs`)
@@ -380,6 +393,7 @@ With-expanded lines have different character positions from the raw source. The 
 - **Control prefix idempotency (FraMES bug)**: `ApplyControlNaming` checked `StartsWith("Frame", OrdinalIgnoreCase)` before the "already correct prefix" check, so `FraMES` (prefix `fra` + base `MES`) was falsely matched as `Frame` + `S` → `FraS`. Fix: moved the "already has correct prefix" check (`StartsWith(expectedPrefix) + uppercase after`) to the top of the method, before the Frame/Panel/Label word checks. Now `FraMES` is recognized as already having the `fra` prefix and preserved
 - **Type _T fallback removal (circular reference bug)**: `AddTypeReferenceAt`, `FindTypeStartChar`, and `BuildReplaces` all had `_T` suffix fallback logic that tried to match type names with/without `_T`. This was fundamentally wrong: VB6 requires exact type names (`As MesMachineState` when the enum is `MesMachineState`, NOT the type `MesMachineState_T`). The parser always stores the exact source text, so the fallback handled a case that cannot exist in valid VB6 code. The fallback caused `MesMachineState` (enum ref) to be attributed to `MesMachineState_T` (type) → `BuildReplaces` generated replace `MesMachineState` → `MesMachineState_T` → circular type reference. Fix: removed ALL `_T` fallback logic — `FindTypeStartChar` returns `-1` if exact match fails; `AddTypeReferenceAt` returns if exact `typeIndex` lookup fails; removed `GetTypeAlternateName` and `effectiveOldName` overrides from `BuildReplaces`; removed the Type exception from the `oldName == newName` skip at line 257
 - **Control prefix case-sensitive guard (lbLonPosition bug)**: the `lb` → `lbl` and `fr` → `fra` normalization blocks in `ApplyControlNaming` used `!StartsWith("lbl"/"fra", OrdinalIgnoreCase)` to skip controls that already have the full prefix. This caused false negatives: `lbLonPosition` has `lbL` which matches `lbl` case-insensitively → guard rejected it → control fell through to the generic no-prefix handler → `LblLbLonPosition` instead of `LblLonPosition`. Same issue for `fr` → `fra` (e.g., `frAnchor` has `frA` = `fra` case-insensitive). Fix: changed both guards to `StringComparison.Ordinal` (case-sensitive) so `lbL` ≠ `lbl` and `frA` ≠ `fra`, allowing the normalization to proceed correctly
+- **Default property expansion**: TypeAnnotator Phase 3 now explicates implicit default property accesses for VB6 controls. 21 control types mapped (VB.Label→Caption, VB.TextBox→Text, VB.ComboBox→Text, VB.CheckBox→Value, etc.). Per-module `BuildControlDefaultMap` maps ConventionalName→defaultProperty from Controls list. `ApplyDefaultProperties` runs per-line after `ApplyForStepCleanup`: masks string literals, matches `\bControlName\b` with optional array index, skips if followed by `.` (already explicit) or preceded by object-context keywords (`Set`/`With`/`TypeOf`/`Load`/`Unload`/`Is`), inserts `.Property` right-to-left. Separate `totalDefaultProps` counter reported in summary
 
 ## Performance Considerations
 **Why is VB6 IDE faster?**

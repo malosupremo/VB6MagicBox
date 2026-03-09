@@ -1,13 +1,4 @@
-﻿
-## default property 
-ma se aggiungessimo i .text o .caption almeno?
-SSPanel caption
-Label caption
-TextBox  Text
-
-
-
-## i nomi dei moduli
+﻿## i nomi dei moduli
 tipo LOGALARM da dove lo prende? dal PDB?
 
 ### missing 
@@ -19,10 +10,18 @@ Public Function ByteArrayToIntArray(byteArr() As Byte, Optional ByVal inStart As
 
 
 
-# TODO E CHECK FILES
+# verificare i file TODO E CHECK (qualcuno si può anche togliere)
 
 --- 
 # FATTI
+
+
+## default property 
+ma se aggiungessimo i .text o .caption almeno?
+SSPanel caption
+Label caption
+TextBox  Text
+
 
 ### preservare i nomi pubblici delle classi?
 enum, const, funct, types?... che noia
