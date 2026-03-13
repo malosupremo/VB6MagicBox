@@ -367,38 +367,27 @@ public class Program
         var vbpDir = Path.GetDirectoryName(vbpPath)!;
         var vbpName = Path.GetFileNameWithoutExtension(vbpPath);
 
-        var jsonOut = Path.Combine(vbpDir, $"{vbpName}.symbols.json");
-        var renameJson = Path.Combine(vbpDir, $"{vbpName}.rename.json");
-        var renameCsv = Path.Combine(vbpDir, $"{vbpName}.rename.csv");
-        var shadowsCsv = Path.Combine(vbpDir, $"{vbpName}._TODO_shadows.csv");
-        var refDebugCsv = Path.Combine(vbpDir, $"{vbpName}.refdebug.csv");
-        var disambiguationCsv = Path.Combine(vbpDir, $"{vbpName}.disambiguations.csv");
-        var refIssuesCsv = Path.Combine(vbpDir, $"{vbpName}.refissues.csv");
-        var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}.linereplace.json");
-        var startCharCheckCsv = Path.Combine(vbpDir, $"{vbpName}._CHECK_startchars.csv");
-        var mermaidOut = Path.Combine(vbpDir, $"{vbpName}.dependencies.md");
+        var jsonOut = Path.Combine(vbpDir, $"{vbpName}._symbols.json");
+        var shadowsCsv = Path.Combine(vbpDir, $"{vbpName}._shadows.csv");
+        var disambiguationCsv = Path.Combine(vbpDir, $"{vbpName}._disambiguations.csv");
+        var lineReplaceJson = Path.Combine(vbpDir, $"{vbpName}._linereplace.json");
+        var mermaidOut = Path.Combine(vbpDir, $"{vbpName}._dependencies.md");
 
         Console.WriteLine();
         Console.WriteLine(">> Esportazione file di output...");
 
         VbParser.ExportJson(project, jsonOut);
         Console.WriteLine($"   JSON completo:     {jsonOut}");
-        VbParser.ExportRenameJson(project, renameJson);
-        Console.WriteLine($"   JSON rename:       {renameJson}");
-        VbParser.ExportRenameCsv(project, renameCsv);
-        Console.WriteLine($"   CSV rename:        {renameCsv}");
+
         VbParser.ExportShadowsCsv(project, shadowsCsv);
         Console.WriteLine($"   CSV shadows:       {shadowsCsv}");
-        VbReferenceListExtensions.ExportReferenceDebugCsv(refDebugCsv, project);
-        Console.WriteLine($"   CSV refdebug:      {refDebugCsv}");
+
         VbParser.ExportDisambiguations(disambiguationCsv);
-        Console.WriteLine($"   CSV disambiguate:  {disambiguationCsv}");
-        VbParser.ExportReferenceIssuesCsv(project, refIssuesCsv);
-        Console.WriteLine($"   CSV refissues:     {refIssuesCsv}");
+        Console.WriteLine($"   CSV disambiguations:  {disambiguationCsv}");
+
         VbParser.ExportLineReplaceJson(project, lineReplaceJson);
         Console.WriteLine($"   JSON linereplace:  {lineReplaceJson}");
-        VbParser.ExportStartCharChecks(startCharCheckCsv);
-        Console.WriteLine($"   CSV startchars:    {startCharCheckCsv}");
+
         VbParser.ExportMermaid(project, mermaidOut);
         Console.WriteLine($"   Mermaid:           {mermaidOut}");
     }

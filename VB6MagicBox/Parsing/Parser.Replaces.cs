@@ -37,23 +37,6 @@ public static partial class VbParser
         public int LineNumber { get; set; }
     }
 
-    public static void ExportStartCharChecks(string outputPath)
-    {
-        var entries = StartCharChecks?.Values
-            .OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(e => e.Procedure, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(e => e.LineNumber)
-            .ThenBy(e => e.StartChar)
-            .ToList() ?? new List<StartCharCheckEntry>();
-
-        using var writer = new StreamWriter(outputPath, false);
-        writer.WriteLine("Module;Procedure;LineNumber;StartChar;OldName;NewName;Category");
-        foreach (var entry in entries)
-        {
-            writer.WriteLine($"{entry.Module};{entry.Procedure};{entry.LineNumber};{entry.StartChar};{entry.OldName};{entry.NewName};{entry.Category}");
-        }
-    }
-
     public static void ExportDisambiguations(string outputPath)
     {
         var entries = DisambiguationEntries

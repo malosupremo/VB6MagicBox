@@ -298,33 +298,6 @@ public static class VbReferenceListExtensions
         ReferenceDebugEntries = new System.Collections.Concurrent.ConcurrentBag<ReferenceDebugEntry>();
     }
 
-    public static void ExportReferenceDebugCsv(string outputPath, VbProject? project = null)
-    {
-        var lines = new List<string>
-    {
-      "SymbolKind,SymbolName,Module,Procedure,LineNumber,StartChar,SourceMember,SourceFile,SourceLine"
-    };
-
-        if (ReferenceDebugEntries.IsEmpty)
-        {
-            File.WriteAllText(outputPath, string.Join(Environment.NewLine, lines));
-            return;
-        }
-
-        foreach (var entry in ReferenceDebugEntries.OrderBy(e => e.Module, StringComparer.OrdinalIgnoreCase)
-                                                   .ThenBy(e => e.Procedure, StringComparer.OrdinalIgnoreCase)
-                                                   .ThenBy(e => e.LineNumber)
-                                                   .ThenBy(e => e.StartChar))
-        {
-            var symbolKind = entry.SymbolKind ?? string.Empty;
-            var symbolName = entry.SymbolName ?? string.Empty;
-
-            lines.Add($"\"{symbolKind}\",\"{symbolName}\",\"{entry.Module}\",\"{entry.Procedure}\",{entry.LineNumber},{entry.StartChar},\"{entry.SourceMember}\",\"{entry.SourceFile}\",{entry.SourceLine}");
-        }
-
-        File.WriteAllText(outputPath, string.Join(Environment.NewLine, lines));
-    }
-
     /// <summary>
     /// Adds <paramref name="lineNumber"/> to an existing reference entry keyed by
     /// Module+Procedure, or creates a new entry when none exists.
