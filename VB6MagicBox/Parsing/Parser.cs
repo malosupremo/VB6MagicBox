@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using System.IO;
 using VB6MagicBox.Models;
 
 namespace VB6MagicBox.Parsing;
@@ -78,10 +77,6 @@ public static partial class VbParser
 
         Console.WriteLine("Step 5/5: Esportazione file di output...");
         ExportJson(project, jsonOutputPath);
-
-        // Genera anche il file .rename.json
-        var renameOutputPath = jsonOutputPath.Replace(".json", ".rename.json");
-        ExportRenameJson(project, renameOutputPath);
 
         ExportMermaid(project, mermaidOutputPath);
         var enumPrefixTodoPath = Path.Combine(Path.GetDirectoryName(jsonOutputPath) ?? string.Empty, "_TODO_enumprefix.csv");
